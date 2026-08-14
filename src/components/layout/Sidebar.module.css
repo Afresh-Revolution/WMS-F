@@ -1,0 +1,113 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 276px;
+  flex-shrink: 0;
+  height: 100vh;
+  padding: 20px 16px;
+  background: var(--afresh-orange);
+  color: #fff;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  margin-bottom: 24px;
+}
+
+.brandName {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.userCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--afresh-orange);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.userMeta {
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.userName,
+.userRole {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userName {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.userRole {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.nav {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.95);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.navLink:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.navLinkActive {
+  background: #fff;
+  color: var(--afresh-orange);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.06);
+}
+
+.navLinkActive:hover {
+  background: #fff;
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
