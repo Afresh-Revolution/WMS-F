@@ -15,7 +15,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "AYUSH WMS — Dashboard",
+  title: "AfrESH WMS — Dashboard",
   description: "Ayush Work Management System",
 };
 

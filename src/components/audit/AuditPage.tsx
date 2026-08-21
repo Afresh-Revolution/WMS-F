@@ -6,15 +6,15 @@ import {
   Bell,
   Check,
   Download,
+  ScrollText,
   Search,
-  UserRound,
   X,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   auditEvents,
-  type AuditCategory,
   type AuditFilter,
+  type AuditModule,
 } from "@/data/audit";
 import styles from "./AuditPage.module.css";
 
@@ -26,15 +26,15 @@ const filterRoutes: Record<AuditFilter, string> = {
   Failed: "/audit/failed",
 };
 
-const categoryClass: Record<AuditCategory, string> = {
-  Leave: styles.catLeave,
-  Discipline: styles.catDiscipline,
-  Promotions: styles.catPromotions,
-  Payroll: styles.catPayroll,
-  System: styles.catSystem,
-  Auth: styles.catAuth,
-  Email: styles.catEmail,
-  Purchase: styles.catPurchase,
+const moduleClass: Record<AuditModule, string> = {
+  Leave: styles.modLeave,
+  Discipline: styles.modDiscipline,
+  Promotions: styles.modPromotions,
+  Payroll: styles.modPayroll,
+  System: styles.modSystem,
+  Auth: styles.modAuth,
+  Email: styles.modEmail,
+  Purchases: styles.modPurchases,
 };
 
 type AuditPageProps = {
@@ -55,45 +55,54 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
       const matchesFilter =
         activeFilter === "All events" ||
         (activeFilter === "Security" && event.security) ||
-        (activeFilter === "Failed" && event.status === "Failed");
+        (activeFilter === "Failed" && event.outcome === "Failed");
       const haystack =
-        `${event.user} ${event.action} ${event.target} ${event.category}`.toLowerCase();
+        `${event.user} ${event.action} ${event.target} ${event.module}`.toLowerCase();
       return matchesFilter && haystack.includes(query.trim().toLowerCase());
     });
   }, [activeFilter, query]);
+
+  function handleFilterChange(filter: AuditFilter) {
+    setActiveFilter(filter);
+    router.push(filterRoutes[filter]);
+  }
 
   return (
     <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>
-            <span>Audits</span>
-            <span className={styles.crumbSep}>›</span>
-            <span>August 1</span>
-          </p>
+          <p className={styles.dateLabel}>Monday, August 3</p>
           <div className={styles.topActions}>
-            <button type="button" aria-label="Search" className={styles.iconButton}>
-              <Search size={16} />
-            </button>
+            <label className={styles.topSearch}>
+              <Search size={15} className={styles.topSearchIcon} />
+              <input
+                placeholder="Search"
+                className={styles.topSearchInput}
+                readOnly
+                aria-label="Search"
+              />
+              <kbd className={styles.searchShortcut}>⌘K</kbd>
+            </label>
             <button type="button" aria-label="Notifications" className={styles.iconButton}>
               <Bell size={16} />
             </button>
-            <button type="button" aria-label="Profile" className={styles.iconButton}>
-              <UserRound size={16} />
+            <button type="button" aria-label="Profile" className={styles.avatarChip}>
+              DO
             </button>
           </div>
         </div>
 
         <div className={styles.header}>
           <div>
+            <p className={styles.eyebrow}>Audit logs</p>
             <h1 className={styles.title}>Every action, on record</h1>
             <p className={styles.subtitle}>
-              A complete, tamper-evident log of all significant admin and
-              operations activity.
+              A complete, tamper-evident log of all significant system and
+              operational activity.
             </p>
           </div>
           <button type="button" className={styles.exportButton}>
-            <Download size={15} />
+            <Download size={15} strokeWidth={2} />
             Export logs
           </button>
         </div>
@@ -103,10 +112,7 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
             <button
               key={filter}
               type="button"
-              onClick={() => {
-                setActiveFilter(filter);
-                router.push(filterRoutes[filter]);
-              }}
+              onClick={() => handleFilterChange(filter)}
               className={`${styles.filterChip} ${
                 activeFilter === filter ? styles.filterChipActive : ""
               }`}
@@ -116,97 +122,84 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
           ))}
         </div>
 
-        <label className={styles.search}>
-          <Search size={16} className={styles.searchIcon} />
+        <label className={styles.tableSearch}>
+          <Search size={16} className={styles.tableSearchIcon} />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by user, action, or insight..."
-            className={styles.searchInput}
+            placeholder="Search by user, action, or target..."
+            className={styles.tableSearchInput}
           />
         </label>
 
-        <p className={styles.count}>{filtered.length} events</p>
-
         <div className={styles.tableWrap}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>User</th>
-                <th>Action</th>
-                <th>Target</th>
-                <th>Category</th>
-                <th>IP</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((event) => (
-                <tr
-                  key={event.id}
-                  className={event.status === "Failed" ? styles.failedRow : ""}
-                >
-                  <td>
-                    <span className={styles.time}>{event.time}</span>
-                    <span className={styles.date}>{event.date}</span>
-                  </td>
-                  <td>
-                    <span className={styles.userCell}>
-                      {event.showAvatar && (
-                        <span className={styles.userAvatar}>
-                          <UserRound size={12} />
-                        </span>
-                      )}
-                      {event.user}
-                    </span>
-                  </td>
-                  <td className={styles.action}>{event.action}</td>
-                  <td>
-                    <span className={styles.target}>
-                      {event.target}
-                      {event.editable && (
-                        <button type="button" className={styles.editLink}>
-                          (Edit)
-                        </button>
-                      )}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      className={`${styles.category} ${categoryClass[event.category]}`}
-                    >
-                      {event.category}
-                    </span>
-                  </td>
-                  <td className={styles.ip}>{event.ip}</td>
-                  <td>
-                    <span
-                      className={`${styles.status} ${
-                        event.status === "Failed"
-                          ? styles.statusFailed
-                          : styles.statusSuccess
-                      }`}
-                    >
-                      {event.status === "Failed" ? (
-                        <X size={12} strokeWidth={2.5} />
-                      ) : (
-                        <Check size={12} strokeWidth={2.5} />
-                      )}
-                      {event.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
+          <div className={styles.tableHeader}>
+            <ScrollText size={15} strokeWidth={2} />
+            <span>{filtered.length} events</span>
+          </div>
+
+          <div className={styles.tableScroll}>
+            <table className={styles.table}>
+              <thead>
                 <tr>
-                  <td colSpan={7} className={styles.empty}>
-                    No events in this view.
-                  </td>
+                  <th>Time</th>
+                  <th>User</th>
+                  <th>Action</th>
+                  <th>Target</th>
+                  <th>Module</th>
+                  <th>IP</th>
+                  <th>Outcome</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((event) => (
+                  <tr
+                    key={event.id}
+                    className={event.outcome === "Failed" ? styles.failedRow : ""}
+                  >
+                    <td>
+                      <span className={styles.time}>{event.time}</span>
+                      <span className={styles.date}>{event.date}</span>
+                    </td>
+                    <td className={styles.user}>{event.user}</td>
+                    <td className={styles.action}>{event.action}</td>
+                    <td className={styles.target}>{event.target}</td>
+                    <td>
+                      <span
+                        className={`${styles.module} ${moduleClass[event.module]}`}
+                      >
+                        {event.module}
+                      </span>
+                    </td>
+                    <td className={styles.ip}>{event.ip}</td>
+                    <td>
+                      <span
+                        className={`${styles.outcome} ${
+                          event.outcome === "Failed"
+                            ? styles.outcomeFailed
+                            : styles.outcomeSuccess
+                        }`}
+                      >
+                        {event.outcome === "Failed" ? (
+                          <X size={12} strokeWidth={2.5} />
+                        ) : (
+                          <Check size={12} strokeWidth={2.5} />
+                        )}
+                        {event.outcome}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className={styles.empty}>
+                      No events in this view.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </AppShell>

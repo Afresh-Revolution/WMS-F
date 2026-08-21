@@ -2,12 +2,15 @@
 
 import { useMemo, useState } from "react";
 import {
+  AlertTriangle,
   Bell,
+  Briefcase,
   ChevronDown,
   ChevronRight,
+  Heart,
+  Pin,
   Plus,
   Search,
-  UserRound,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import {
@@ -15,19 +18,40 @@ import {
   announcementStats,
   type AnnouncementCategory,
   type AnnouncementFilter,
+  type AnnouncementTagTone,
 } from "@/data/announcements";
 import styles from "./AnnouncementsPage.module.css";
 
 const filters: AnnouncementFilter[] = ["All", "Unread", "Pinned"];
-const categories: AnnouncementCategory[] = ["All", "Finance", "General", "Urgent"];
 
-const tagClass = {
+const categories: {
+  id: AnnouncementCategory;
+  label: string;
+  icon?: typeof Heart;
+}[] = [
+  { id: "All", label: "All" },
+  { id: "HR", label: "HR", icon: Heart },
+  { id: "Finance", label: "Finance", icon: Briefcase },
+  { id: "General", label: "General", icon: Bell },
+  { id: "Urgent", label: "Urgent", icon: AlertTriangle },
+];
+
+const tagClass: Record<AnnouncementTagTone, string> = {
   finance: styles.tagFinance,
   urgent: styles.tagUrgent,
   hr: styles.tagHr,
   general: styles.tagGeneral,
   pinned: styles.tagPinned,
-} as const;
+};
+
+function TagIcon({ tone }: { tone: AnnouncementTagTone }) {
+  if (tone === "finance") return <Briefcase size={11} strokeWidth={2} />;
+  if (tone === "hr") return <Heart size={11} strokeWidth={2} />;
+  if (tone === "general") return <Bell size={11} strokeWidth={2} />;
+  if (tone === "urgent") return <AlertTriangle size={11} strokeWidth={2} />;
+  if (tone === "pinned") return <Pin size={11} strokeWidth={2} />;
+  return null;
+}
 
 export function AnnouncementsPage() {
   const [activeFilter, setActiveFilter] = useState<AnnouncementFilter>("All");
@@ -53,7 +77,7 @@ export function AnnouncementsPage() {
     <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>Sunday, Aug 01</p>
+          <p className={styles.dateLabel}>Monday, August 3</p>
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -63,44 +87,51 @@ export function AnnouncementsPage() {
                 placeholder="Search"
                 className={styles.searchInput}
               />
+              <kbd className={styles.searchShortcut}>⌘K</kbd>
             </label>
             <button type="button" aria-label="Notifications" className={styles.iconButton}>
               <Bell size={16} />
             </button>
-            <button type="button" aria-label="Profile" className={styles.iconButton}>
-              <UserRound size={16} />
+            <button type="button" aria-label="Profile" className={styles.avatarChip}>
+              MC
             </button>
           </div>
         </div>
 
         <div className={styles.header}>
-          <p className={styles.eyebrow}>Announcement</p>
-          <h1 className={styles.title}>The company, speaking clearly</h1>
-          <p className={styles.subtitle}>
-            Company-wide communications, policy updates, and important notices —
-            all in one place.
-          </p>
+          <div>
+            <p className={styles.eyebrow}>Announcements</p>
+            <h1 className={styles.title}>The company, speaking clearly</h1>
+            <p className={styles.subtitle}>
+              Company-wide communications, policy updates, and important notices —
+              all in one place.
+            </p>
+          </div>
+          <button type="button" className={styles.newButton}>
+            <Plus size={16} strokeWidth={2.5} />
+            New announcement
+          </button>
         </div>
 
         <div className={styles.stats}>
           {announcementStats.map((stat) => (
-            <div key={stat.id} className={styles.statCard}>
+            <article key={stat.id} className={styles.statCard}>
               <div className={styles.statTop}>
                 <p className={styles.statLabel}>{stat.label}</p>
                 <span
                   className={`${styles.badge} ${
                     stat.badge === "New"
                       ? styles.badgeNew
-                      : stat.badge === "All time"
-                        ? styles.badgeMuted
-                        : ""
+                      : stat.badge === "Active"
+                        ? styles.badgeActive
+                        : styles.badgeMuted
                   }`}
                 >
                   {stat.badge}
                 </span>
               </div>
               <p className={styles.statValue}>{stat.value}</p>
-            </div>
+            </article>
           ))}
         </div>
 
@@ -120,23 +151,24 @@ export function AnnouncementsPage() {
             ))}
           </div>
 
-          <div className={styles.toolbarActions}>
-            {categories.map((category) => (
-              <button
-                key={category}
-                type="button"
-                onClick={() => setActiveCategory(category)}
-                className={`${styles.categoryButton} ${
-                  activeCategory === category ? styles.categoryButtonActive : ""
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-            <button type="button" className={styles.createButton}>
-              <Plus size={15} strokeWidth={2.5} />
-              Create
-            </button>
+          <div className={styles.categoryFilters}>
+            {categories.map((category) => {
+              const Icon = category.icon;
+              const active = activeCategory === category.id;
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setActiveCategory(category.id)}
+                  className={`${styles.categoryButton} ${
+                    active ? styles.categoryButtonActive : ""
+                  }`}
+                >
+                  {Icon && <Icon size={13} strokeWidth={2} />}
+                  {category.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -153,19 +185,29 @@ export function AnnouncementsPage() {
                   <div className={styles.avatar}>{item.initials}</div>
                   <div className={styles.cardMain}>
                     <div className={styles.titleRow}>
-                      <h2 className={styles.cardTitle}>{item.title}</h2>
+                      <h2
+                        className={`${styles.cardTitle} ${
+                          item.unread ? styles.cardTitleUnread : ""
+                        }`}
+                      >
+                        {item.title}
+                      </h2>
+                      {item.unread && (
+                        <span className={styles.unreadDot} aria-label="Unread" />
+                      )}
                       {item.tags.map((tag) => (
                         <span
                           key={`${item.id}-${tag.label}`}
                           className={`${styles.tag} ${tagClass[tag.tone]}`}
                         >
+                          <TagIcon tone={tag.tone} />
                           {tag.label}
                         </span>
                       ))}
                     </div>
                     <p className={styles.meta}>
                       {item.source}
-                      <span className={styles.dot}>•</span>
+                      <span className={styles.dot}>·</span>
                       {item.date}
                     </p>
                   </div>
@@ -179,11 +221,14 @@ export function AnnouncementsPage() {
                 {expanded && (
                   <>
                     <p className={styles.body}>{item.body}</p>
-                    <div className={styles.cardFooter}>
-                      <button type="button" className={styles.loginLink}>
-                        Log in →
-                      </button>
-                    </div>
+                    {item.pinned && (
+                      <div className={styles.cardFooter}>
+                        <button type="button" className={styles.unpinButton}>
+                          <Pin size={14} strokeWidth={2} />
+                          Unpin
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </article>

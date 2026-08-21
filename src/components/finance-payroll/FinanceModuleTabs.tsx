@@ -8,6 +8,9 @@ import styles from "./FinancePayrollPage.module.css";
 const moduleRoutes: Partial<Record<FinanceModuleTab, string>> = {
   Payroll: "/finance-payroll",
   Purchases: "/finance-payroll/purchases",
+  Bills: "/finance-payroll/bills",
+  Expenses: "/finance-payroll/expenses",
+  Vendors: "/finance-payroll/vendors",
 };
 
 export function FinanceModuleTabs() {

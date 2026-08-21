@@ -3,14 +3,14 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  AlertCircle,
   Bell,
   CalendarDays,
+  Circle,
   Eye,
   Gavel,
-  LayoutGrid,
   Plus,
   Search,
-  UserRound,
   X,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
@@ -67,8 +67,6 @@ export function DisciplinePage({
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
 
-  const isClosedView = activeFilter === "Closed";
-  const isAllView = activeFilter === "All";
   const selectedRecord = selectedRecordId
     ? getDisciplineCase(selectedRecordId)
     : undefined;
@@ -156,13 +154,7 @@ export function DisciplinePage({
         className={`${styles.page} ${isModalOpen ? styles.pageDimmed : ""}`}
       >
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>
-            {isClosedView
-              ? "Tuesday, July 20"
-              : isAllView
-                ? "Thursday, July 10"
-                : "Monday, August 1"}
-          </p>
+          <p className={styles.dateLabel}>Monday, August 3</p>
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -172,15 +164,13 @@ export function DisciplinePage({
                 placeholder="Search"
                 className={styles.searchInput}
               />
+              <kbd className={styles.searchShortcut}>⌘K</kbd>
             </label>
-            <button type="button" aria-label="View options" className={styles.iconButton}>
-              <LayoutGrid size={16} />
-            </button>
             <button type="button" aria-label="Notifications" className={styles.iconButton}>
               <Bell size={16} />
             </button>
-            <button type="button" aria-label="Profile" className={styles.iconButton}>
-              <UserRound size={16} />
+            <button type="button" aria-label="Profile" className={styles.avatarChip}>
+              MC
             </button>
           </div>
         </div>
@@ -206,15 +196,15 @@ export function DisciplinePage({
 
         <div className={styles.stats}>
           {disciplineStats.map((stat) => (
-            <div
+            <article
               key={stat.id}
               className={`${styles.statCard} ${
-                isClosedView && stat.id === "pending" ? styles.statCardSoft : ""
+                stat.id === "pending" ? styles.statCardSoft : ""
               }`}
             >
               <p className={styles.statLabel}>{stat.label}</p>
               <p className={styles.statValue}>{stat.value}</p>
-            </div>
+            </article>
           ))}
         </div>
 
@@ -244,30 +234,24 @@ export function DisciplinePage({
                   {item.tags.map((tag) => (
                     <span
                       key={`${item.id}-${tag.label}`}
-                      className={`${styles.tag} ${
-                        isClosedView && tag.tone === "warning"
-                          ? styles.tagWarningSoft
-                          : tagClass[tag.tone]
-                      }`}
+                      className={`${styles.tag} ${tagClass[tag.tone]}`}
                     >
+                      {tag.tone === "warning" && (
+                        <AlertCircle size={12} strokeWidth={2} />
+                      )}
+                      {tag.tone === "strike" && (
+                        <Circle size={10} strokeWidth={2.5} fill="currentColor" />
+                      )}
                       {tag.label}
                     </span>
                   ))}
                 </div>
                 <p className={styles.meta}>
-                  {isClosedView || isAllView ? (
-                    <>
-                      {item.role}
-                      <span className={styles.metaDot}>·</span>
-                      {item.date}
-                      <span className={styles.metaDot}>·</span>
-                      Issued by: {item.issuedBy}
-                    </>
-                  ) : (
-                    <>
-                      {item.role}. {item.date}. Issued By: {item.issuedBy}
-                    </>
-                  )}
+                  {item.role}
+                  <span className={styles.metaDot}>·</span>
+                  {item.date}
+                  <span className={styles.metaDot}>·</span>
+                  Issued by {item.issuedBy}
                 </p>
                 <p className={styles.description}>{item.description}</p>
               </div>

@@ -3,12 +3,12 @@
 import { useState } from "react";
 import {
   Bell,
-  ChevronRight,
   Clock3,
   Download,
   FileSpreadsheet,
   LineChart,
   Search,
+  Upload,
   Users,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
@@ -29,42 +29,72 @@ const kpiBadgeClass = {
 } as const;
 
 function HeadcountChart() {
-  const width = 420;
-  const height = 180;
-  const pad = 28;
+  const width = 440;
+  const height = 200;
+  const padLeft = 44;
+  const padRight = 16;
+  const padTop = 12;
+  const padBottom = 28;
   const values = headcountGrowth.map((d) => d.value);
-  const min = 1000;
-  const max = 1400;
+  const min = 1100;
+  const max = 1300;
+  const yTicks = [1100, 1150, 1200, 1250, 1300];
+
   const points = values.map((value, i) => {
-    const x = pad + (i * (width - pad * 2)) / (values.length - 1);
-    const y = height - pad - ((value - min) / (max - min)) * (height - pad * 2);
+    const x =
+      padLeft + (i * (width - padLeft - padRight)) / (values.length - 1);
+    const y =
+      height -
+      padBottom -
+      ((value - min) / (max - min)) * (height - padTop - padBottom);
     return `${x},${y}`;
   });
+
   const line = points.join(" ");
-  const area = `${pad},${height - pad} ${line} ${width - pad},${height - pad}`;
-  const labels = ["Jan", "Mar", "May", "Jul"];
+  const area = `${padLeft},${height - padBottom} ${line} ${width - padRight},${height - padBottom}`;
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} className={styles.chart} aria-hidden>
-      <polyline points={area} fill="rgba(255, 90, 31, 0.12)" stroke="none" />
+      {yTicks.map((tick) => {
+        const y =
+          height -
+          padBottom -
+          ((tick - min) / (max - min)) * (height - padTop - padBottom);
+        return (
+          <g key={tick}>
+            <line
+              x1={padLeft}
+              y1={y}
+              x2={width - padRight}
+              y2={y}
+              stroke="#f5f5f4"
+              strokeWidth="1"
+            />
+            <text x={padLeft - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#a8a29e">
+              {tick}
+            </text>
+          </g>
+        );
+      })}
+      <polyline points={area} fill="rgba(237, 90, 40, 0.12)" stroke="none" />
       <polyline
         points={line}
         fill="none"
-        stroke="#ff5a1f"
+        stroke="#ed5a28"
         strokeWidth="2.5"
         strokeLinejoin="round"
         strokeLinecap="round"
       />
-      {labels.map((label, i) => (
+      {headcountGrowth.map((item, i) => (
         <text
-          key={label}
-          x={pad + (i * (width - pad * 2)) / (labels.length - 1)}
+          key={item.month}
+          x={padLeft + (i * (width - padLeft - padRight)) / (values.length - 1)}
           y={height - 8}
           textAnchor="middle"
           fontSize="11"
           fill="#a8a29e"
         >
-          {label}
+          {item.month}
         </text>
       ))}
     </svg>
@@ -122,7 +152,7 @@ export function ReportsPage() {
     <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.eyebrow}>Reports &amp; Analytics</p>
+          <p className={styles.dateLabel}>Monday, August 3</p>
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -132,27 +162,33 @@ export function ReportsPage() {
                 placeholder="Search"
                 className={styles.searchInput}
               />
+              <kbd className={styles.searchShortcut}>⌘K</kbd>
             </label>
             <button type="button" aria-label="Notifications" className={styles.iconButton}>
               <Bell size={16} />
+            </button>
+            <button type="button" aria-label="Profile" className={styles.avatarChip}>
+              MC
             </button>
           </div>
         </div>
 
         <div className={styles.header}>
           <div>
+            <p className={styles.eyebrow}>Reports &amp; Exports</p>
             <h1 className={styles.title}>See the workforce as a whole</h1>
             <p className={styles.subtitle}>
-              Get insights, build reports, and export the numbers that matter to
+              Explore trends, build reports, and export the numbers that matter to
               your teams.
             </p>
           </div>
           <div className={styles.headerActions}>
             <button type="button" className={styles.csvButton}>
+              <FileSpreadsheet size={15} strokeWidth={2} />
               CSV
             </button>
             <button type="button" className={styles.exportButton}>
-              <Download size={15} />
+              <Upload size={15} strokeWidth={2} />
               Export report
             </button>
           </div>
@@ -160,34 +196,36 @@ export function ReportsPage() {
 
         <div className={styles.kpis}>
           {reportKpis.map((kpi) => (
-            <div key={kpi.id} className={styles.kpiCard}>
+            <article key={kpi.id} className={styles.kpiCard}>
               <div className={styles.kpiTop}>
                 <p className={styles.kpiLabel}>{kpi.label}</p>
                 <span className={kpiBadgeClass[kpi.tone]}>{kpi.badge}</span>
               </div>
               <p className={styles.kpiValue}>{kpi.value}</p>
-            </div>
+            </article>
           ))}
         </div>
 
-        <div className={styles.tabs}>
-          {(["Overview", "Saved reports"] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              onClick={() => setTab(item)}
-              className={`${styles.tab} ${tab === item ? styles.tabActive : ""}`}
-            >
-              {item}
-            </button>
-          ))}
+        <div className={styles.tabsWrap}>
+          <div className={styles.tabs}>
+            {(["Overview", "Saved reports"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setTab(item)}
+                className={`${styles.tab} ${tab === item ? styles.tabActive : ""}`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
         </div>
 
         {tab === "Overview" ? (
           <div className={styles.grid}>
             <section className={styles.card}>
               <h2 className={styles.cardTitle}>
-                <LineChart size={16} />
+                <LineChart size={16} strokeWidth={2} />
                 Headcount growth
               </h2>
               <HeadcountChart />
@@ -195,40 +233,51 @@ export function ReportsPage() {
 
             <section className={styles.card}>
               <h2 className={styles.cardTitle}>
-                <Clock3 size={16} />
+                <Clock3 size={16} strokeWidth={2} />
                 Weekly attendance %
               </h2>
-              <div className={styles.bars}>
-                {weeklyAttendance.map((item) => (
-                  <div key={item.day} className={styles.barCol}>
-                    <div className={styles.barTrack}>
-                      <div className={styles.bar} style={{ height: `${item.value}%` }} />
+              <div className={styles.barChart}>
+                <div className={styles.barYAxis}>
+                  {[100, 75, 50, 25, 0].map((tick) => (
+                    <span key={tick} className={styles.barYTick}>
+                      {tick}
+                    </span>
+                  ))}
+                </div>
+                <div className={styles.bars}>
+                  {weeklyAttendance.map((item) => (
+                    <div key={item.day} className={styles.barCol}>
+                      <div className={styles.barTrack}>
+                        <div
+                          className={styles.bar}
+                          style={{ height: `${item.value}%` }}
+                        />
+                      </div>
+                      <span className={styles.barLabel}>{item.day}</span>
                     </div>
-                    <span className={styles.barLabel}>{item.day}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </section>
 
             <section className={styles.card}>
               <h2 className={styles.cardTitle}>
-                <Users size={16} />
+                <Users size={16} strokeWidth={2} />
                 Headcount by department
               </h2>
               <DepartmentDonut />
             </section>
 
             <section className={styles.card}>
-              <h2 className={styles.cardTitle}>
-                <FileSpreadsheet size={16} />
-                Quick exports
-              </h2>
-              <p className={styles.cardHint}>Generate a fresh report in one click.</p>
+              <h2 className={styles.cardTitle}>Quick exports</h2>
+              <p className={styles.cardHint}>
+                Generate a fresh export in one click.
+              </p>
               <div className={styles.exportList}>
                 {quickExports.map((item) => (
                   <button key={item} type="button" className={styles.exportRow}>
                     {item}
-                    <ChevronRight size={16} />
+                    <Download size={16} strokeWidth={2} />
                   </button>
                 ))}
               </div>

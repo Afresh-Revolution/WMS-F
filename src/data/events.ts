@@ -6,7 +6,10 @@ export type EventTagTone =
   | "company"
   | "upcoming"
   | "completed"
-  | "sponsorship";
+  | "sponsorship"
+  | "draft";
+
+export type EventAction = "sent" | "send-now" | "none";
 
 export type EventItem = {
   id: string;
@@ -16,7 +19,7 @@ export type EventItem = {
   audience: string;
   description: string;
   category: Exclude<EventFilter, "All">;
-  sentToHods: boolean;
+  action: EventAction;
 };
 
 export type StatTone = "confirmed" | "draft" | "meta";
@@ -64,7 +67,7 @@ export const statsByFilter: Record<EventFilter, EventStat[]> = {
     {
       id: "draft",
       label: "Draft Events",
-      value: "1",
+      value: "0",
       badge: "Not sent",
       badgeTone: "draft",
     },
@@ -80,7 +83,7 @@ export const statsByFilter: Record<EventFilter, EventStat[]> = {
     {
       id: "total",
       label: "Total Sponsorships",
-      value: "2",
+      value: "1",
       badge: "Confirmed",
       badgeTone: "confirmed",
     },
@@ -133,17 +136,17 @@ export const events: EventItem[] = [
       { label: "Upcoming", tone: "upcoming" },
     ],
     date: "Aug 5, 2026",
-    audience: "Fashion, Media photography",
+    audience: "Fashion, Media/Photography",
     description:
       "Walkthrough of the Q3 collection for department leads. Share fitting notes, shoot priorities, and launch-day staffing with your teams.",
     category: "Upcoming",
-    sentToHods: true,
+    action: "sent",
   },
   {
     id: "2",
     title: "Afresh Annual Staff Retreat",
     tags: [
-      { label: "Company wide", tone: "company" },
+      { label: "Company-wide", tone: "company" },
       { label: "Upcoming", tone: "upcoming" },
     ],
     date: "Sept 12–15, 2026",
@@ -151,38 +154,24 @@ export const events: EventItem[] = [
     description:
       "Four-day company retreat covering strategy, team bonding, and department showcases. Travel and lodging details cascade through HODs first.",
     category: "Upcoming",
-    sentToHods: true,
-  },
-  {
-    id: "s1",
-    title: "Q3 Fashion Collection Launch",
-    tags: [
-      { label: "Internal", tone: "internal" },
-      { label: "Upcoming", tone: "upcoming" },
-    ],
-    date: "Aug 5, 2026",
-    audience: "Fashion, Media photography",
-    description:
-      "Launch event for Q3 fashion collection. All Fashion and Media HODs required.",
-    category: "Sponsorship",
-    sentToHods: true,
-  },
-  {
-    id: "s2",
-    title: "Afresh Annual Staff Retreat",
-    tags: [
-      { label: "Company-wide", tone: "company" },
-      { label: "Upcoming", tone: "upcoming" },
-    ],
-    date: "Dec 17–18, 2026",
-    audience: "All departments",
-    description:
-      "Two-day annual retreat. Venue: Transcorp Hilton, Abuja.",
-    category: "Sponsorship",
-    sentToHods: true,
+    action: "none",
   },
   {
     id: "3",
+    title: "Lagos Tech Innovation Expo Sponsorship",
+    tags: [
+      { label: "Sponsorship", tone: "sponsorship" },
+      { label: "Draft", tone: "draft" },
+    ],
+    date: "Aug 22, 2026",
+    audience: "Software Engineers, Hardware",
+    description:
+      "Afresh is sponsoring the Lagos Tech Innovation Expo. HODs to nominate team representatives and confirm attendance by Aug 10.",
+    category: "Sponsorship",
+    action: "send-now",
+  },
+  {
+    id: "4",
     title: "Mid-Year Performance Review Week",
     tags: [
       { label: "Internal", tone: "internal" },
@@ -193,6 +182,6 @@ export const events: EventItem[] = [
     description:
       "Structured mid-year reviews across all departments. Calibration sessions and promotion shortlists were completed and filed.",
     category: "Completed",
-    sentToHods: true,
+    action: "sent",
   },
 ];

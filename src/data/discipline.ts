@@ -34,7 +34,7 @@ export const disciplineCases: DisciplineCase[] = [
     initials: "TG",
     name: "Theo Grant",
     role: "Fashion",
-    date: "Jul 24, 2024",
+    date: "Jul 24, 2026",
     issuedBy: "Maya Chen (HR)",
     description:
       "Persistent failure to submit weekly activity reports on time. Third occurrence in Q2.",
@@ -50,8 +50,8 @@ export const disciplineCases: DisciplineCase[] = [
     ref: "DC-0019",
     initials: "BA",
     name: "Bolu Adeyemi",
-    role: "Software Engineering",
-    date: "Jul 18, 2024",
+    role: "Software Engineer",
+    date: "Jul 15, 2026",
     issuedBy: "Maya Chen (HR)",
     description:
       "Unauthorised sharing of internal source code with an external party.",

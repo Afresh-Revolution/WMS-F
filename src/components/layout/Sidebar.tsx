@@ -16,6 +16,7 @@ import {
   Settings,
   LogOut,
 } from "lucide-react";
+import { AfreshLogo } from "./AfreshLogo";
 import styles from "./Sidebar.module.css";
 
 const primaryNav = [
@@ -41,9 +42,9 @@ export function Sidebar() {
 
   return (
     <aside className={styles.sidebar}>
-      <div className={styles.brand}>
-        <span className={styles.brandName}>AYUSH</span>
-      </div>
+      <Link href="/dashboard" className={styles.brand}>
+        <AfreshLogo />
+      </Link>
 
       <div className={styles.userCard}>
         <div className={styles.avatar}>DS</div>

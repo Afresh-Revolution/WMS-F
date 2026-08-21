@@ -1,8 +1,10 @@
 :root {
-  --afresh-orange: #ff5a1f;
-  --afresh-orange-dark: #e64e18;
+  --afresh-orange: #ed5a28;
+  --afresh-orange-dark: #d14f22;
   --afresh-orange-soft: #fff1ea;
   --afresh-orange-muted: #ffe4d6;
+  --afresh-logo-mark: #fb9206;
+  --afresh-logo-mark-text: #000000;
   --afresh-cream: #faf6f2;
   --afresh-ink: #1c1917;
   --afresh-muted: #78716c;

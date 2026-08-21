@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, Search, UserRound } from "lucide-react";
+import { Bell, ChevronRight, Plus, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   placementMembers,
@@ -33,8 +33,6 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     setActiveFilter(initialFilter);
   }, [initialFilter]);
 
-  const isAllView = activeFilter === "All";
-
   const filteredMembers = useMemo(() => {
     return placementMembers.filter((member) => {
       const matchesFilter =
@@ -54,9 +52,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>
-            {isAllView ? "Tuesday, June 4" : "Monday, August 3"}
-          </p>
+          <p className={styles.dateLabel}>Monday, August 3</p>
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -66,42 +62,51 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
                 placeholder="Search"
                 className={styles.searchInput}
               />
+              <kbd className={styles.searchShortcut}>⌘K</kbd>
             </label>
             <button type="button" aria-label="Notifications" className={styles.iconButton}>
               <Bell size={16} />
             </button>
-            <button type="button" aria-label="Profile" className={styles.iconButton}>
-              <UserRound size={16} />
+            <button type="button" aria-label="Profile" className={styles.avatarChip}>
+              MC
             </button>
           </div>
         </div>
 
         <div className={styles.header}>
-          <p className={styles.eyebrow}>NYSC &amp; Intern Management</p>
-          <h1 className={`${styles.title} ${isAllView ? styles.titleDark : ""}`}>
-            Supporting every placement
-          </h1>
-          <p className={styles.subtitle}>
-            Manage NYSC members and interns, track progress, monitor exit dates,
-            and process evaluations.
-          </p>
+          <div>
+            <p className={styles.eyebrow}>NYSC &amp; Intern Management</p>
+            <h1 className={styles.title}>Supporting every placement</h1>
+            <p className={styles.subtitle}>
+              Manage NYSC members and interns, track progress, monitor exit dates,
+              and process conversions.
+            </p>
+          </div>
+          <button type="button" className={styles.addButton}>
+            <Plus size={16} strokeWidth={2.5} />
+            Add member
+          </button>
         </div>
 
         <div className={styles.stats}>
           {placementStats.map((stat) => (
-            <div key={stat.id} className={styles.statCard}>
+            <article key={stat.id} className={styles.statCard}>
               <div className={styles.statTop}>
                 <p className={styles.statLabel}>{stat.label}</p>
                 <span
                   className={`${styles.badge} ${
-                    stat.badge === "Alert" ? styles.badgeAlert : ""
+                    stat.badge === "Alert"
+                      ? styles.badgeAlert
+                      : stat.badge === "Current"
+                        ? styles.badgeCurrent
+                        : styles.badgeActive
                   }`}
                 >
                   {stat.badge}
                 </span>
               </div>
               <p className={styles.statValue}>{stat.value}</p>
-            </div>
+            </article>
           ))}
         </div>
 
@@ -130,28 +135,21 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
                   <div>
                     <div className={styles.nameRow}>
                       <h2 className={styles.name}>{member.name}</h2>
-                      <span
-                        className={`${styles.typeTag} ${
-                          member.type === "NYSC" ? styles.typeNysc : styles.typeIntern
-                        }`}
-                      >
-                        {member.type}
-                      </span>
+                      <span className={styles.typeTag}>{member.type}</span>
                     </div>
                     <p className={styles.school}>{member.school}</p>
                   </div>
                 </div>
 
                 <div className={styles.meta}>
-                  <p className={styles.metaItem}>
+                  <p className={styles.metaLine}>
                     <span className={styles.metaLabel}>Dept: </span>
                     {member.department}
-                  </p>
-                  <p className={styles.metaItem}>
+                    <span className={styles.metaDot}>·</span>
                     <span className={styles.metaLabel}>Supervisor: </span>
                     {member.supervisor}
                   </p>
-                  <p className={styles.metaItem}>
+                  <p className={styles.metaLine}>
                     <span className={styles.metaLabel}>End date: </span>
                     {member.endDate}
                   </p>
@@ -173,7 +171,8 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
 
               <div className={styles.cardFooter}>
                 <button type="button" className={styles.profileLink}>
-                  View profile →
+                  View profile
+                  <ChevronRight size={14} strokeWidth={2.5} />
                 </button>
               </div>
             </article>

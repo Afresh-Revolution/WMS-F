@@ -27,10 +27,10 @@ export const placementMembers: PlacementMember[] = [
     initials: "CE",
     name: "Chidi Eze",
     type: "NYSC",
-    school: "Covenant University | Software Engineering",
+    school: "Covenant University · Software Engineering",
     department: "Software Engineers",
-    supervisor: "Omar Ross",
-    endDate: "Sep 30, 2025",
+    supervisor: "Omar Reyes",
+    endDate: "Sep 30, 2026",
     progress: 82,
     status: "Active",
   },
@@ -39,7 +39,7 @@ export const placementMembers: PlacementMember[] = [
     initials: "FL",
     name: "Funmi Lawal",
     type: "NYSC",
-    school: "OAU Ife | Public Administration",
+    school: "OAU Ife · Public Administration",
     department: "HR",
     supervisor: "Maya Chen",
     endDate: "Sep 20, 2024",
@@ -51,11 +51,11 @@ export const placementMembers: PlacementMember[] = [
     initials: "SA",
     name: "Seun Adeyemi",
     type: "Intern",
-    school: "Unilag | Computer Science",
+    school: "UniLag · Computer Science",
     department: "Software Engineers",
-    supervisor: "Omar Ross",
+    supervisor: "Omar Reyes",
     endDate: "Sep 20, 2025",
-    progress: 22,
+    progress: 55,
     status: "Active",
   },
   {
@@ -63,7 +63,7 @@ export const placementMembers: PlacementMember[] = [
     initials: "KO",
     name: "Kemi Obi",
     type: "Intern",
-    school: "Babcock University | Mass Communication",
+    school: "Babcock University · Mass Communication",
     department: "Media/Photography",
     supervisor: "Musi Paul",
     endDate: "Oct 14, 2024",
@@ -75,7 +75,7 @@ export const placementMembers: PlacementMember[] = [
     initials: "TB",
     name: "Tolu Benson",
     type: "NYSC",
-    school: "University of Ibadan | Accounting",
+    school: "University of Ibadan · Accounting",
     department: "Admin",
     supervisor: "Ken Salami",
     endDate: "Sep 30, 2025",
@@ -83,3 +83,7 @@ export const placementMembers: PlacementMember[] = [
     status: "Exited",
   },
 ];
+
+export function getPlacementMember(id: string) {
+  return placementMembers.find((member) => member.id === id);
+}

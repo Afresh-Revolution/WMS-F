@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CalendarDays, Check, Search, SlidersHorizontal } from "lucide-react";
+import { Bell, CalendarDays, Check, Plus, Search, Send } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   events,
@@ -27,6 +27,7 @@ const tagClass = {
   upcoming: styles.tagUpcoming,
   completed: styles.tagCompleted,
   sponsorship: styles.tagSponsorship,
+  draft: styles.tagDraft,
 } as const;
 
 const badgeClass = {
@@ -66,23 +67,11 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
     router.push(filterRoutes[filter]);
   }
 
-  const isSponsorship = activeFilter === "Sponsorship";
-
   return (
     <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>
-            {isSponsorship ? (
-              <>
-                <span className={styles.breadcrumb}>Events / Sponsorships</span>
-                <span className={styles.topSep}>·</span>
-                Thursday, July 20
-              </>
-            ) : (
-              "Thursday, July 20"
-            )}
-          </p>
+          <p className={styles.dateLabel}>Monday, August 3</p>
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -92,55 +81,50 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
                 placeholder="Search"
                 className={styles.searchInput}
               />
+              <kbd className={styles.searchShortcut}>⌘K</kbd>
             </label>
             <button type="button" aria-label="Notifications" className={styles.iconButton}>
               <Bell size={16} />
             </button>
-            <button type="button" aria-label="Filters" className={styles.iconButton}>
-              <SlidersHorizontal size={16} />
+            <button type="button" aria-label="Profile" className={styles.avatarChip}>
+              MC
             </button>
           </div>
         </div>
 
         <div className={styles.header}>
-          {!isSponsorship && (
+          <div>
             <p className={styles.eyebrow}>Events &amp; Sponsorships</p>
-          )}
-          <h1
-            className={`${styles.title} ${isSponsorship ? styles.titleDark : ""}`}
-          >
-            Company events, shared clearly
-          </h1>
-          <p className={styles.subtitle}>
-            Create and broadcast events to HODs and departments. Track
-            notification delivery and engagement.
-          </p>
+            <h1 className={styles.title}>Company events, shared clearly</h1>
+            <p className={styles.subtitle}>
+              Create and broadcast events to HODs and departments. Track
+              notification delivery and engagement.
+            </p>
+          </div>
+          <button type="button" className={styles.createButton}>
+            <Plus size={16} strokeWidth={2.5} />
+            Create event
+          </button>
         </div>
 
         <div className={styles.stats}>
-          {currentStats.map((stat) => {
-            const whiteCards = isSponsorship || stat.badgeTone === "meta";
-            return (
-              <div
-                key={stat.id}
-                className={`${styles.statCard} ${whiteCards ? styles.statCardWhite : ""}`}
-              >
-                <div className={styles.statTop}>
-                  <p className={styles.statLabel}>{stat.label}</p>
-                  {stat.badgeTone === "meta" ? (
-                    <span className={`${styles.badge} ${styles.badgeMetaPill}`}>
-                      {stat.badge}
-                    </span>
-                  ) : (
-                    <span className={`${styles.badge} ${badgeClass[stat.badgeTone]}`}>
-                      {stat.badge}
-                    </span>
-                  )}
-                </div>
-                <p className={styles.statValue}>{stat.value}</p>
+          {currentStats.map((stat) => (
+            <article key={stat.id} className={styles.statCard}>
+              <div className={styles.statTop}>
+                <p className={styles.statLabel}>{stat.label}</p>
+                <span
+                  className={`${styles.badge} ${
+                    stat.badgeTone === "meta"
+                      ? styles.badgeMetaPill
+                      : badgeClass[stat.badgeTone]
+                  }`}
+                >
+                  {stat.badge}
+                </span>
               </div>
-            );
-          })}
+              <p className={styles.statValue}>{stat.value}</p>
+            </article>
+          ))}
         </div>
 
         <div className={styles.filters}>
@@ -162,9 +146,7 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
         <div className={styles.list}>
           {filteredEvents.map((event) => (
             <article key={event.id} className={styles.card}>
-              <div
-                className={`${styles.cardIcon} ${isSponsorship ? styles.cardIconSquare : ""}`}
-              >
+              <div className={styles.cardIcon}>
                 <CalendarDays size={18} strokeWidth={2} />
               </div>
 
@@ -174,11 +156,7 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
                   {event.tags.map((tag) => (
                     <span
                       key={`${event.id}-${tag.label}`}
-                      className={`${styles.tag} ${tagClass[tag.tone]} ${
-                        tag.tone === "internal" || tag.tone === "company"
-                          ? styles.tagMuted
-                          : ""
-                      }`}
+                      className={`${styles.tag} ${tagClass[tag.tone]}`}
                     >
                       {tag.label}
                     </span>
@@ -186,25 +164,29 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
                 </div>
                 <p className={styles.cardMeta}>
                   {event.date}
-                  <span className={styles.dot}>{isSponsorship ? "—" : "•"}</span>
+                  <span className={styles.dot}>·</span>
                   Audience: {event.audience}
                 </p>
                 <p className={styles.cardDescription}>{event.description}</p>
               </div>
 
-              {event.sentToHods ? (
-                <button
-                  type="button"
-                  className={`${styles.sentButton} ${isSponsorship ? styles.sentButtonSoft : ""}`}
-                >
-                  <Check size={14} strokeWidth={2.5} />
-                  Sent to HODs
+              <div className={styles.cardActions}>
+                {event.action === "sent" && (
+                  <button type="button" className={styles.sentButton}>
+                    <Check size={14} strokeWidth={2.5} />
+                    Sent to HODs
+                  </button>
+                )}
+                {event.action === "send-now" && (
+                  <button type="button" className={styles.sendNowButton}>
+                    <Send size={14} />
+                    Send now
+                  </button>
+                )}
+                <button type="button" className={styles.editButton}>
+                  Edit
                 </button>
-              ) : (
-                <button type="button" className={styles.sendButton}>
-                  Send to HODs
-                </button>
-              )}
+              </div>
             </article>
           ))}
 

@@ -1,11 +1,3 @@
-.topBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
 .avatarChip {
   display: flex;
   align-items: center;
@@ -21,17 +13,16 @@
   letter-spacing: 0.02em;
 }
 
-.newButton {
+.submitButton {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
-  margin-top: 8px;
-  padding: 12px 18px;
-  border-radius: 999px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 10px;
   background: var(--afresh-orange);
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   box-shadow: 0 8px 20px rgba(237, 90, 40, 0.22);
 }
@@ -50,6 +41,13 @@
   background: var(--afresh-orange-soft);
 }
 
+.statTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .statLabel {
   margin: 0;
   font-size: 11px;
@@ -57,6 +55,20 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #a8a29e;
+}
+
+.statBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #a8a29e;
+  white-space: nowrap;
 }
 
 .statValue {
@@ -67,7 +79,18 @@
   color: var(--afresh-orange);
 }
 
-.filters {
+.statValueAlert {
+  color: #e11d48;
+}
+
+.statSublabel {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #78716c;
+}
+
+.sectionTabs {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -75,7 +98,7 @@
   margin-bottom: 20px;
 }
 
-.filterChip {
+.sectionTab {
   padding: 8px 16px;
   border-radius: 999px;
   font-size: 14px;
@@ -83,7 +106,7 @@
   color: #78716c;
 }
 
-.filterChipActive {
+.sectionTabActive {
   background: var(--afresh-orange);
   color: #fff;
   font-weight: 600;
@@ -94,6 +117,26 @@
   border-radius: 16px;
   background: #fff;
   overflow: hidden;
+}
+
+.tableHeader {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #f5f5f4;
+}
+
+.tableTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--afresh-orange);
+}
+
+.tableSubtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #78716c;
 }
 
 .tableWrap {
@@ -133,106 +176,50 @@
   background: #fafaf9;
 }
 
-.refCell {
-  font-weight: 600;
-  color: var(--afresh-ink);
-  white-space: nowrap;
-}
-
-.itemCell {
-  min-width: 220px;
-  white-space: normal;
-}
-
-.itemTitle {
-  display: block;
-  font-weight: 600;
-  color: var(--afresh-ink);
-}
-
-.itemDetail {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  color: #a8a29e;
-}
-
-.requester {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  color: #44403c;
-  flex-shrink: 0;
-}
-
+.refCell,
 .amountCell {
   font-weight: 600;
   color: var(--afresh-ink);
   white-space: nowrap;
 }
 
-.actionCell {
-  text-align: right;
-  white-space: nowrap;
+.descriptionCell {
+  min-width: 220px;
+  font-weight: 500;
+  color: var(--afresh-ink);
 }
 
-.actionGroup {
+.category {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  white-space: nowrap;
+  color: #78716c;
 }
 
-.rejectButton,
-.approveButton {
+.actionCell {
+  width: 48px;
+  text-align: right;
+}
+
+.deleteButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-}
-
-.rejectButton {
-  border: 1.5px solid #fecaca;
-  background: #fff;
-  color: #be123c;
-}
-
-.approveButton {
-  background: var(--afresh-orange);
-  color: #fff;
-}
-
-.orderButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  width: 32px;
   height: 32px;
-  padding: 0 12px;
-  border: 1.5px solid #ebe6e1;
   border-radius: 8px;
-  background: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  color: #44403c;
+  color: #a8a29e;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.statusReview,
+.deleteButton:hover {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
 .statusPending,
 .statusApproved,
-.statusDelivered,
 .statusRejected {
   display: inline-flex;
   align-items: center;
@@ -245,14 +232,12 @@
   white-space: nowrap;
 }
 
-.statusReview,
 .statusPending {
   background: var(--afresh-upcoming-bg);
   color: var(--afresh-upcoming-text);
 }
 
-.statusApproved,
-.statusDelivered {
+.statusApproved {
   background: var(--afresh-green-soft);
   color: var(--afresh-green-text);
 }
@@ -262,11 +247,12 @@
   color: var(--afresh-pink-text);
 }
 
-.empty {
+.placeholder {
   padding: 48px 24px;
+  border: 1px dashed #ebe6e1;
+  border-radius: 16px;
+  background: #fff;
   text-align: center;
-  font-size: 14px;
-  color: #78716c;
 }
 
 @media (max-width: 980px) {

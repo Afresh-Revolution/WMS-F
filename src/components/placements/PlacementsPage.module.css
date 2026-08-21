@@ -31,15 +31,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 200px;
+  width: 240px;
   height: 38px;
   padding: 0 14px;
   border: 1px solid #ebe6e1;
   border-radius: 999px;
   background: #fff;
+  color: #a8a29e;
 }
 
 .searchIcon {
+  flex-shrink: 0;
   color: #a8a29e;
 }
 
@@ -53,6 +55,18 @@
   color: #a8a29e;
 }
 
+.searchShortcut {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #f5f5f4;
+  font-size: 10px;
+  font-weight: 600;
+  color: #a8a29e;
+  line-height: 1;
+}
+
 .iconButton {
   display: flex;
   align-items: center;
@@ -63,9 +77,33 @@
   border-radius: 999px;
   background: #fff;
   color: #78716c;
+  transition: background 0.15s ease;
+}
+
+.iconButton:hover {
+  background: #fafaf9;
+}
+
+.avatarChip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #ebe6e1;
+  color: var(--afresh-orange);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
   margin-bottom: 28px;
 }
 
@@ -75,21 +113,18 @@
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--afresh-orange);
+  color: #78716c;
 }
 
 .title {
   margin: 0;
+  max-width: 16ch;
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 400;
   line-height: 1.05;
   letter-spacing: -0.02em;
   color: var(--afresh-orange);
-}
-
-.titleDark {
-  color: #2a211c;
 }
 
 .subtitle {
@@ -100,18 +135,33 @@
   color: #78716c;
 }
 
+.addButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-top: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: var(--afresh-orange);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 20px rgba(237, 90, 40, 0.22);
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
   margin-bottom: 28px;
 }
 
 .statCard {
-  padding: 16px 18px;
+  padding: 18px 20px;
   border-radius: 16px;
-  border: 1px solid #f3e7df;
-  background: var(--afresh-orange-soft);
+  border: 1px solid #ebe6e1;
+  background: #fff;
 }
 
 .statTop {
@@ -125,16 +175,17 @@
   margin: 0;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--afresh-orange);
+  color: #a8a29e;
 }
 
 .statValue {
-  margin: 10px 0 0;
+  margin: 14px 0 0;
   font-family: var(--font-display);
-  font-size: 40px;
+  font-size: 48px;
   line-height: 1;
+  letter-spacing: -0.03em;
   color: var(--afresh-orange);
 }
 
@@ -145,14 +196,22 @@
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  background: var(--afresh-orange);
-  color: #fff;
   white-space: nowrap;
 }
 
-.badgeAlert {
-  background: #ffe4d4;
+.badgeCurrent {
+  background: var(--afresh-orange);
+  color: #fff;
+}
+
+.badgeActive {
+  background: var(--afresh-orange-soft);
   color: var(--afresh-orange);
+}
+
+.badgeAlert {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .filters {
@@ -167,7 +226,7 @@
   border-radius: 999px;
   font-size: 14px;
   font-weight: 500;
-  color: #78716c;
+  color: #44403c;
 }
 
 .filterChipActive {
@@ -192,14 +251,14 @@
 }
 
 .cardBody {
-  padding: 18px 20px 12px;
+  padding: 18px 20px 16px;
 }
 
 .cardHead {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .avatar {
@@ -237,16 +296,8 @@
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-}
-
-.typeNysc {
   background: var(--afresh-orange-soft);
   color: var(--afresh-orange);
-}
-
-.typeIntern {
-  background: #fff7ed;
-  color: #c2410c;
 }
 
 .school {
@@ -256,13 +307,13 @@
 }
 
 .meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin-bottom: 16px;
 }
 
-.metaItem {
+.metaLine {
   margin: 0;
   font-size: 13px;
   color: #78716c;
@@ -272,8 +323,13 @@
   color: #a8a29e;
 }
 
+.metaDot {
+  margin: 0 6px;
+  color: #d6d3d1;
+}
+
 .progressBlock {
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .progressTop {
@@ -291,7 +347,7 @@
 }
 
 .progressTrack {
-  height: 6px;
+  height: 8px;
   overflow: hidden;
   border-radius: 999px;
   background: #f5f5f4;
@@ -307,11 +363,13 @@
   margin-top: auto;
   padding: 12px 20px;
   border-top: 1px solid #f5f5f4;
-  background: #fafaf9;
   text-align: center;
 }
 
 .profileLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-size: 13px;
   font-weight: 600;
   color: #78716c;
@@ -333,6 +391,10 @@
 }
 
 @media (max-width: 980px) {
+  .header {
+    flex-direction: column;
+  }
+
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -343,12 +405,12 @@
 }
 
 @media (max-width: 640px) {
-  .stats,
-  .meta {
+  .stats {
     grid-template-columns: 1fr;
   }
 
   .title {
     font-size: 34px;
+    max-width: none;
   }
 }

@@ -1,0 +1,33 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mark {
+  display: block;
+  width: auto;
+  height: 36px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.wordmark {
+  font-family: var(--font-sans), "Segoe UI", sans-serif;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: #fff;
+}
+
+.wordmarkLower {
+  font-size: 0.88em;
+  font-weight: 600;
+}
+
+.wordmarkUpper {
+  font-size: 0.88em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
