@@ -1,13 +1,13 @@
-# WMS-F
+# Afresh WMS
 
-Afresh Work Management System — React + TypeScript frontend.
+Afresh Work Management System — Next.js frontend.
 
 ## Stack
 
+- Next.js 16
 - React 19
 - TypeScript
-- Vite
-- React Router
+- Lucide React
 
 ## Scripts
 
@@ -15,29 +15,18 @@ Afresh Work Management System — React + TypeScript frontend.
 npm install
 npm run dev
 npm run build
-npm run preview
+npm start
+npm run lint
 ```
+
+Open [http://localhost:3000](http://localhost:3000) after starting the dev server.
 
 ## Folder structure
 
 ```text
 src/
-  app/                 # App shell, providers, routes
-  assets/              # Static images/icons
-  components/
-    layout/            # Sidebar, Header, Footer, AppLayout
-    ui/                # Shared UI primitives
-  features/
-    auth/              # Login / register
-    dashboard/         # Overview page
-    projects/          # Project list & detail
-    tasks/             # Task list, board & detail
-    teams/             # Teams
-    settings/          # Settings
-  hooks/               # Shared React hooks
-  lib/                 # API helpers, constants, utils
-  pages/               # Top-level pages (e.g. 404)
-  styles/              # Global CSS
-  types/               # Shared TypeScript types
-  main.tsx             # Entry point
+  app/                 # Next.js App Router pages
+  components/          # Feature UI and shared layout
+  data/                # Mock / static data
+public/                # Static assets
 ```

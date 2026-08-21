@@ -1,0 +1,68 @@
+:root {
+  --afresh-orange: #ed5a28;
+  --afresh-orange-dark: #d14f22;
+  --afresh-orange-soft: #fff1ea;
+  --afresh-orange-muted: #ffe4d6;
+  --afresh-logo-mark: #fb9206;
+  --afresh-logo-mark-text: #000000;
+  --afresh-cream: #faf6f2;
+  --afresh-ink: #1c1917;
+  --afresh-muted: #78716c;
+  --afresh-border: #e7e5e4;
+  --afresh-green: #0f766e;
+  --afresh-green-soft: #dcfce7;
+  --afresh-green-text: #166534;
+  --afresh-pink-soft: #ffe4e6;
+  --afresh-pink-text: #be123c;
+  --afresh-upcoming-bg: #ffe8d6;
+  --afresh-upcoming-text: #c2410c;
+  --font-sans: var(--font-dm-sans), "Segoe UI", sans-serif;
+  --font-display: var(--font-instrument), Georgia, serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--afresh-cream);
+  color: var(--afresh-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+a {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+input {
+  border: none;
+  outline: none;
+}
+
+select,
+textarea {
+  font: inherit;
+}
