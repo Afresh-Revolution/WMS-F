@@ -1,0 +1,241 @@
+.afresh-meet-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.afresh-meet-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a08b80;
+}
+
+.afresh-meet-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--afresh);
+}
+
+.afresh-meet-sub {
+  margin: 0;
+  max-width: 40rem;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.afresh-meet-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.afresh-meet-stat {
+  padding: 16px 18px;
+}
+
+.afresh-meet-stat.highlight {
+  background: #fff6ef;
+  border-color: #f3d4c2;
+}
+
+.afresh-meet-stat-label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.afresh-meet-stat-value {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--afresh);
+}
+
+.afresh-meet-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.afresh-meet-tab {
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #8d776b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.afresh-meet-tab.active {
+  background: var(--afresh);
+  color: #fff;
+}
+
+.afresh-meet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.afresh-meet-card {
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+}
+
+.afresh-meet-date {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--afresh-soft);
+  color: var(--afresh);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  flex: none;
+}
+
+.afresh-meet-date span {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.afresh-meet-date strong {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.afresh-meet-body {
+  min-width: 0;
+}
+
+.afresh-meet-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.afresh-meet-title-row h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #2f241e;
+}
+
+.afresh-meet-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--afresh-badge);
+  color: var(--afresh);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.afresh-meet-tag.company {
+  background: #f4ebe4;
+  color: #9a7b68;
+}
+
+.afresh-meet-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.afresh-meet-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.afresh-meet-meta svg {
+  color: #b09a8e;
+  flex: none;
+}
+
+.afresh-meet-details {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: #4d3b32;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.afresh-meet-details:hover {
+  background: #fffaf6;
+}
+
+@media (max-width: 900px) {
+  .afresh-meet-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .afresh-meet-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .afresh-meet-details {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 640px) {
+  .afresh-meet-tabs {
+    flex-wrap: wrap;
+    border-radius: 18px;
+  }
+
+  .afresh-meet-card {
+    grid-template-columns: 1fr;
+  }
+
+  .afresh-meet-details {
+    grid-column: 1;
+    width: 100%;
+  }
+}

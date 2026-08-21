@@ -1,0 +1,244 @@
+.afresh-salary-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.afresh-salary-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a08b80;
+}
+
+.afresh-salary-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--afresh);
+}
+
+.afresh-salary-sub {
+  margin: 0;
+  max-width: 40rem;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.afresh-salary-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.afresh-salary-stat {
+  padding: 16px 18px;
+}
+
+.afresh-salary-stat.highlight {
+  background: #fff6ef;
+  border-color: #f3d4c2;
+}
+
+.afresh-salary-stat-label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.afresh-salary-stat-value {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--afresh);
+}
+
+.afresh-salary-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.afresh-salary-tab {
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #8d776b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.afresh-salary-tab.active {
+  background: var(--afresh);
+  color: #fff;
+}
+
+.afresh-salary-panel {
+  padding: 18px 18px 8px;
+}
+
+.afresh-salary-panel-head {
+  margin-bottom: 8px;
+}
+
+.afresh-salary-panel-head h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--afresh);
+}
+
+.afresh-salary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+}
+
+.afresh-salary-row + .afresh-salary-row {
+  border-top: 1px solid #f3e7de;
+}
+
+.afresh-salary-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.afresh-salary-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--afresh-soft);
+  color: var(--afresh);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex: none;
+}
+
+.afresh-salary-person h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #2f241e;
+}
+
+.afresh-salary-path {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.afresh-salary-path em {
+  font-style: normal;
+  color: var(--afresh);
+  font-weight: 600;
+}
+
+.afresh-salary-dates {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.afresh-salary-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.afresh-salary-percent {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--afresh-badge);
+  color: var(--afresh);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.afresh-salary-status {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.afresh-salary-status.review {
+  background: var(--afresh-badge);
+  color: var(--afresh);
+}
+
+.afresh-salary-status.draft {
+  background: #f4ebe4;
+  color: #9a7b68;
+}
+
+.afresh-salary-status.approved {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-line);
+}
+
+.afresh-salary-chevron {
+  color: #c4ada0;
+  display: grid;
+  place-items: center;
+}
+
+@media (max-width: 1180px) {
+  .afresh-salary-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .afresh-salary-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .afresh-salary-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .afresh-salary-meta {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}

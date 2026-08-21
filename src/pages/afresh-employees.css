@@ -1,0 +1,244 @@
+.afresh-directory-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.afresh-directory-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a08b80;
+}
+
+.afresh-directory-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--afresh);
+}
+
+.afresh-directory-sub {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.afresh-directory-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.afresh-staff-search {
+  flex: 1;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  padding: 0 18px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.afresh-staff-search::placeholder {
+  color: #b09a8e;
+}
+
+.afresh-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.afresh-view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #8d776b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.afresh-view-btn.active {
+  background: var(--afresh);
+  color: #fff;
+}
+
+.afresh-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.afresh-filter-chip {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: #6f5a50;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.afresh-filter-chip.active {
+  background: var(--afresh);
+  border-color: var(--afresh);
+  color: #fff;
+}
+
+.afresh-staff-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.afresh-staff-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(120, 72, 40, 0.04);
+}
+
+.afresh-staff-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.afresh-staff-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--afresh-soft);
+  color: var(--afresh);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex: none;
+}
+
+.afresh-staff-status {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.afresh-staff-status.active {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-line);
+}
+
+.afresh-staff-status.leave {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border: 1px solid var(--warn-line);
+}
+
+.afresh-staff-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #2f241e;
+}
+
+.afresh-staff-role {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.afresh-staff-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.afresh-staff-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #8d776b;
+}
+
+.afresh-staff-meta-row svg {
+  color: #b09a8e;
+  flex: none;
+}
+
+.afresh-staff-profile-btn {
+  width: 100%;
+  height: 38px;
+  margin-top: auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: #4d3b32;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.afresh-staff-profile-btn:hover {
+  background: #fffaf6;
+}
+
+@media (max-width: 1180px) {
+  .afresh-staff-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .afresh-directory-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .afresh-view-toggle {
+    align-self: flex-end;
+  }
+
+  .afresh-staff-grid {
+    grid-template-columns: 1fr;
+  }
+}
