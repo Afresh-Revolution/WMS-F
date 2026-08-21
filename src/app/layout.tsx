@@ -15,8 +15,8 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "AfrESH WMS — Dashboard",
-  description: "Ayush Work Management System",
+  title: "AfrESH WMS",
+  description: "AfrESH Work Management System",
 };
 
 export default function RootLayout({

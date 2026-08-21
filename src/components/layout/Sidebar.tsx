@@ -37,6 +37,7 @@ const footerNav = [
   { href: "/sign-out", label: "Log out", icon: LogOut },
 ];
 
+/** Sidebar brand uses AfreshLogo — shared by every AppShell page. */
 export function Sidebar() {
   const pathname = usePathname();
 

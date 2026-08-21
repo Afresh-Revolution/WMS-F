@@ -277,7 +277,8 @@
 
 .user {
   white-space: nowrap;
-  color: #57534e;
+  font-weight: 600;
+  color: #1c1917;
 }
 
 .action {
