@@ -3,23 +3,44 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  CalendarOff,
-  CalendarDays,
   BadgeDollarSign,
-  TrendingUp,
-  Users,
+  Bell,
   Building2,
-  Wallet,
-  Target,
+  CalendarDays,
+  CalendarOff,
+  CircleHelp,
+  Home,
+  LayoutDashboard,
   ListTodo,
-  Settings,
   LogOut,
+  Megaphone,
+  Settings,
+  Target,
+  TrendingUp,
+  User,
+  Users,
+  Wallet,
 } from "lucide-react";
 import { AfreshLogo } from "./AfreshLogo";
 import styles from "./Sidebar.module.css";
 
-const primaryNav = [
+export type SidebarVariant = "manager" | "intern";
+
+export type SidebarUser = {
+  name: string;
+  initials: string;
+  role?: string;
+};
+
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof Home;
+  badge?: number;
+  exact?: boolean;
+};
+
+const managerNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/leave", label: "Leave", icon: CalendarOff },
   { href: "/meetings", label: "Meetings", icon: CalendarDays },
@@ -32,14 +53,52 @@ const primaryNav = [
   { href: "/target", label: "Target", icon: Target },
 ];
 
-const footerNav = [
+const managerFooter: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/sign-out", label: "Log out", icon: LogOut },
 ];
 
-/** Sidebar brand uses AfreshLogo — shared by every AppShell page. */
-export function Sidebar() {
+const internNav: NavItem[] = [
+  { href: "/dashboard", label: "Home", icon: Home, exact: true },
+  { href: "/profile", label: "My Profile", icon: User },
+  { href: "/tasks", label: "My Tasks", icon: ListTodo },
+  { href: "/meetings", label: "My Meetings", icon: CalendarDays },
+  { href: "/dashboard#progress", label: "My Progress", icon: TrendingUp, exact: true },
+  { href: "/announcements", label: "Announcements", icon: Megaphone, badge: 1 },
+  { href: "/notifications", label: "Notifications", icon: Bell, badge: 3 },
+  { href: "/settings", label: "Account Settings", icon: Settings },
+];
+
+const internFooter: NavItem[] = [
+  { href: "/help", label: "Help center", icon: CircleHelp },
+  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/sign-out", label: "Sign out", icon: LogOut },
+];
+
+const defaultUsers: Record<SidebarVariant, SidebarUser> = {
+  manager: { name: "Deepa Sharma", initials: "DS" },
+  intern: { name: "Chidi Eze", initials: "CE", role: "NYSC / Intern" },
+};
+
+function isActive(pathname: string, item: NavItem) {
+  const href = item.href.split("#")[0];
+  if (item.exact || href === "/dashboard") {
+    return pathname === href || (href === "/dashboard" && pathname === "/");
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function Sidebar({
+  variant = "manager",
+  user,
+}: {
+  variant?: SidebarVariant;
+  user?: SidebarUser;
+}) {
   const pathname = usePathname();
+  const primaryNav = variant === "intern" ? internNav : managerNav;
+  const footerNav = variant === "intern" ? internFooter : managerFooter;
+  const displayUser = user ?? defaultUsers[variant];
 
   return (
     <aside className={styles.sidebar}>
@@ -48,26 +107,28 @@ export function Sidebar() {
       </Link>
 
       <div className={styles.userCard}>
-        <div className={styles.avatar}>DS</div>
+        <div className={styles.avatar}>{displayUser.initials}</div>
         <div className={styles.userMeta}>
-          <p className={styles.userName}>Deepa Sharma</p>
+          <p className={styles.userName}>{displayUser.name}</p>
+          {displayUser.role ? (
+            <p className={styles.userRole}>{displayUser.role}</p>
+          ) : null}
         </div>
       </div>
 
       <nav className={styles.nav}>
-        {primaryNav.map(({ href, label, icon: Icon }) => {
-          const active =
-            pathname === href ||
-            (href === "/dashboard" && pathname === "/") ||
-            pathname.startsWith(`${href}/`);
+        {primaryNav.map((item) => {
+          const { href, label, icon: Icon, badge } = item;
+          const active = isActive(pathname, item) && !href.includes("#");
           return (
             <Link
-              key={href}
+              key={label}
               href={href}
               className={`${styles.navLink} ${active ? styles.navLinkActive : ""}`}
             >
               <Icon size={18} strokeWidth={active ? 2.25 : 1.75} />
-              {label}
+              <span className={styles.navLabel}>{label}</span>
+              {badge ? <span className={styles.navBadge}>{badge}</span> : null}
             </Link>
           );
         })}
@@ -75,7 +136,7 @@ export function Sidebar() {
 
       <div className={styles.footer}>
         {footerNav.map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href} className={styles.navLink}>
+          <Link key={label} href={href} className={styles.navLink}>
             <Icon size={18} strokeWidth={1.75} />
             {label}
           </Link>

@@ -1,10 +1,21 @@
-import { Sidebar } from "./Sidebar";
+import { Sidebar, type SidebarUser, type SidebarVariant } from "./Sidebar";
 import styles from "./AppShell.module.css";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export type AppShellVariant = SidebarVariant;
+export type AppShellUser = SidebarUser;
+
+export function AppShell({
+  children,
+  variant = "manager",
+  user,
+}: {
+  children: React.ReactNode;
+  variant?: AppShellVariant;
+  user?: AppShellUser;
+}) {
   return (
     <div className={styles.shell}>
-      <Sidebar />
+      <Sidebar variant={variant} user={user} />
       <main className={styles.main}>{children}</main>
     </div>
   );

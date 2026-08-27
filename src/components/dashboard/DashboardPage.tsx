@@ -1,48 +1,48 @@
 "use client";
 
+import { useState } from "react";
+import Link from "next/link";
 import {
   Bell,
-  BookOpen,
-  Gift,
-  Headphones,
-  MoreVertical,
+  Calendar,
+  Check,
+  FlaskConical,
+  MapPin,
+  Megaphone,
   Search,
-  Shield,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import { type LeaveStatus } from "@/data/dashboard";
-import { useManagerDashboard } from "@/lib/hooks/useManagerApi";
+import {
+  internAccounts,
+  type InternAccountId,
+  type InternTaskStatus,
+} from "@/data/internHome";
 import styles from "./DashboardPage.module.css";
 
-const statusClass: Record<LeaveStatus, string> = {
-  Approved: styles.statusApproved,
-  Pending: styles.statusPending,
-  Rejected: styles.statusRejected,
+const statusClass: Record<InternTaskStatus, string> = {
+  "In Progress": styles.statusInProgress,
+  Overdue: styles.statusOverdue,
+  "Not Started": styles.statusNotStarted,
+  "In Review": styles.statusInReview,
 };
 
-const resourceIcons = {
-  handbook: BookOpen,
-  benefits: Gift,
-  support: Headphones,
-  policy: Shield,
-} as const;
-
 export function DashboardPage() {
-  const { data, companyResources } = useManagerDashboard();
-  const {
-    stats,
-    leaveRequests,
-    overviewItems,
-    employeesByDepartment,
-    departmentPerformance,
-    recentActivity,
-  } = data;
+  const [accountId, setAccountId] = useState<InternAccountId>("nysc");
+  const account = internAccounts.find((item) => item.id === accountId) ?? internAccounts[0];
+  const unreadCount = account.notifications.filter((item) => item.unread).length;
 
   return (
-    <AppShell>
+    <AppShell
+      variant="intern"
+      user={{
+        name: account.name,
+        initials: account.initials,
+        role: account.sidebarRole,
+      }}
+    >
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>Thursday, July 20</p>
+          <p className={styles.dateLabel}>Monday, August 17</p>
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -50,186 +50,247 @@ export function DashboardPage() {
                 type="search"
                 placeholder="Search"
                 className={styles.searchInput}
+                aria-label="Search"
               />
+              <kbd className={styles.searchShortcut}>⌘ K</kbd>
             </label>
-            <button type="button" aria-label="Notifications" className={styles.iconButton}>
+            <Link
+              href="/notifications"
+              aria-label="Notifications"
+              className={`${styles.iconButton} ${styles.iconButtonBadge}`}
+            >
               <Bell size={16} />
-            </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              DS
-            </button>
+            </Link>
+            <Link href="/profile" aria-label="Profile" className={styles.avatarChip}>
+              {account.initials}
+            </Link>
+          </div>
+        </div>
+
+        <div className={styles.accountSwitcher}>
+          <p className={styles.accountLabel}>Example account</p>
+          <div className={styles.accountPills}>
+            {internAccounts.map((item) => {
+              const active = item.id === accountId;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setAccountId(item.id)}
+                  className={`${styles.accountPill} ${active ? styles.accountPillActive : ""}`}
+                  aria-pressed={active}
+                >
+                  {item.switcherLabel}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         <section className={styles.hero}>
           <div className={styles.heroContent}>
-            <h1 className={styles.heroTitle}>Your workforce is in motion.</h1>
-            <p className={styles.heroSubtitle}>
-              Track attendance, manage approvals, and keep every department aligned
-              from one shared workspace.
+            <p className={styles.heroEyebrow}>
+              {account.typeLabel} · {account.track}
             </p>
-            <button type="button" className={styles.heroButton}>
-              Get started
-            </button>
+            <h1 className={styles.heroTitle}>Welcome, {account.firstName}.</h1>
+            <p className={styles.heroSubtitle}>{account.roleLine}</p>
+            <p className={styles.heroLocation}>
+              <MapPin size={14} strokeWidth={2} />
+              {account.location}
+            </p>
+            <Link href="#progress" className={styles.heroButton}>
+              View my progress →
+            </Link>
           </div>
-          <div className={styles.heroAvatar} aria-hidden="true">
-            DS
+          <div className={styles.heroCountdown}>
+            <p className={styles.countdownLabel}>Countdown to exit</p>
+            <p className={styles.countdownValue}>{account.daysToExit} days</p>
+            <p className={styles.countdownRange}>
+              {account.startDate} → {account.endDate}
+            </p>
           </div>
-          <div className={styles.heroDecoration}>
+          <div className={styles.heroDecoration} aria-hidden="true">
             <div className={styles.heroDecorationInner} />
           </div>
         </section>
 
-        <div className={styles.statsRow}>
-          {stats.map(({ label, value }) => (
-            <article key={label} className={styles.statCard}>
-              <p className={styles.statValue}>{value}</p>
-              <p className={styles.statLabel}>{label}</p>
-            </article>
-          ))}
+        <div className={styles.statsWrap}>
+          <div className={styles.statsRow}>
+            {account.stats.map((stat) => (
+              <article key={stat.id} className={styles.statCard}>
+                <p className={styles.statValue}>{stat.value}</p>
+                <p className={styles.statLabel}>{stat.label}</p>
+                <p className={styles.statHint}>{stat.hint}</p>
+              </article>
+            ))}
+          </div>
+          <div className={styles.prototypeBadge}>
+            <FlaskConical size={13} strokeWidth={2.25} />
+            Prototype: NYSC / Intern
+          </div>
         </div>
 
-        <div className={styles.middleRow}>
-          <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Leave approval section</h2>
-            <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th>Type</th>
-                    <th>Duration</th>
-                    <th>Status</th>
-                    <th aria-label="Actions" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaveRequests.map((request) => (
-                    <tr key={request.id}>
-                      <td>
-                        <div className={styles.employeeCell}>
-                          <span
-                            className={styles.rowAvatar}
-                            style={{ background: request.avatarColor }}
-                          >
-                            {request.initials}
-                          </span>
-                          <span className={styles.employeeName}>{request.name}</span>
-                        </div>
-                      </td>
-                      <td>{request.type}</td>
-                      <td>{request.duration}</td>
-                      <td>
-                        <span className={statusClass[request.status]}>
-                          {request.status}
-                        </span>
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          aria-label={`Actions for ${request.name}`}
-                          className={styles.actionButton}
-                        >
-                          <MoreVertical size={16} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <section className={styles.placementCard}>
+          <div className={styles.placementCol}>
+            <div>
+              <p className={styles.placementLabel}>Institution</p>
+              <p className={styles.placementValue}>{account.institution}</p>
             </div>
-          </section>
+            <div className={styles.placementDate}>
+              <span className={styles.placementIcon}>
+                <Calendar size={15} />
+              </span>
+              <div>
+                <p className={styles.placementLabel}>Start date</p>
+                <p className={styles.placementValue}>{account.startDate}</p>
+              </div>
+            </div>
+          </div>
+          <div className={styles.placementCol}>
+            <div>
+              <p className={styles.placementLabel}>Course of study</p>
+              <p className={styles.placementValue}>{account.course}</p>
+            </div>
+            <div className={styles.placementDate}>
+              <span className={styles.placementIcon}>
+                <Calendar size={15} />
+              </span>
+              <div>
+                <p className={styles.placementLabel}>Expected end date</p>
+                <p className={styles.placementValue}>{account.endDate}</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-          <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Overview 2024</h2>
-            <div className={styles.overviewList}>
-              {overviewItems.map((item) => (
-                <article key={item.id} className={styles.overviewItem}>
-                  <span className={styles.overviewDate}>{item.date}</span>
-                  <div className={styles.overviewBody}>
-                    <p className={styles.overviewTitle}>{item.title}</p>
-                    <a href="#" className={styles.overviewLink}>
-                      View details
-                    </a>
+        <div className={styles.contentGrid}>
+          <div className={styles.mainColumn}>
+            <section className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2 className={styles.cardTitle}>My tasks</h2>
+                <Link href="/tasks" className={styles.cardLink}>
+                  View all
+                </Link>
+              </div>
+              <div className={styles.list}>
+                {account.tasks.map((task) => (
+                  <article key={task.id} className={styles.listRow}>
+                    <div className={styles.listBody}>
+                      <p className={styles.listTitle}>{task.title}</p>
+                      <p className={styles.listMeta}>{task.meta}</p>
+                    </div>
+                    <span className={statusClass[task.status]}>{task.status}</span>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2 className={`${styles.cardTitle} ${styles.cardTitleSerif}`}>
+                  Upcoming meetings
+                </h2>
+                <Link href="/meetings" className={styles.cardLink}>
+                  View all
+                </Link>
+              </div>
+              <div className={styles.list}>
+                {account.meetings.map((meeting) => (
+                  <article key={meeting.id} className={styles.listRow}>
+                    <div className={styles.listBody}>
+                      <p className={styles.listTitle}>{meeting.title}</p>
+                      <p className={styles.listMeta}>{meeting.details}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <div className={styles.sideColumn}>
+            <section className={styles.card} id="progress">
+              <div className={styles.cardHeader}>
+                <h2 className={styles.cardTitle}>Progress summary</h2>
+              </div>
+              <div className={styles.progressList}>
+                {account.progress.map((meter) => (
+                  <div key={meter.id} className={styles.progressRow}>
+                    <div className={styles.progressMeta}>
+                      <span>{meter.label}</span>
+                      <span>{meter.value}%</span>
+                    </div>
+                    <div className={styles.progressTrack}>
+                      <div
+                        className={styles.progressFill}
+                        style={{ width: `${meter.value}%` }}
+                      />
+                    </div>
                   </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <div className={styles.chartsRow}>
-          <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Employee by department</h2>
-            <div className={styles.chartList}>
-              {employeesByDepartment.map((dept) => (
-                <div key={dept.name} className={styles.chartRow}>
-                  <span className={styles.chartLabel}>{dept.name}</span>
-                  <div className={styles.chartTrack}>
-                    <div
-                      className={styles.chartFill}
-                      style={{ width: `${(dept.value / dept.max) * 100}%` }}
-                    />
-                  </div>
-                  <span className={styles.chartValue}>{dept.value}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Department performance</h2>
-            <div className={styles.chartList}>
-              {departmentPerformance.map((dept) => (
-                <div key={dept.name} className={styles.chartRow}>
-                  <span className={styles.chartLabel}>{dept.name}</span>
-                  <div className={styles.chartTrack}>
-                    <div
-                      className={styles.chartFill}
-                      style={{ width: `${(dept.value / dept.max) * 100}%` }}
-                    />
-                  </div>
-                  <span className={styles.chartValue}>{dept.value}%</span>
-                </div>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <div className={styles.bottomRow}>
-          <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Company resources</h2>
-            <div className={styles.resourceList}>
-              {companyResources.map((resource) => {
-                const Icon = resourceIcons[resource.icon];
-                return (
-                  <a key={resource.id} href="#" className={styles.resourceLink}>
-                    <span className={styles.resourceIcon}>
-                      <Icon size={16} />
+                ))}
+              </div>
+              <div className={styles.milestoneList}>
+                {account.milestones.map((item) => (
+                  <div key={item.id} className={styles.milestone}>
+                    <span
+                      className={`${styles.milestoneMark} ${
+                        item.done ? styles.milestoneDone : ""
+                      }`}
+                    >
+                      {item.done ? <Check size={11} strokeWidth={3} /> : null}
                     </span>
-                    {resource.label}
-                  </a>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className={styles.card}>
-            <h2 className={styles.cardTitle}>Recent activity feed</h2>
-            <div className={styles.activityList}>
-              {recentActivity.map((activity) => (
-                <article key={activity.id} className={styles.activityItem}>
-                  <div className={styles.activityBody}>
-                    <p className={styles.activityTitle}>{activity.title}</p>
-                    <p className={styles.activityDescription}>
-                      {activity.description}
-                    </p>
+                    <span className={item.done ? styles.milestoneLabelDone : undefined}>
+                      {item.label}
+                    </span>
                   </div>
-                  <span className={styles.activityTime}>{activity.time}</span>
-                </article>
-              ))}
-            </div>
-          </section>
+                ))}
+              </div>
+              <Link href="#progress" className={styles.footerLink}>
+                View full progress
+              </Link>
+            </section>
+
+            <section className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2 className={styles.cardTitle}>
+                  <Megaphone size={16} strokeWidth={2} />
+                  Announcements
+                </h2>
+              </div>
+              <div className={styles.list}>
+                {account.announcements.map((item) => (
+                  <article key={item.id} className={styles.compactRow}>
+                    <p className={styles.listTitle}>{item.title}</p>
+                    <p className={styles.listMeta}>{item.meta}</p>
+                  </article>
+                ))}
+              </div>
+              <Link href="/announcements" className={styles.footerLink}>
+                All announcements →
+              </Link>
+            </section>
+
+            <section className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2 className={styles.cardTitle}>Notifications</h2>
+                <span className={styles.newBadge}>{unreadCount} new</span>
+              </div>
+              <div className={styles.list}>
+                {account.notifications.map((item) => (
+                  <article key={item.id} className={styles.notificationRow}>
+                    {item.unread ? (
+                      <span className={styles.unreadDot} aria-hidden="true" />
+                    ) : (
+                      <span className={styles.unreadSpacer} aria-hidden="true" />
+                    )}
+                    <p className={styles.listTitle}>{item.message}</p>
+                  </article>
+                ))}
+              </div>
+              <Link href="/notifications" className={styles.footerLink}>
+                View all →
+              </Link>
+            </section>
+          </div>
         </div>
       </div>
     </AppShell>
