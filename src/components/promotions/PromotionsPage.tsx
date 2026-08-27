@@ -11,11 +11,11 @@ import {
 import { AppShell } from "@/components/layout/AppShell";
 import {
   promotionFilters,
-  promotions,
   promotionStats,
   type PromotionFilter,
   type PromotionStatus,
 } from "@/data/promotions";
+import { useManagerPromotions } from "@/lib/hooks/useManagerApi";
 import styles from "./PromotionsPage.module.css";
 
 const statusClass: Record<PromotionStatus, string> = {
@@ -34,13 +34,14 @@ const statusLabels: Record<PromotionStatus, string> = {
 
 export function PromotionsPage() {
   const [activeFilter, setActiveFilter] = useState<PromotionFilter>("All");
+  const { items: promotions } = useManagerPromotions();
 
   const filteredPromotions = useMemo(() => {
     return promotions.filter((promotion) => {
       if (activeFilter === "All") return true;
       return promotion.status === activeFilter;
     });
-  }, [activeFilter]);
+  }, [activeFilter, promotions]);
 
   return (
     <AppShell>

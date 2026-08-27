@@ -10,16 +10,8 @@ import {
   Shield,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
-import {
-  companyResources,
-  departmentPerformance,
-  employeesByDepartment,
-  leaveRequests,
-  overviewItems,
-  recentActivity,
-  stats,
-  type LeaveStatus,
-} from "@/data/dashboard";
+import { type LeaveStatus } from "@/data/dashboard";
+import { useManagerDashboard } from "@/lib/hooks/useManagerApi";
 import styles from "./DashboardPage.module.css";
 
 const statusClass: Record<LeaveStatus, string> = {
@@ -36,6 +28,16 @@ const resourceIcons = {
 } as const;
 
 export function DashboardPage() {
+  const { data, companyResources } = useManagerDashboard();
+  const {
+    stats,
+    leaveRequests,
+    overviewItems,
+    employeesByDepartment,
+    departmentPerformance,
+    recentActivity,
+  } = data;
+
   return (
     <AppShell>
       <div className={styles.page}>

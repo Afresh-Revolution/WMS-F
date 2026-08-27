@@ -4,11 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Bell,
-  Check,
   Download,
   ScrollText,
   Search,
-  X,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import {
@@ -180,11 +178,6 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
                             : styles.outcomeSuccess
                         }`}
                       >
-                        {event.outcome === "Failed" ? (
-                          <X size={12} strokeWidth={2.5} />
-                        ) : (
-                          <Check size={12} strokeWidth={2.5} />
-                        )}
                         {event.outcome}
                       </span>
                     </td>

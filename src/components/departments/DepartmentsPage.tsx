@@ -16,10 +16,10 @@ import {
 import { AppShell } from "@/components/layout/AppShell";
 import {
   departmentFilters,
-  departments,
   departmentStats,
   type DepartmentFilter,
 } from "@/data/departments";
+import { useManagerDepartments } from "@/lib/hooks/useManagerApi";
 import styles from "./DepartmentsPage.module.css";
 
 const deptIcons = {
@@ -35,6 +35,7 @@ export function DepartmentsPage() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] =
     useState<DepartmentFilter>("All departments");
+  const { items: departments, refresh } = useManagerDepartments();
 
   const filteredDepartments = useMemo(() => {
     return departments.filter((department) => {
@@ -48,7 +49,7 @@ export function DepartmentsPage() {
         matchesFilter && haystack.includes(query.trim().toLowerCase())
       );
     });
-  }, [activeFilter, query]);
+  }, [activeFilter, departments, query]);
 
   return (
     <AppShell>
@@ -70,7 +71,12 @@ export function DepartmentsPage() {
               />
               <span className={styles.shortcut}>Ctrl K</span>
             </label>
-            <button type="button" aria-label="Refresh" className={styles.iconButton}>
+            <button
+              type="button"
+              aria-label="Refresh"
+              className={styles.iconButton}
+              onClick={() => void refresh()}
+            >
               <RefreshCw size={16} />
             </button>
             <button type="button" aria-label="Add department" className={styles.iconButton}>

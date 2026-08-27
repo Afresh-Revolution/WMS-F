@@ -12,11 +12,11 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import {
-  departmentFilters,
-  employees,
+  departmentFilters as defaultDepartmentFilters,
   type DepartmentFilter,
   type EmployeeStatus,
 } from "@/data/employees";
+import { useManagerEmployees } from "@/lib/hooks/useManagerApi";
 import styles from "./EmployeesPage.module.css";
 
 type ViewMode = "grid" | "list";
@@ -30,6 +30,14 @@ export function EmployeesPage() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<DepartmentFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const { items: employees } = useManagerEmployees();
+
+  const departmentFilters = useMemo(() => {
+    const unique = Array.from(
+      new Set(employees.map((employee) => employee.department).filter(Boolean)),
+    );
+    return unique.length ? ["All", ...unique] : defaultDepartmentFilters;
+  }, [employees]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
@@ -41,7 +49,7 @@ export function EmployeesPage() {
         matchesFilter && haystack.includes(query.trim().toLowerCase())
       );
     });
-  }, [activeFilter, query]);
+  }, [activeFilter, employees, query]);
 
   return (
     <AppShell>

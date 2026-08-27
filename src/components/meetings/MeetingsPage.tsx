@@ -13,11 +13,11 @@ import {
 import { AppShell } from "@/components/layout/AppShell";
 import {
   meetingFilters,
-  meetings,
   meetingStats,
   type MeetingFilter,
   type MeetingTag,
 } from "@/data/meetings";
+import { useManagerMeetings } from "@/lib/hooks/useManagerApi";
 import styles from "./MeetingsPage.module.css";
 
 const tagClass: Record<MeetingTag, string> = {
@@ -28,6 +28,7 @@ const tagClass: Record<MeetingTag, string> = {
 
 export function MeetingsPage() {
   const [activeFilter, setActiveFilter] = useState<MeetingFilter>("Upcoming");
+  const { items: meetings } = useManagerMeetings();
 
   const filteredMeetings = useMemo(() => {
     return meetings.filter((meeting) => {
@@ -40,7 +41,7 @@ export function MeetingsPage() {
       }
       return meeting.tags.includes("Company-wide") || meeting.category === "Company-wide";
     });
-  }, [activeFilter]);
+  }, [activeFilter, meetings]);
 
   return (
     <AppShell>

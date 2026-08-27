@@ -15,11 +15,12 @@ import {
 import { AppShell } from "@/components/layout/AppShell";
 import {
   leaveBalances,
-  leaveRequests,
   leaveTabs,
   type LeaveRequestStatus,
   type LeaveTab,
 } from "@/data/leave";
+import { managerApi } from "@/lib/api/manager";
+import { useManagerLeave } from "@/lib/hooks/useManagerApi";
 import styles from "./LeavePage.module.css";
 
 const balanceIcons = {
@@ -37,6 +38,22 @@ const statusClass: Record<LeaveRequestStatus, string> = {
 
 export function LeavePage() {
   const [activeTab, setActiveTab] = useState<LeaveTab>("Requests");
+  const { items: leaveRequests, setItems, isLive, refresh } = useManagerLeave();
+
+  async function updateLeaveStatus(id: string, status: LeaveRequestStatus) {
+    if (isLive) {
+      if (status === "Approved") await managerApi.approveLeave(id);
+      else await managerApi.rejectLeave(id);
+      await refresh();
+      return;
+    }
+
+    setItems((current) =>
+      current.map((request) =>
+        request.id === id ? { ...request, status } : request,
+      ),
+    );
+  }
 
   return (
     <AppShell>
@@ -157,10 +174,15 @@ export function LeavePage() {
                           type="button"
                           aria-label={`Decline ${request.name}'s request`}
                           className={styles.declineButton}
+                          onClick={() => void updateLeaveStatus(request.id, "Declined")}
                         >
                           <X size={16} />
                         </button>
-                        <button type="button" className={styles.approveButton}>
+                        <button
+                          type="button"
+                          className={styles.approveButton}
+                          onClick={() => void updateLeaveStatus(request.id, "Approved")}
+                        >
                           Approve
                         </button>
                       </>

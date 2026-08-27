@@ -12,10 +12,10 @@ import { AppShell } from "@/components/layout/AppShell";
 import {
   incrementFilters,
   incrementStats,
-  salaryIncrements,
   type IncrementFilter,
   type IncrementStatus,
 } from "@/data/salaryIncrements";
+import { useManagerSalaryRecommendations } from "@/lib/hooks/useManagerApi";
 import styles from "./SalaryIncrementsPage.module.css";
 
 const statusClass: Record<IncrementStatus, string> = {
@@ -32,13 +32,14 @@ const statusLabels: Record<IncrementStatus, string> = {
 
 export function SalaryIncrementsPage() {
   const [activeFilter, setActiveFilter] = useState<IncrementFilter>("All");
+  const { items: salaryIncrements } = useManagerSalaryRecommendations();
 
   const filteredIncrements = useMemo(() => {
     return salaryIncrements.filter((increment) => {
       if (activeFilter === "All") return true;
       return increment.status === activeFilter;
     });
-  }, [activeFilter]);
+  }, [activeFilter, salaryIncrements]);
 
   return (
     <AppShell>

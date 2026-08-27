@@ -4,12 +4,12 @@ import { useState } from "react";
 import { Bell, ChevronRight, LayoutGrid, Plus, Search, Star } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import {
-  performanceReviews,
   targetStats,
   targetTabs,
   type ReviewStatus,
   type TargetTab,
 } from "@/data/targets";
+import { useManagerTargets } from "@/lib/hooks/useManagerApi";
 import styles from "./TargetsPage.module.css";
 
 const statusClass: Record<ReviewStatus, string> = {
@@ -46,6 +46,7 @@ function StarRating({ rating }: { rating: number }) {
 
 export function TargetsPage() {
   const [activeTab, setActiveTab] = useState<TargetTab>("Reviews");
+  const { items: performanceReviews } = useManagerTargets();
 
   return (
     <AppShell>

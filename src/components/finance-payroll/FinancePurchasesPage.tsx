@@ -7,11 +7,12 @@ import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTab
 import {
   matchesPurchaseFilter,
   purchaseFilters,
-  purchaseRequests,
   purchaseStats,
   type PurchaseFilter,
   type PurchaseStatus,
 } from "@/data/financePurchases";
+import { managerApi } from "@/lib/api/manager";
+import { useManagerProcurementRequests } from "@/lib/hooks/useManagerApi";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinancePurchasesPage.module.css";
 
@@ -31,12 +32,29 @@ function isPending(status: PurchaseStatus): boolean {
 
 export function FinancePurchasesPage() {
   const [activeFilter, setActiveFilter] = useState<PurchaseFilter>("All");
+  const { items: purchaseRequests, setItems, isLive, refresh } =
+    useManagerProcurementRequests();
 
   const filteredRequests = useMemo(() => {
     return purchaseRequests.filter((request) =>
       matchesPurchaseFilter(request.status, activeFilter),
     );
-  }, [activeFilter]);
+  }, [activeFilter, purchaseRequests]);
+
+  async function decideRequest(id: string, next: "Approved" | "Rejected") {
+    if (isLive) {
+      if (next === "Approved") await managerApi.approveProcurementRequest(id);
+      else await managerApi.rejectProcurementRequest(id);
+      await refresh();
+      return;
+    }
+
+    setItems((current) =>
+      current.map((request) =>
+        request.id === id ? { ...request, status: next } : request,
+      ),
+    );
+  }
 
   return (
     <AppShell>
@@ -144,6 +162,7 @@ export function FinancePurchasesPage() {
                             type="button"
                             aria-label={`Reject ${request.ref}`}
                             className={styles.rejectButton}
+                            onClick={() => void decideRequest(request.id, "Rejected")}
                           >
                             <X size={14} />
                           </button>
@@ -151,6 +170,7 @@ export function FinancePurchasesPage() {
                             type="button"
                             aria-label={`Approve ${request.ref}`}
                             className={styles.approveButton}
+                            onClick={() => void decideRequest(request.id, "Approved")}
                           >
                             <Check size={14} strokeWidth={2.5} />
                           </button>

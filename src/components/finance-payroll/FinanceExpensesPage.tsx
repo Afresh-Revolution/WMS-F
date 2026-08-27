@@ -1,17 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, Download, Plus, Search, Trash2 } from "lucide-react";
+import { Bell, Check, Download, Plus, Search, Trash2, X } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
 import {
   categoryIcons,
-  expenseClaims,
   expenseSectionTabs,
   expenseStats,
+  type ExpenseCategory,
   type ExpenseSectionTab,
   type ExpenseStatus,
 } from "@/data/financeExpenses";
+import { managerApi } from "@/lib/api/manager";
+import { useManagerExpenses } from "@/lib/hooks/useManagerApi";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceExpensesPage.module.css";
 
@@ -23,6 +25,22 @@ const statusClass: Record<ExpenseStatus, string> = {
 
 export function FinanceExpensesPage() {
   const [activeSection, setActiveSection] = useState<ExpenseSectionTab>("My expense");
+  const { items: expenseClaims, setItems, isLive, refresh } = useManagerExpenses();
+
+  async function decideExpense(id: string, status: ExpenseStatus) {
+    if (isLive) {
+      if (status === "Approved") await managerApi.approveExpense(id);
+      else await managerApi.rejectExpense(id);
+      await refresh();
+      return;
+    }
+
+    setItems((current) =>
+      current.map((claim) => (claim.id === id ? { ...claim, status } : claim)),
+    );
+  }
+
+  const fallbackIcon = categoryIcons.Supplies;
 
   return (
     <AppShell>
@@ -102,13 +120,26 @@ export function FinanceExpensesPage() {
           })}
         </div>
 
-        {activeSection === "My expense" ? (
+        {activeSection === "Policies" ? (
+          <section className={styles.placeholder}>
+            <h2 className={styles.tableTitle}>{activeSection}</h2>
+            <p className={styles.tableSubtitle}>
+              View company expense policies and reimbursement limits.
+            </p>
+          </section>
+        ) : (
           <section className={styles.tableSection}>
             <div className={styles.tableHeader}>
               <div>
-                <h2 className={styles.tableTitle}>My claims — July 2026</h2>
+                <h2 className={styles.tableTitle}>
+                  {activeSection === "Team expenses"
+                    ? "Team claims"
+                    : "My claims — July 2026"}
+                </h2>
                 <p className={styles.tableSubtitle}>
-                  All expense submission for the current month.
+                  {activeSection === "Team expenses"
+                    ? "Review and approve expense claims submitted by your team."
+                    : "All expense submission for the current month."}
                 </p>
               </div>
             </div>
@@ -128,7 +159,8 @@ export function FinanceExpensesPage() {
                 </thead>
                 <tbody>
                   {expenseClaims.map((claim) => {
-                    const CategoryIcon = categoryIcons[claim.category];
+                    const CategoryIcon =
+                      categoryIcons[claim.category as ExpenseCategory] ?? fallbackIcon;
                     return (
                       <tr key={claim.id}>
                         <td className={styles.refCell}>{claim.ref}</td>
@@ -145,13 +177,34 @@ export function FinanceExpensesPage() {
                           <span className={statusClass[claim.status]}>{claim.status}</span>
                         </td>
                         <td className={styles.actionCell}>
-                          <button
-                            type="button"
-                            aria-label={`Delete ${claim.ref}`}
-                            className={styles.deleteButton}
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          {activeSection === "Team expenses" && claim.status === "Pending" ? (
+                            <>
+                              <button
+                                type="button"
+                                aria-label={`Reject ${claim.ref}`}
+                                className={styles.deleteButton}
+                                onClick={() => void decideExpense(claim.id, "Rejected")}
+                              >
+                                <X size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`Approve ${claim.ref}`}
+                                className={styles.deleteButton}
+                                onClick={() => void decideExpense(claim.id, "Approved")}
+                              >
+                                <Check size={15} />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              aria-label={`Delete ${claim.ref}`}
+                              className={styles.deleteButton}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -159,15 +212,6 @@ export function FinanceExpensesPage() {
                 </tbody>
               </table>
             </div>
-          </section>
-        ) : (
-          <section className={styles.placeholder}>
-            <h2 className={styles.tableTitle}>{activeSection}</h2>
-            <p className={styles.tableSubtitle}>
-              {activeSection === "Team expenses"
-                ? "Review and approve expense claims submitted by your team."
-                : "View company expense policies and reimbursement limits."}
-            </p>
           </section>
         )}
       </div>
