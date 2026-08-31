@@ -27,9 +27,14 @@ export type BootstrapPayload = {
   name?: string;
 };
 
+export type BootstrapStatus = {
+  complete?: boolean;
+  bootstrapped?: boolean;
+};
+
 export const authApi = {
   bootstrapStatus: () =>
-    apiRequest<{ complete: boolean }>("/api/superadmin/bootstrap/status", {
+    apiRequest<BootstrapStatus>("/api/superadmin/bootstrap/status", {
       auth: false,
       root: true,
     }),

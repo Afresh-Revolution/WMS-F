@@ -3,7 +3,7 @@ export type { ApiListResponse, PaginatedResponse, Id } from "./types";
 export { unwrapList } from "./types";
 
 export { authApi, dashboardApi, healthApi, searchApi } from "./auth";
-export type { AuthUser, LoginPayload, LoginResponse, BootstrapPayload } from "./auth";
+export type { AuthUser, LoginPayload, LoginResponse, BootstrapPayload, BootstrapStatus } from "./auth";
 
 export { profileApi } from "./profile";
 export type { ProfileRecord } from "./profile";

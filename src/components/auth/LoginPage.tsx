@@ -47,7 +47,8 @@ export function LoginPage() {
       .bootstrapStatus()
       .then((status) => {
         setApiUnavailable(false);
-        setNeedsBootstrap(!status.complete);
+        const isComplete = status.complete ?? status.bootstrapped ?? false;
+        setNeedsBootstrap(!isComplete);
       })
       .catch(() => {
         setApiUnavailable(true);
