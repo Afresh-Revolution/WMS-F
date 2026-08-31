@@ -29,20 +29,30 @@ export type BootstrapPayload = {
 
 export const authApi = {
   bootstrapStatus: () =>
-    apiRequest<{ complete: boolean }>("/auth/bootstrap/status", { auth: false }),
-
-  bootstrap: (body: BootstrapPayload) =>
-    apiRequest<LoginResponse>("/auth/bootstrap", {
-      method: "POST",
-      body,
+    apiRequest<{ complete: boolean }>("/api/superadmin/bootstrap/status", {
       auth: false,
+      root: true,
     }),
 
-  login: async (body: LoginPayload) => {
-    const response = await apiRequest<LoginResponse>("/auth/login", {
+  bootstrap: async (body: BootstrapPayload) => {
+    const response = await apiRequest<LoginResponse>("/api/superadmin/bootstrap", {
       method: "POST",
       body,
       auth: false,
+      root: true,
+    });
+    if (response.accessToken) {
+      setTokens(response.accessToken, response.refreshToken);
+    }
+    return response;
+  },
+
+  login: async (body: LoginPayload) => {
+    const response = await apiRequest<LoginResponse>("/api/superadmin/login", {
+      method: "POST",
+      body,
+      auth: false,
+      root: true,
     });
     if (response.accessToken) {
       setTokens(response.accessToken, response.refreshToken);
@@ -63,10 +73,11 @@ export const authApi = {
   },
 
   refresh: async (refreshToken?: string) => {
-    const response = await apiRequest<LoginResponse>("/auth/refresh", {
+    const response = await apiRequest<LoginResponse>("/api/superadmin/refresh", {
       method: "POST",
       body: refreshToken ? { refreshToken } : {},
       auth: false,
+      root: true,
     });
     if (response.accessToken) {
       setTokens(response.accessToken, response.refreshToken);
@@ -75,16 +86,20 @@ export const authApi = {
   },
 
   logout: async () => {
-    await apiRequest<void>("/auth/logout", { method: "POST" });
+    await apiRequest<void>("/api/superadmin/logout", { method: "POST", root: true });
     clearTokens();
   },
 
-  me: () => apiRequest<AuthUser>("/auth/me"),
+  me: () => apiRequest<AuthUser>("/api/superadmin/me", { root: true }),
 
-  superAdminMe: () => apiRequest<AuthUser>("/auth/superadmin/me"),
+  superAdminMe: () => apiRequest<AuthUser>("/api/superadmin/me", { root: true }),
 
   changePassword: (body: { currentPassword: string; newPassword: string }) =>
-    apiRequest<void>("/auth/change-password", { method: "POST", body }),
+    apiRequest<void>("/api/superadmin/change-password", {
+      method: "POST",
+      body,
+      root: true,
+    }),
 
   forgotPassword: (body: { email: string }) =>
     apiRequest<void>("/auth/forgot-password", {
@@ -106,69 +121,18 @@ export const authApi = {
   revokeSession: (id: string) =>
     apiRequest<void>(`/auth/sessions/${id}`, { method: "DELETE" }),
 
-  /** Legacy aliases at /api/superadmin */
+  /** @deprecated Use top-level authApi methods — all point to /api/superadmin */
   legacy: {
-    bootstrapStatus: () =>
-      apiRequest<{ complete: boolean }>("/api/superadmin/bootstrap/status", {
-        auth: false,
-        root: true,
-      }),
-
-    bootstrap: (body: BootstrapPayload) =>
-      apiRequest<LoginResponse>("/api/superadmin/bootstrap", {
-        method: "POST",
-        body,
-        auth: false,
-        root: true,
-      }),
-
-    login: async (body: LoginPayload) => {
-      const response = await apiRequest<LoginResponse>("/api/superadmin/login", {
-        method: "POST",
-        body,
-        auth: false,
-        root: true,
-      });
-      if (response.accessToken) {
-        setTokens(response.accessToken, response.refreshToken);
-      }
-      return response;
-    },
-
-    refresh: async (refreshToken?: string) => {
-      const response = await apiRequest<LoginResponse>("/api/superadmin/refresh", {
-        method: "POST",
-        body: refreshToken ? { refreshToken } : {},
-        auth: false,
-        root: true,
-      });
-      if (response.accessToken) {
-        setTokens(response.accessToken, response.refreshToken);
-      }
-      return response;
-    },
-
-    logout: async () => {
-      await apiRequest<void>("/api/superadmin/logout", {
-        method: "POST",
-        root: true,
-      });
-      clearTokens();
-    },
-
-    me: () =>
-      apiRequest<AuthUser>("/api/superadmin/me", { root: true }),
-
+    bootstrapStatus: () => authApi.bootstrapStatus(),
+    bootstrap: (body: BootstrapPayload) => authApi.bootstrap(body),
+    login: (body: LoginPayload) => authApi.login(body),
+    refresh: (refreshToken?: string) => authApi.refresh(refreshToken),
+    logout: () => authApi.logout(),
+    me: () => authApi.me(),
     changePassword: (body: {
       currentPassword: string;
       newPassword: string;
-    }) =>
-      apiRequest<void>("/api/superadmin/change-password", {
-        method: "POST",
-        body,
-        root: true,
-      }),
-
+    }) => authApi.changePassword(body),
     patchPassword: (body: { password: string }) =>
       apiRequest<void>("/api/superadmin/password", {
         method: "PATCH",

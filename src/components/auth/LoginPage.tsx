@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Shield } from "lucide-react";
-import { authApi, getAccessToken, setTokens } from "@/lib/api";
+import { authApi, getAccessToken } from "@/lib/api";
 import styles from "./LoginPage.module.css";
 
 function LoginBrandMark() {
@@ -31,7 +31,11 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [checkingBootstrap, setCheckingBootstrap] = useState(true);
   const [needsBootstrap, setNeedsBootstrap] = useState(false);
+  const [apiUnavailable, setApiUnavailable] = useState(false);
   const [name, setName] = useState("");
+
+  const apiRoot =
+    process.env.NEXT_PUBLIC_API_ROOT_URL ?? "http://localhost:3001";
 
   useEffect(() => {
     if (getAccessToken()) {
@@ -41,8 +45,14 @@ export function LoginPage() {
 
     authApi
       .bootstrapStatus()
-      .then((status) => setNeedsBootstrap(!status.complete))
-      .catch(() => setNeedsBootstrap(false))
+      .then((status) => {
+        setApiUnavailable(false);
+        setNeedsBootstrap(!status.complete);
+      })
+      .catch(() => {
+        setApiUnavailable(true);
+        setNeedsBootstrap(true);
+      })
       .finally(() => setCheckingBootstrap(false));
   }, [router]);
 
@@ -52,14 +62,11 @@ export function LoginPage() {
     setError(null);
     try {
       if (needsBootstrap) {
-        const response = await authApi.bootstrap({
+        await authApi.bootstrap({
           email,
           password,
           name: name || undefined,
         });
-        if (response.accessToken) {
-          setTokens(response.accessToken, response.refreshToken);
-        }
       } else {
         await authApi.login({ email, password });
       }
@@ -127,6 +134,19 @@ export function LoginPage() {
                   : "Sign in to continue to your workspace."}
               </p>
             </header>
+
+            {apiUnavailable ? (
+              <div className={styles.apiNotice} role="status">
+                <p className={styles.apiNoticeTitle}>Backend not reachable</p>
+                <p className={styles.apiNoticeText}>
+                  Start the API server at{" "}
+                  <code className={styles.apiNoticeCode}>{apiRoot}</code>, then
+                  refresh this page. Login requests are proxied through Next.js
+                  to that URL (see <code className={styles.apiNoticeCode}>.env</code>
+                  ).
+                </p>
+              </div>
+            ) : null}
 
             <form className={styles.form} onSubmit={(event) => void handleSubmit(event)}>
               {needsBootstrap ? (

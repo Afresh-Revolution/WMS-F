@@ -49,8 +49,14 @@ type RequestOptions = Omit<RequestInit, "body"> & {
 function resolveUrl(path: string, root?: boolean) {
   if (path.startsWith("http")) return path;
   if (root) {
-    const rootBase = process.env.NEXT_PUBLIC_API_ROOT_URL ?? "";
-    return `${rootBase}${path.startsWith("/") ? path : `/${path}`}`;
+    const normalized = path.startsWith("/") ? path : `/${path}`;
+    // Browser: same-origin path so Next.js rewrites proxy to the backend
+    if (typeof window !== "undefined") {
+      return normalized;
+    }
+    const rootBase =
+      process.env.NEXT_PUBLIC_API_ROOT_URL ?? "http://localhost:3001";
+    return `${rootBase}${normalized}`;
   }
   return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
@@ -76,16 +82,25 @@ export async function apiRequest<T>(
     }
   }
 
-  const response = await fetch(resolveUrl(path, root), {
-    ...rest,
-    headers: requestHeaders,
-    body:
-      body instanceof FormData
-        ? body
-        : body !== undefined
-          ? JSON.stringify(body)
-          : undefined,
-  });
+  let response: Response;
+  try {
+    response = await fetch(resolveUrl(path, root), {
+      ...rest,
+      headers: requestHeaders,
+      body:
+        body instanceof FormData
+          ? body
+          : body !== undefined
+            ? JSON.stringify(body)
+            : undefined,
+    });
+  } catch {
+    const apiRoot = process.env.NEXT_PUBLIC_API_ROOT_URL ?? "http://localhost:3001";
+    throw new ApiError(
+      0,
+      `Cannot reach the API at ${apiRoot}. Start the backend server, then try again.`,
+    );
+  }
 
   if (response.status === 204) {
     return undefined as T;
@@ -96,16 +111,36 @@ export async function apiRequest<T>(
   const payload = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const message =
-      typeof payload === "object" && payload !== null && "message" in payload
-        ? String((payload as { message: unknown }).message)
-        : typeof payload === "string" && payload
-          ? payload
-          : response.statusText;
+    const message = extractErrorMessage(payload, response.statusText);
     throw new ApiError(response.status, message, payload);
   }
 
   return payload as T;
+}
+
+function extractErrorMessage(payload: unknown, fallback: string): string {
+  if (typeof payload === "string" && payload.trim()) {
+    if (payload.toLowerCase().includes("internal server error")) {
+      return "The API returned an internal server error. Check that the backend is running and configured correctly.";
+    }
+    return payload;
+  }
+
+  if (typeof payload === "object" && payload !== null) {
+    const record = payload as Record<string, unknown>;
+    const candidates = [record.message, record.error, record.detail, record.title];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && candidate.trim()) {
+        return candidate;
+      }
+    }
+  }
+
+  if (fallback.toLowerCase().includes("internal server error")) {
+    return "The API returned an internal server error. Check backend logs for details.";
+  }
+
+  return fallback || "Request failed";
 }
 
 export function buildQuery(params?: Record<string, unknown>) {

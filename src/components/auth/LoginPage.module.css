@@ -371,6 +371,33 @@
   text-decoration: underline;
 }
 
+.apiNotice {
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fef2f2;
+}
+
+.apiNoticeTitle {
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #991b1b;
+}
+
+.apiNoticeText {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: #7f1d1d;
+}
+
+.apiNoticeCode {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
 @media (max-width: 860px) {
   .shell {
     grid-template-columns: 1fr;
