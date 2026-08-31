@@ -1,14 +1,32 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { authApi } from "@/lib/api";
+import { ChevronRight, Shield } from "lucide-react";
+import { authApi, getAccessToken, setTokens } from "@/lib/api";
 import styles from "./LoginPage.module.css";
+
+function LoginBrandMark() {
+  return (
+    <div className={styles.brandLogo} aria-label="Afresh">
+      <span className={styles.brandMark} aria-hidden>
+        A
+      </span>
+      <span className={styles.brandWordmark}>afresh</span>
+    </div>
+  );
+}
+
+function SsoMark() {
+  return <span className={styles.ssoMark} aria-hidden>A</span>;
+}
 
 export function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [checkingBootstrap, setCheckingBootstrap] = useState(true);
@@ -16,12 +34,17 @@ export function LoginPage() {
   const [name, setName] = useState("");
 
   useEffect(() => {
+    if (getAccessToken()) {
+      router.replace("/dashboard");
+      return;
+    }
+
     authApi
       .bootstrapStatus()
       .then((status) => setNeedsBootstrap(!status.complete))
       .catch(() => setNeedsBootstrap(false))
       .finally(() => setCheckingBootstrap(false));
-  }, []);
+  }, [router]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -29,10 +52,24 @@ export function LoginPage() {
     setError(null);
     try {
       if (needsBootstrap) {
-        await authApi.bootstrap({ email, password, name: name || undefined });
+        const response = await authApi.bootstrap({
+          email,
+          password,
+          name: name || undefined,
+        });
+        if (response.accessToken) {
+          setTokens(response.accessToken, response.refreshToken);
+        }
       } else {
         await authApi.login({ email, password });
       }
+
+      if (remember) {
+        localStorage.setItem("wms_remember_me", "1");
+      } else {
+        localStorage.removeItem("wms_remember_me");
+      }
+
       router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed");
@@ -44,71 +81,166 @@ export function LoginPage() {
   if (checkingBootstrap) {
     return (
       <div className={styles.page}>
-        <p>Checking setup status…</p>
+        <div className={styles.loadingShell}>
+          <p className={styles.loadingText}>Loading workspace…</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className={styles.page}>
-      <form className={styles.card} onSubmit={(e) => void handleSubmit(e)}>
-        <p className={styles.eyebrow}>Afresh WMS</p>
-        <h1 className={styles.title}>
-          {needsBootstrap ? "Create Super Admin" : "Sign in"}
-        </h1>
-        <p className={styles.subtitle}>
-          {needsBootstrap
-            ? "Set up the first Super Admin account for this workspace."
-            : "Use your Super Admin credentials to access the dashboard."}
-        </p>
+      <div className={styles.shell}>
+        <aside className={styles.brandPanel} aria-hidden={false}>
+          <div className={styles.rings} aria-hidden>
+            <span className={styles.ring} />
+            <span className={styles.ring} />
+          </div>
 
-        {needsBootstrap ? (
-          <label className={styles.field}>
-            <span>Name</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Your name"
-            />
-          </label>
-        ) : null}
+          <LoginBrandMark />
 
-        <label className={styles.field}>
-          <span>Email</span>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@company.com"
-          />
-        </label>
+          <div className={styles.brandCopy}>
+            <p className={styles.brandEyebrow}>Work, made whole</p>
+            <h1 className={styles.brandTitle}>The staff side of progress.</h1>
+            <p className={styles.brandDescription}>
+              One considered workspace for every person, process, and important
+              moment at work.
+            </p>
+          </div>
 
-        <label className={styles.field}>
-          <span>Password</span>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-          />
-        </label>
-
-        {error ? (
-          <p className={styles.error} role="alert">
-            {error}
+          <p className={styles.brandSecure}>
+            <Shield size={15} strokeWidth={1.75} />
+            Secure workforce management
           </p>
-        ) : null}
+        </aside>
 
-        <button type="submit" className={styles.button} disabled={loading}>
-          {loading
-            ? "Please wait…"
-            : needsBootstrap
-              ? "Create account"
-              : "Sign in"}
-        </button>
-      </form>
+        <main className={styles.formPanel}>
+          <div className={styles.formInner}>
+            <header className={styles.formHeader}>
+              <p className={styles.formEyebrow}>Afresh workspace</p>
+              <h2 className={styles.formTitle}>
+                {needsBootstrap ? "Set up your workspace" : "Welcome back"}
+              </h2>
+              <p className={styles.formSubtitle}>
+                {needsBootstrap
+                  ? "Create the first Super Admin account to get started."
+                  : "Sign in to continue to your workspace."}
+              </p>
+            </header>
+
+            <form className={styles.form} onSubmit={(event) => void handleSubmit(event)}>
+              {needsBootstrap ? (
+                <label className={styles.field}>
+                  <span className={styles.label}>Full name</span>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Christy Ishaku"
+                    className={styles.input}
+                    autoComplete="name"
+                  />
+                </label>
+              ) : null}
+
+              <label className={styles.field}>
+                <span className={styles.label}>Work email</span>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="maya.chen@afresh.co"
+                  className={styles.input}
+                  autoComplete="email"
+                />
+              </label>
+
+              <label className={styles.field}>
+                <span className={styles.label}>Password</span>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="••••••••••••"
+                  className={styles.input}
+                  autoComplete={
+                    needsBootstrap ? "new-password" : "current-password"
+                  }
+                />
+              </label>
+
+              {!needsBootstrap ? (
+                <div className={styles.formRow}>
+                  <label className={styles.checkbox}>
+                    <input
+                      type="checkbox"
+                      checked={remember}
+                      onChange={(event) => setRemember(event.target.checked)}
+                    />
+                    <span>Keep me signed in</span>
+                  </label>
+                  <Link href="/help" className={styles.textLink}>
+                    Forgot password?
+                  </Link>
+                </div>
+              ) : null}
+
+              {error ? (
+                <p className={styles.error} role="alert">
+                  {error}
+                </p>
+              ) : null}
+
+              <button type="submit" className={styles.primaryButton} disabled={loading}>
+                {loading
+                  ? "Please wait…"
+                  : needsBootstrap
+                    ? "Create workspace"
+                    : "Sign in to Afresh"}
+                {!loading && !needsBootstrap ? (
+                  <ChevronRight size={18} strokeWidth={2.25} aria-hidden />
+                ) : null}
+              </button>
+            </form>
+
+            {!needsBootstrap ? (
+              <>
+                <div className={styles.divider}>
+                  <span>or</span>
+                </div>
+
+                <button
+                  type="button"
+                  className={styles.ssoButton}
+                  onClick={() => {
+                    setError("SSO is not configured for this environment yet.");
+                  }}
+                >
+                  <SsoMark />
+                  Continue with SSO
+                </button>
+
+                <p className={styles.support}>
+                  Need help?{" "}
+                  <Link href="/help" className={styles.textLink}>
+                    Contact support
+                  </Link>
+                </p>
+              </>
+            ) : null}
+          </div>
+
+          <footer className={styles.legal}>
+            <span>© 2026 Afresh</span>
+            <span aria-hidden>·</span>
+            <Link href="/help">Privacy</Link>
+            <span aria-hidden>·</span>
+            <Link href="/help">Terms</Link>
+          </footer>
+        </main>
+      </div>
     </div>
   );
 }
