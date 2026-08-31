@@ -87,6 +87,7 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/** Sidebar brand uses AfreshLogo — shared by every AppShell page. */
 export function Sidebar({
   open = false,
   onNavigate,

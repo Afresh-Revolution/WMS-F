@@ -4,12 +4,17 @@
   gap: 10px;
 }
 
-.mark {
-  display: block;
-  width: auto;
+.markWrap {
+  width: 36px;
   height: 36px;
   flex-shrink: 0;
-  object-fit: contain;
+  overflow: hidden;
+  border-radius: 9px;
+  background-color: var(--afresh-logo-mark);
+  background-image: url("/afresh-logo-source.png");
+  background-repeat: no-repeat;
+  background-size: auto 100%;
+  background-position: left center;
 }
 
 .wordmark {
