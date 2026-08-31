@@ -1,7 +1,20 @@
+const API_ROOT_URL = (
+  process.env.NEXT_PUBLIC_API_ROOT_URL ?? "https://wms-b.onrender.com"
+).replace(/\/$/, "");
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 
 const ACCESS_TOKEN_KEY = "wms_access_token";
 const REFRESH_TOKEN_KEY = "wms_refresh_token";
+
+function envAccessToken(): string | null {
+  const token = process.env.NEXT_PUBLIC_JWT_TOKEN?.trim();
+  if (!token) return null;
+  // Only use env token if it looks like a JWT (three base64 segments)
+  if (!/^eyJ[\w-]*\.[\w-]*\.[\w-]*$/i.test(token)) {
+    return null;
+  }
+  return token;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -15,9 +28,19 @@ export class ApiError extends Error {
   }
 }
 
-export function getAccessToken(): string | null {
+/** Token from a real sign-in (localStorage only). Used for login redirects. */
+export function getSessionToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+/**
+ * Token for API Authorization headers.
+ * Prefers a signed-in session; falls back to NEXT_PUBLIC_JWT_TOKEN if set.
+ * Env JWT must not be used for "are you logged in?" checks.
+ */
+export function getAccessToken(): string | null {
+  return getSessionToken() ?? envAccessToken();
 }
 
 export function getRefreshToken(): string | null {
@@ -54,9 +77,7 @@ function resolveUrl(path: string, root?: boolean) {
     if (typeof window !== "undefined") {
       return normalized;
     }
-    const rootBase =
-      process.env.NEXT_PUBLIC_API_ROOT_URL ?? "http://localhost:3001";
-    return `${rootBase}${normalized}`;
+    return `${API_ROOT_URL}${normalized}`;
   }
   return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
@@ -95,10 +116,9 @@ export async function apiRequest<T>(
             : undefined,
     });
   } catch {
-    const apiRoot = process.env.NEXT_PUBLIC_API_ROOT_URL ?? "http://localhost:3001";
     throw new ApiError(
       0,
-      `Cannot reach the API at ${apiRoot}. Start the backend server, then try again.`,
+      `Cannot reach the API at ${API_ROOT_URL}. Check that the backend is running.`,
     );
   }
 
@@ -111,6 +131,12 @@ export async function apiRequest<T>(
   const payload = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
+    if (response.status === 401 && getSessionToken()) {
+      clearTokens();
+      if (typeof window !== "undefined" && window.location.pathname !== "/") {
+        window.location.assign("/");
+      }
+    }
     const message = extractErrorMessage(payload, response.statusText);
     throw new ApiError(response.status, message, payload);
   }
@@ -118,7 +144,22 @@ export async function apiRequest<T>(
   return payload as T;
 }
 
-function extractErrorMessage(payload: unknown, fallback: string): string {
+const GENERIC_ERROR_MESSAGES = new Set([
+  "operation failed",
+  "request failed",
+  "error",
+  "bad request",
+]);
+
+function isUsefulErrorMessage(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  return !GENERIC_ERROR_MESSAGES.has(trimmed.toLowerCase());
+}
+
+/** Parse API error payloads (superadmin + /api/v1/auth formats). */
+export function extractErrorMessage(payload: unknown, fallback: string): string {
   if (typeof payload === "string" && payload.trim()) {
     if (payload.toLowerCase().includes("internal server error")) {
       return "The API returned an internal server error. Check that the backend is running and configured correctly.";
@@ -128,9 +169,60 @@ function extractErrorMessage(payload: unknown, fallback: string): string {
 
   if (typeof payload === "object" && payload !== null) {
     const record = payload as Record<string, unknown>;
-    const candidates = [record.message, record.error, record.detail, record.title];
+    const nestedError = record.error;
+
+    if (typeof nestedError === "object" && nestedError !== null) {
+      const errObj = nestedError as Record<string, unknown>;
+      const code = typeof errObj.code === "string" ? errObj.code : "";
+      const details = errObj.details;
+
+      if (code === "RATE_LIMIT_EXCEEDED") {
+        const retryAfter =
+          typeof details === "object" &&
+          details !== null &&
+          typeof (details as Record<string, unknown>).retryAfterSeconds ===
+            "number"
+            ? Math.ceil(
+                (details as Record<string, unknown>).retryAfterSeconds as number,
+              )
+            : null;
+        return retryAfter
+          ? `Too many sign-in attempts. Please wait ${retryAfter} seconds and try again.`
+          : "Too many sign-in attempts. Please wait a few minutes and try again.";
+      }
+
+      if (code === "CORS_ORIGIN_NOT_ALLOWED") {
+        return "Unable to reach the sign-in service from this address. Use http://localhost:3000 or the deployed app URL.";
+      }
+
+      if (code === "FORBIDDEN" || code === "ACCESS_DENIED") {
+        if (typeof details === "object" && details !== null) {
+          const detailMessage = (details as Record<string, unknown>).message;
+          if (isUsefulErrorMessage(detailMessage)) {
+            return detailMessage;
+          }
+        }
+        return "Access denied. This account may not have Super Admin permissions.";
+      }
+
+      if (typeof details === "object" && details !== null) {
+        const detailMessage = (details as Record<string, unknown>).message;
+        if (isUsefulErrorMessage(detailMessage)) {
+          return detailMessage;
+        }
+      }
+      if (isUsefulErrorMessage(errObj.message)) {
+        return errObj.message;
+      }
+    }
+
+    if (isUsefulErrorMessage(nestedError)) {
+      return nestedError;
+    }
+
+    const candidates = [record.detail, record.title, record.message];
     for (const candidate of candidates) {
-      if (typeof candidate === "string" && candidate.trim()) {
+      if (isUsefulErrorMessage(candidate)) {
         return candidate;
       }
     }
@@ -140,7 +232,24 @@ function extractErrorMessage(payload: unknown, fallback: string): string {
     return "The API returned an internal server error. Check backend logs for details.";
   }
 
+  if (responseLooksLikeAuthFailure(payload)) {
+    return "Invalid email or password.";
+  }
+
+  if (fallback.toLowerCase() === "forbidden") {
+    return "Access denied. Check your Super Admin credentials and try again.";
+  }
+
   return fallback || "Request failed";
+}
+
+function responseLooksLikeAuthFailure(payload: unknown): boolean {
+  if (typeof payload !== "object" || payload === null) return false;
+  const record = payload as Record<string, unknown>;
+  const nestedError = record.error;
+  if (typeof nestedError !== "object" || nestedError === null) return false;
+  const code = (nestedError as Record<string, unknown>).code;
+  return code === "INVALID_CREDENTIALS";
 }
 
 export function buildQuery(params?: Record<string, unknown>) {

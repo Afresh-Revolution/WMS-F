@@ -1,35 +1,9 @@
 import type { NextConfig } from "next";
 
-/** Backend API — proxied in next.config rewrites (build-time env on Render). */
-const apiRoot = (
-  process.env.NEXT_PUBLIC_API_ROOT_URL ?? "http://localhost:3001"
-).replace(/\/$/, "");
-
-const nextConfig: NextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: "/api/v1/:path*",
-        destination: `${apiRoot}/api/v1/:path*`,
-      },
-      {
-        source: "/api/admin/:path*",
-        destination: `${apiRoot}/api/admin/:path*`,
-      },
-      {
-        source: "/api/superadmin/:path*",
-        destination: `${apiRoot}/api/superadmin/:path*`,
-      },
-      {
-        source: "/health/:path*",
-        destination: `${apiRoot}/health/:path*`,
-      },
-      {
-        source: "/health",
-        destination: `${apiRoot}/health`,
-      },
-    ];
-  },
-};
+/**
+ * API traffic is proxied by App Router route handlers under
+ * src/app/api/* and src/app/health/* (server-side, no browser Origin).
+ */
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

@@ -1,4 +1,14 @@
-export { apiRequest, buildQuery, ApiError, getAccessToken, getRefreshToken, setTokens, clearTokens } from "./client";
+export {
+  apiRequest,
+  buildQuery,
+  ApiError,
+  extractErrorMessage,
+  getSessionToken,
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+  clearTokens,
+} from "./client";
 export type { ApiListResponse, PaginatedResponse, Id } from "./types";
 export { unwrapList } from "./types";
 

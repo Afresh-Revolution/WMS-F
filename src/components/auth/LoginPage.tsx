@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Shield } from "lucide-react";
-import { authApi, getAccessToken } from "@/lib/api";
+import { authApi, ApiError, getSessionToken } from "@/lib/api";
 import styles from "./LoginPage.module.css";
 
 function LoginBrandMark() {
@@ -31,7 +31,7 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (getAccessToken()) {
+    if (getSessionToken()) {
       router.replace("/dashboard");
     }
   }, [router]);
@@ -51,7 +51,15 @@ export function LoginPage() {
 
       router.replace("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Authentication failed");
+      if (err instanceof ApiError) {
+        if (err.status === 0) {
+          setError(err.message);
+        } else {
+          setError(err.message || `Sign in failed (${err.status}).`);
+        }
+      } else {
+        setError(err instanceof Error ? err.message : "Authentication failed");
+      }
     } finally {
       setLoading(false);
     }
