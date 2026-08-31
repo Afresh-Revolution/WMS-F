@@ -25,8 +25,19 @@ Open [http://localhost:3000](http://localhost:3000) after starting the dev serve
 
 ```text
 src/
-  app/                 # Next.js App Router pages
-  components/          # Feature UI and shared layout
-  data/                # Mock / static data
-public/                # Static assets
+  app/
+    layout.tsx              # Root HTML / fonts
+    page.tsx                # Redirects to /dashboard
+    (shell)/                # Shared AppShell layout
+      layout.tsx
+      dashboard/
+      (people)/             # employees, departments, nysc-interns
+      (hr)/                 # leave, meetings, promotions, salary-increments
+      (work)/               # tasks, target
+      (finance)/            # finance-payroll (+ bills, expenses, purchases, vendors)
+      (ops)/                # announcements, audit, discipline, events, reports
+  components/               # Feature UI and shared layout
+  data/                     # Mock / static data
+public/                     # Static assets
+legacy/                     # Old Vite prototype (not used by Next)
 ```

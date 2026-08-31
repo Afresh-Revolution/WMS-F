@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   AlertCircle,
-  Bell,
   CalendarDays,
   Circle,
   Eye,
@@ -13,16 +12,20 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
 import {
   actionTypeOptions,
-  disciplineCases,
-  disciplineStats,
+  disciplineCases as fallbackCases,
+  disciplineStats as fallbackStats,
   employeeOptions,
-  getDisciplineCase,
+  type DisciplineCase,
   type DisciplineFilter,
 } from "@/data/discipline";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { disciplineApi } from "@/lib/api";
+import { listFrom, mapDisciplineCase } from "@/lib/api/mappers";
 import { DisciplineRecordModal } from "./DisciplineRecordModal";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { usePageActions } from "@/hooks/usePageActions";
 import styles from "./DisciplinePage.module.css";
 
 const filters: DisciplineFilter[] = ["Active", "Closed", "All"];
@@ -55,6 +58,7 @@ export function DisciplinePage({
 }: DisciplinePageProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { runAction } = usePageActions();
   const [activeFilter, setActiveFilter] =
     useState<DisciplineFilter>(initialFilter);
   const [query, setQuery] = useState("");
@@ -67,8 +71,36 @@ export function DisciplinePage({
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
 
+  const statusParam =
+    activeFilter === "All" ? undefined : activeFilter.toLowerCase();
+
+  const { data, loading, error, refetch } = useAsyncData(
+    () =>
+      disciplineApi.list(
+        statusParam ? { status: statusParam } : undefined,
+      ),
+    [statusParam],
+  );
+
+  const disciplineCases = useMemo((): DisciplineCase[] => {
+    const records = listFrom(data ?? undefined);
+    return records.length > 0
+      ? records.map((record) => mapDisciplineCase(record) as DisciplineCase)
+      : fallbackCases;
+  }, [data]);
+
+  const disciplineStats = useMemo(() => {
+    const open = disciplineCases.filter((item) => item.status === "Active").length;
+    const closed = disciplineCases.filter((item) => item.status === "Closed").length;
+    return [
+      { id: "open", label: "Open Cases", value: String(open || fallbackStats[0].value) },
+      { id: "pending", label: "Pending Acknowledgement", value: fallbackStats[1].value },
+      { id: "closed", label: "Closed This Year", value: String(closed || fallbackStats[2].value) },
+    ];
+  }, [disciplineCases]);
+
   const selectedRecord = selectedRecordId
-    ? getDisciplineCase(selectedRecordId)
+    ? disciplineCases.find((item) => item.id === selectedRecordId)
     : undefined;
 
   const filteredCases = useMemo(() => {
@@ -80,7 +112,7 @@ export function DisciplinePage({
       const matchesQuery = haystack.includes(query.trim().toLowerCase());
       return matchesFilter && matchesQuery;
     });
-  }, [activeFilter, query]);
+  }, [activeFilter, query, disciplineCases]);
 
   useEffect(() => {
     setActiveFilter(initialFilter);
@@ -145,16 +177,31 @@ export function DisciplinePage({
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    closeModal();
+    void runAction("Create disciplinary record", async () => {
+      await disciplineApi.create({
+        employee,
+        actionType,
+        description,
+        date,
+      });
+      await refetch();
+      closeModal();
+    });
   }
 
   return (
-    <AppShell>
+    <>
       <div
         className={`${styles.page} ${isModalOpen ? styles.pageDimmed : ""}`}
       >
         <div className={styles.topBar}>
           <p className={styles.dateLabel}>Monday, August 3</p>
+          {loading ? <p className={styles.dateLabel}>Loading cases…</p> : null}
+          {error ? (
+            <p className={styles.dateLabel} role="alert">
+              Using cached cases — {error}
+            </p>
+          ) : null}
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -166,12 +213,8 @@ export function DisciplinePage({
               />
               <kbd className={styles.searchShortcut}>⌘K</kbd>
             </label>
-            <button type="button" aria-label="Notifications" className={styles.iconButton}>
-              <Bell size={16} />
-            </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              MC
-            </button>
+            <NotificationsLink className={styles.iconButton} />
+            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
 
@@ -276,6 +319,7 @@ export function DisciplinePage({
         <DisciplineRecordModal
           record={selectedRecord}
           onClose={closeRecordModal}
+          onUpdated={() => void refetch()}
         />
       )}
 
@@ -386,6 +430,6 @@ export function DisciplinePage({
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }

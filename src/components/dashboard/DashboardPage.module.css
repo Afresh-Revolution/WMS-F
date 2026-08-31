@@ -341,6 +341,57 @@
   background: #f5f5f4;
 }
 
+.actionCell {
+  position: relative;
+  width: 1%;
+  white-space: nowrap;
+}
+
+.actionMenu {
+  position: relative;
+  display: inline-flex;
+}
+
+.actionDropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  min-width: 132px;
+  padding: 4px;
+  border: 1px solid #ebe6e1;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(28, 25, 23, 0.08);
+}
+
+.actionDropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #44403c;
+  text-align: left;
+}
+
+.actionDropdownItem:hover {
+  background: #fafaf9;
+}
+
+.actionLink {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--afresh-orange);
+}
+
+.actionLink:hover {
+  text-decoration: underline;
+}
+
 .overviewList {
   display: flex;
   flex-direction: column;
@@ -445,6 +496,71 @@
   color: #78716c;
 }
 
+.accessRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cardTitleInline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--afresh-ink);
+}
+
+.panelLink {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--afresh-orange);
+  white-space: nowrap;
+}
+
+.panelLink:hover {
+  text-decoration: underline;
+}
+
+.emptyPanel {
+  padding: 18px 0 4px;
+  font-size: 13px;
+  color: #a8a29e;
+}
+
+.roleChange {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 0;
+}
+
+.roleChange h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--afresh-ink);
+}
+
+.roleChange span {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #a8a29e;
+  white-space: nowrap;
+}
+
 .bottomRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -543,6 +659,7 @@
   }
 
   .chartsRow,
+  .accessRow,
   .bottomRow {
     grid-template-columns: 1fr;
   }

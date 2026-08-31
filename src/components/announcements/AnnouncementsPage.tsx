@@ -7,19 +7,26 @@ import {
   Briefcase,
   ChevronDown,
   ChevronRight,
+  Download,
   Heart,
   Pin,
   Plus,
+  RefreshCw,
   Search,
 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
-  announcements,
-  announcementStats,
+  announcements as fallbackAnnouncements,
+  announcementStats as fallbackStats,
   type AnnouncementCategory,
   type AnnouncementFilter,
   type AnnouncementTagTone,
 } from "@/data/announcements";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { announcementsApi } from "@/lib/api";
+import { listFrom, mapAnnouncement } from "@/lib/api/mappers";
 import styles from "./AnnouncementsPage.module.css";
 
 const filters: AnnouncementFilter[] = ["All", "Unread", "Pinned"];
@@ -44,6 +51,24 @@ const tagClass: Record<AnnouncementTagTone, string> = {
   pinned: styles.tagPinned,
 };
 
+const createFields = [
+  { name: "title", label: "Title", required: true },
+  { name: "source", label: "Source", required: true },
+  { name: "body", label: "Message", type: "textarea" as const, required: true },
+  {
+    name: "category",
+    label: "Category",
+    type: "select" as const,
+    defaultValue: "General",
+    options: [
+      { label: "HR", value: "HR" },
+      { label: "Finance", value: "Finance" },
+      { label: "General", value: "General" },
+      { label: "Urgent", value: "Urgent" },
+    ],
+  },
+];
+
 function TagIcon({ tone }: { tone: AnnouncementTagTone }) {
   if (tone === "finance") return <Briefcase size={11} strokeWidth={2} />;
   if (tone === "hr") return <Heart size={11} strokeWidth={2} />;
@@ -58,6 +83,36 @@ export function AnnouncementsPage() {
   const [activeCategory, setActiveCategory] = useState<AnnouncementCategory>("All");
   const [query, setQuery] = useState("");
   const [expandedId, setExpandedId] = useState("1");
+  const [createOpen, setCreateOpen] = useState(false);
+  const { runAction, exportRows } = usePageActions();
+
+  const { data, loading, error, refetch } = useAsyncData(
+    () => announcementsApi.list(),
+    [],
+  );
+
+  const announcements = useMemo(() => {
+    const records = listFrom(data ?? undefined);
+    return records.length > 0
+      ? records.map((record) => mapAnnouncement(record))
+      : fallbackAnnouncements;
+  }, [data]);
+
+  const announcementStats = useMemo(() => {
+    const unread = announcements.filter((item) => item.unread).length;
+    const pinned = announcements.filter((item) => item.pinned).length;
+    return [
+      { id: "unread", label: "Unread", value: String(unread), badge: "New" },
+      { id: "pinned", label: "Pinned", value: String(pinned), badge: "Active" },
+      {
+        id: "month",
+        label: "Total This Month",
+        value: String(announcements.length || fallbackStats[2].value),
+        badge: fallbackStats[2].badge,
+      },
+      { id: "recipients", label: "Recipients", value: fallbackStats[3].value, badge: fallbackStats[3].badge },
+    ];
+  }, [announcements]);
 
   const filtered = useMemo(() => {
     return announcements.filter((item) => {
@@ -71,13 +126,53 @@ export function AnnouncementsPage() {
       const matchesQuery = haystack.includes(query.trim().toLowerCase());
       return matchesFilter && matchesCategory && matchesQuery;
     });
-  }, [activeFilter, activeCategory, query]);
+  }, [activeFilter, activeCategory, query, announcements]);
+
+  async function handleCreate(values: Record<string, string>) {
+    await runAction("Create announcement", async () => {
+      await announcementsApi.create(values);
+      refetch();
+    });
+  }
+
+  async function unpinAnnouncement(id: string) {
+    await runAction("Unpin announcement", async () => {
+      await announcementsApi.action(id, "unpin");
+      refetch();
+    });
+  }
+
+  function handleRefresh() {
+    void runAction("Refresh", async () => {
+      refetch();
+    });
+  }
+
+  function handleExport() {
+    exportRows(
+      filtered.map((item) => ({
+        title: item.title,
+        source: item.source,
+        date: item.date,
+        category: item.category,
+        pinned: item.pinned,
+        unread: item.unread,
+      })),
+      "announcements.csv",
+    );
+  }
 
   return (
-    <AppShell>
+    <>
       <div className={styles.page}>
         <div className={styles.topBar}>
           <p className={styles.dateLabel}>Monday, August 3</p>
+          {loading ? <p className={styles.dateLabel}>Loading announcements…</p> : null}
+          {error ? (
+            <p className={styles.dateLabel} role="alert">
+              Using cached announcements — {error}
+            </p>
+          ) : null}
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -89,12 +184,16 @@ export function AnnouncementsPage() {
               />
               <kbd className={styles.searchShortcut}>⌘K</kbd>
             </label>
-            <button type="button" aria-label="Notifications" className={styles.iconButton}>
-              <Bell size={16} />
+            <NotificationsLink className={styles.iconButton} />
+            <button
+              type="button"
+              aria-label="Refresh"
+              className={styles.iconButton}
+              onClick={handleRefresh}
+            >
+              <RefreshCw size={16} />
             </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              MC
-            </button>
+            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
 
@@ -107,10 +206,20 @@ export function AnnouncementsPage() {
               all in one place.
             </p>
           </div>
-          <button type="button" className={styles.newButton}>
-            <Plus size={16} strokeWidth={2.5} />
-            New announcement
-          </button>
+          <div className={styles.headerActions}>
+            <button type="button" className={styles.exportButton} onClick={handleExport}>
+              <Download size={15} />
+              Export
+            </button>
+            <button
+              type="button"
+              className={styles.newButton}
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              New announcement
+            </button>
+          </div>
         </div>
 
         <div className={styles.stats}>
@@ -223,7 +332,11 @@ export function AnnouncementsPage() {
                     <p className={styles.body}>{item.body}</p>
                     {item.pinned && (
                       <div className={styles.cardFooter}>
-                        <button type="button" className={styles.unpinButton}>
+                        <button
+                          type="button"
+                          className={styles.unpinButton}
+                          onClick={() => void unpinAnnouncement(item.id)}
+                        >
                           <Pin size={14} strokeWidth={2} />
                           Unpin
                         </button>
@@ -240,6 +353,16 @@ export function AnnouncementsPage() {
           )}
         </div>
       </div>
-    </AppShell>
+
+      <SimpleModal
+        open={createOpen}
+        title="New announcement"
+        description="Publish a company-wide notice or policy update."
+        fields={createFields}
+        submitLabel="Publish"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreate}
+      />
+    </>
   );
 }

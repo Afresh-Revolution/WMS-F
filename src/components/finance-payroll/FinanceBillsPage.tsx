@@ -1,17 +1,23 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bell, Check, Plus, Search, TrendingDown, Upload, X } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
+import { Check, Plus, RefreshCw, Search, TrendingDown, Upload, X } from "lucide-react";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   billFilters,
-  billStats,
-  bills,
+  billStats as fallbackStats,
+  bills as fallbackBills,
   matchesBillFilter,
+  type Bill,
   type BillFilter,
   type BillStatus,
 } from "@/data/financeBills";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { billsApi } from "@/lib/api";
+import { listFrom, mapBill } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceBillsPage.module.css";
 
@@ -23,34 +29,139 @@ const statusClass: Record<BillStatus, string> = {
   Paid: styles.statusPaid,
 };
 
+const createFields = [
+  { name: "vendor", label: "Vendor", required: true },
+  { name: "category", label: "Category", required: true },
+  { name: "amount", label: "Amount", required: true, placeholder: "₦ 0" },
+  { name: "dueDate", label: "Due date", type: "date" as const, required: true },
+];
+
 function isAwaitingApproval(status: BillStatus): boolean {
   return status === "Awaiting Admin Approval";
 }
 
 export function FinanceBillsPage() {
   const [activeFilter, setActiveFilter] = useState<BillFilter>("All");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const { runAction, exportRows } = usePageActions();
+
+  const { data, loading, error, refetch } = useAsyncData(() => billsApi.list(), []);
+
+  const bills = useMemo(() => {
+    const records = listFrom(data ?? undefined);
+    return records.length > 0
+      ? records.map((record) => mapBill(record))
+      : fallbackBills;
+  }, [data]);
+
+  const billStats = fallbackStats;
 
   const filteredBills = useMemo(() => {
-    return bills.filter((bill) => matchesBillFilter(bill.status, activeFilter));
-  }, [activeFilter]);
+    const term = query.trim().toLowerCase();
+    return bills.filter((bill) => {
+      const matchesFilter = matchesBillFilter(bill.status, activeFilter);
+      const haystack =
+        `${bill.ref} ${bill.vendor} ${bill.category}`.toLowerCase();
+      return matchesFilter && (!term || haystack.includes(term));
+    });
+  }, [activeFilter, bills, query]);
+
+  async function handleCreate(values: Record<string, string>) {
+    await runAction("Add bill", async () => {
+      await billsApi.create(values);
+      refetch();
+    });
+  }
+
+  async function approveBill(bill: Bill) {
+    await runAction(`Approve ${bill.ref}`, async () => {
+      await billsApi.action(bill.id, "approve");
+      refetch();
+    });
+  }
+
+  async function rejectBill(bill: Bill) {
+    await runAction(`Reject ${bill.ref}`, async () => {
+      await billsApi.action(bill.id, "reject");
+      refetch();
+    });
+  }
+
+  async function uploadBill(bill: Bill) {
+    await runAction(`Upload ${bill.ref}`, async () => {
+      await billsApi.action(bill.id, "upload");
+      refetch();
+    });
+  }
+
+  async function payBill(bill: Bill) {
+    await runAction(`Pay ${bill.ref}`, async () => {
+      await billsApi.action(bill.id, "pay");
+      refetch();
+    });
+  }
+
+  function handleRefresh() {
+    void runAction("Refresh", async () => {
+      refetch();
+    });
+  }
+
+  function handleExport() {
+    exportRows(
+      filteredBills.map((bill) => ({
+        ref: bill.ref,
+        vendor: bill.vendor,
+        category: bill.category,
+        amount: bill.amount,
+        dueDate: bill.dueDate,
+        status: bill.status,
+      })),
+      "bills.csv",
+    );
+  }
 
   return (
-    <AppShell>
+    <>
       <div className={payrollStyles.page}>
         <FinanceModuleTabs />
+        {loading ? <p>Loading bills…</p> : null}
+        {error ? <p role="alert">Using cached bills — {error}</p> : null}
 
         <div className={payrollStyles.topBar}>
           <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>
           <div className={payrollStyles.topActions}>
-            <button type="button" aria-label="Search" className={payrollStyles.iconButton}>
+            <button
+              type="button"
+              aria-label="Search"
+              className={payrollStyles.iconButton}
+              onClick={() => {
+                document
+                  .querySelector<HTMLInputElement>("[data-bills-search]")
+                  ?.focus();
+              }}
+            >
               <Search size={16} />
             </button>
-            <button type="button" aria-label="Notifications" className={payrollStyles.iconButton}>
-              <Bell size={16} />
+            <NotificationsLink className={payrollStyles.iconButton} />
+            <button
+              type="button"
+              aria-label="Refresh"
+              className={payrollStyles.iconButton}
+              onClick={handleRefresh}
+            >
+              <RefreshCw size={16} />
             </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              MC
+            <button
+              type="button"
+              aria-label="Export"
+              className={payrollStyles.iconButton}
+              onClick={handleExport}
+            >
+              <Upload size={16} />
             </button>
+            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
 
@@ -63,7 +174,7 @@ export function FinanceBillsPage() {
               one place.
             </p>
           </div>
-          <button type="button" className={styles.addButton}>
+          <button type="button" className={styles.addButton} onClick={() => setCreateOpen(true)}>
             <Plus size={16} strokeWidth={2.5} />
             Add bill
           </button>
@@ -112,6 +223,18 @@ export function FinanceBillsPage() {
           })}
         </div>
 
+        <label className={styles.searchField}>
+          <Search size={16} className={styles.searchIcon} />
+          <input
+            type="search"
+            data-bills-search
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search bills..."
+            className={styles.searchInput}
+          />
+        </label>
+
         <section className={styles.tableSection}>
           <div className={styles.tableWrap}>
             <table className={styles.table}>
@@ -147,23 +270,36 @@ export function FinanceBillsPage() {
                             type="button"
                             aria-label={`Reject ${bill.ref}`}
                             className={styles.rejectButton}
+                            onClick={() => void rejectBill(bill)}
                           >
                             <X size={14} />
                           </button>
-                          <button type="button" className={styles.approveButton}>
+                          <button
+                            type="button"
+                            className={styles.approveButton}
+                            onClick={() => void approveBill(bill)}
+                          >
                             <Check size={14} strokeWidth={2.5} />
                             Approve
                           </button>
                         </span>
                       )}
                       {bill.status === "Scheduled for Payment" && (
-                        <button type="button" className={styles.uploadButton}>
+                        <button
+                          type="button"
+                          className={styles.uploadButton}
+                          onClick={() => void uploadBill(bill)}
+                        >
                           <Upload size={14} />
                           Upload
                         </button>
                       )}
                       {bill.status === "Overdue" && (
-                        <button type="button" className={styles.payNowButton}>
+                        <button
+                          type="button"
+                          className={styles.payNowButton}
+                          onClick={() => void payBill(bill)}
+                        >
                           Pay now
                         </button>
                       )}
@@ -179,6 +315,16 @@ export function FinanceBillsPage() {
           )}
         </section>
       </div>
-    </AppShell>
+
+      <SimpleModal
+        open={createOpen}
+        title="Add bill"
+        description="Record a vendor bill or invoice for approval."
+        fields={createFields}
+        submitLabel="Add bill"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreate}
+      />
+    </>
   );
 }

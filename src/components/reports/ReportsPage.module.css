@@ -412,6 +412,36 @@
   border-color: #d6d3d1;
 }
 
+.savedList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.savedRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f5f5f4;
+  font-size: 14px;
+}
+
+.savedRunButton {
+  padding: 6px 12px;
+  border: 1px solid #e7e5e4;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--afresh-orange);
+}
+
+.savedRunButton:hover {
+  background: #fff7ed;
+}
+
 @media (max-width: 980px) {
   .kpis,
   .grid {

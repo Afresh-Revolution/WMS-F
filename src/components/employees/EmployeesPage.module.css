@@ -23,6 +23,8 @@
   border-radius: 999px;
   background: #fff;
   color: #a8a29e;
+  font: inherit;
+  cursor: pointer;
 }
 
 .globalSearchIcon {
@@ -424,5 +426,31 @@
   .globalSearch {
     min-width: 0;
     flex: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .topBar {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .list {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 12px 16px 40px;
+  }
+
+  .title {
+    font-size: 28px;
   }
 }

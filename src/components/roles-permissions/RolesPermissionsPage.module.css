@@ -1,0 +1,276 @@
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 36px 64px;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.dateLabel {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a8a29e;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topSearch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 240px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #a8a29e;
+}
+
+.topSearchIcon {
+  flex-shrink: 0;
+  color: #a8a29e;
+}
+
+.topSearchInput {
+  width: 100%;
+  background: transparent;
+  color: #44403c;
+}
+
+.topSearchInput::placeholder {
+  color: #a8a29e;
+}
+
+.searchShortcut {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #f5f5f4;
+  font-size: 10px;
+  font-weight: 600;
+  color: #a8a29e;
+  line-height: 1;
+}
+
+.iconButton {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #78716c;
+}
+
+.notifDot {
+  position: absolute;
+  top: 8px;
+  right: 9px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #ef4444;
+  border: 1.5px solid #fff;
+}
+
+.avatarChip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #ebe6e1;
+  color: var(--afresh-orange);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #78716c;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 48px;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--afresh-orange);
+}
+
+.subtitle {
+  margin: 12px 0 0;
+  max-width: 40rem;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #78716c;
+}
+
+.matrixCard {
+  padding: 8px 8px 18px;
+  border: 1px solid #ebe6e1;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.03);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+}
+
+.permissionHead,
+.roleHead {
+  padding: 18px 14px 16px;
+  border-bottom: 1px solid #f0ece8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a8a29e;
+  white-space: nowrap;
+}
+
+.permissionHead {
+  text-align: left;
+  padding-left: 22px;
+}
+
+.roleHead {
+  text-align: center;
+}
+
+.permissionCell {
+  padding: 22px 14px 22px 22px;
+  border-bottom: 1px solid #f5f5f4;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--afresh-ink);
+  white-space: nowrap;
+}
+
+.checkCell {
+  padding: 18px 10px;
+  border-bottom: 1px solid #f5f5f4;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child .permissionCell,
+.table tbody tr:last-child .checkCell {
+  border-bottom: none;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.checkOn {
+  background: var(--afresh-orange);
+  color: #fff;
+  border: none;
+}
+
+.checkOff {
+  background: transparent;
+  border: 1.5px solid #d6d3d1;
+  color: transparent;
+}
+
+.checkOff:hover {
+  border-color: #a8a29e;
+}
+
+.checkOn:hover {
+  background: var(--afresh-orange-dark);
+}
+
+.checkLocked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.checkLocked:hover {
+  background: var(--afresh-orange);
+}
+
+.note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 14px 0;
+  padding-top: 14px;
+  border-top: 1px solid #f5f5f4;
+  font-size: 13px;
+  color: #78716c;
+}
+
+.noteIcon {
+  flex-shrink: 0;
+  color: var(--afresh-orange);
+}
+
+@media (max-width: 860px) {
+  .page {
+    padding: 20px 18px 48px;
+  }
+
+  .title {
+    font-size: 40px;
+  }
+
+  .header {
+    flex-direction: column;
+  }
+
+  .matrixCard {
+    padding: 4px 4px 14px;
+  }
+
+  .tableWrap {
+    overflow-x: auto;
+  }
+}

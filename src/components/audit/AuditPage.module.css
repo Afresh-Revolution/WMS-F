@@ -368,6 +368,15 @@
     flex-direction: column;
   }
 
+  .topBar {
+    flex-wrap: wrap;
+  }
+
+  .topActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   .title {
     font-size: 34px;
     max-width: none;

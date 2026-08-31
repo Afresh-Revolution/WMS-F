@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
-  Bell,
   LayoutGrid,
   List,
   Mail,
@@ -10,13 +9,17 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
 import {
-  departmentFilters,
-  employees,
+  employees as fallbackEmployees,
   type DepartmentFilter,
   type EmployeeStatus,
 } from "@/data/employees";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { SimpleModal } from "@/components/ui/SimpleModal";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { employeesApi } from "@/lib/api";
+import { listFrom, mapEmployee } from "@/lib/api/mappers";
 import styles from "./EmployeesPage.module.css";
 
 type ViewMode = "grid" | "list";
@@ -26,10 +29,38 @@ const statusClass: Record<EmployeeStatus, string> = {
   "On leave": styles.statusLeave,
 };
 
+const addEmployeeFields = [
+  { name: "name", label: "Full name", required: true },
+  { name: "email", label: "Email", type: "email" as const, required: true },
+  { name: "title", label: "Job title", required: true },
+  { name: "department", label: "Department", required: true },
+  { name: "location", label: "Location" },
+];
+
 export function EmployeesPage() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<DepartmentFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [addOpen, setAddOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const { runAction, showToast } = usePageActions();
+  const { data, loading, error, refetch } = useAsyncData(
+    () => employeesApi.list(),
+    [],
+  );
+
+  const employees = useMemo(() => {
+    const records = listFrom(data ?? undefined);
+    return records.length > 0
+      ? records.map((record) => mapEmployee(record))
+      : fallbackEmployees;
+  }, [data]);
+
+  const departmentFilters = useMemo((): DepartmentFilter[] => {
+    const departments = new Set(employees.map((e) => e.department).filter(Boolean));
+    return ["All", ...Array.from(departments)] as DepartmentFilter[];
+  }, [employees]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
@@ -41,24 +72,45 @@ export function EmployeesPage() {
         matchesFilter && haystack.includes(query.trim().toLowerCase())
       );
     });
-  }, [activeFilter, query]);
+  }, [activeFilter, query, employees]);
+
+  function focusSearch() {
+    searchRef.current?.focus();
+    showToast("Use the search field below", "info");
+  }
+
+  function viewProfile(employee: (typeof employees)[number]) {
+    showToast(
+      `${employee.name} — ${employee.title}, ${employee.department}`,
+      "info",
+    );
+    window.location.href = `mailto:${employee.email}`;
+  }
+
+  async function handleAddEmployee(values: Record<string, string>) {
+    await runAction("Add person", async () => {
+      await employeesApi.create(values);
+      refetch();
+    });
+  }
 
   return (
-    <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <div className={styles.globalSearch}>
+          {loading ? <span>Loading employees…</span> : null}
+          {error ? <span role="alert">Using cached employees — {error}</span> : null}
+          <button
+            type="button"
+            className={styles.globalSearch}
+            onClick={focusSearch}
+          >
             <Search size={15} className={styles.globalSearchIcon} />
             <span className={styles.globalSearchText}>Search</span>
             <span className={styles.shortcut}>⌘ K</span>
-          </div>
+          </button>
           <div className={styles.topActions}>
-            <button type="button" aria-label="Notifications" className={styles.iconButton}>
-              <Bell size={16} />
-            </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              MC
-            </button>
+            <NotificationsLink className={styles.iconButton} />
+            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
 
@@ -71,7 +123,11 @@ export function EmployeesPage() {
             </p>
           </div>
           <div className={styles.headerActions}>
-            <button type="button" className={styles.addButton}>
+            <button
+              type="button"
+              className={styles.addButton}
+              onClick={() => setAddOpen(true)}
+            >
               <Plus size={16} strokeWidth={2.5} />
               Add person
             </button>
@@ -103,6 +159,7 @@ export function EmployeesPage() {
         <label className={styles.staffSearch}>
           <Search size={16} className={styles.staffSearchIcon} />
           <input
+            ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search staff..."
@@ -158,7 +215,11 @@ export function EmployeesPage() {
                   </div>
                 </div>
                 <div className={styles.cardFooter}>
-                  <button type="button" className={styles.profileLink}>
+                  <button
+                    type="button"
+                    className={styles.profileLink}
+                    onClick={() => viewProfile(employee)}
+                  >
                     View profile
                   </button>
                 </div>
@@ -192,7 +253,11 @@ export function EmployeesPage() {
                 <span className={statusClass[employee.status]}>
                   {employee.status}
                 </span>
-                <button type="button" className={styles.profileLink}>
+                <button
+                  type="button"
+                  className={styles.profileLink}
+                  onClick={() => viewProfile(employee)}
+                >
                   View profile
                 </button>
               </article>
@@ -203,7 +268,16 @@ export function EmployeesPage() {
             )}
           </div>
         )}
+
+        <SimpleModal
+          open={addOpen}
+          title="Add person"
+          description="Create a new staff directory entry."
+          fields={addEmployeeFields}
+          submitLabel="Add person"
+          onClose={() => setAddOpen(false)}
+          onSubmit={handleAddEmployee}
+        />
       </div>
-    </AppShell>
   );
 }

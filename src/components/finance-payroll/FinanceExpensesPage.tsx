@@ -1,17 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { Bell, Download, Plus, Search, Trash2 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
+import { useMemo, useState } from "react";
+import { Download, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   categoryIcons,
-  expenseClaims,
+  expenseClaims as fallbackClaims,
   expenseSectionTabs,
   expenseStats,
+  type ExpenseClaim,
   type ExpenseSectionTab,
   type ExpenseStatus,
 } from "@/data/financeExpenses";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { expensesApi } from "@/lib/api";
+import { listFrom, mapExpense } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceExpensesPage.module.css";
 
@@ -21,26 +27,114 @@ const statusClass: Record<ExpenseStatus, string> = {
   Rejected: styles.statusRejected,
 };
 
+const createFields = [
+  { name: "description", label: "Description", required: true },
+  {
+    name: "category",
+    label: "Category",
+    type: "select" as const,
+    defaultValue: "Meals",
+    options: [
+      { label: "Meals", value: "Meals" },
+      { label: "Transport", value: "Transport" },
+      { label: "Travel", value: "Travel" },
+      { label: "Supplies", value: "Supplies" },
+      { label: "Equipment", value: "Equipment" },
+    ],
+  },
+  { name: "date", label: "Date", type: "date" as const, required: true },
+  { name: "amount", label: "Amount", required: true, placeholder: "₦ 0" },
+];
+
 export function FinanceExpensesPage() {
   const [activeSection, setActiveSection] = useState<ExpenseSectionTab>("My expense");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const { runAction, exportRows } = usePageActions();
+
+  const { data, loading, error, refetch } = useAsyncData(() => expensesApi.list(), []);
+
+  const expenseClaims = useMemo(() => {
+    const records = listFrom(data ?? undefined);
+    return records.length > 0
+      ? records.map((record) => mapExpense(record))
+      : fallbackClaims;
+  }, [data]);
+
+  const filteredClaims = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return expenseClaims;
+    return expenseClaims.filter((claim) =>
+      `${claim.ref} ${claim.description} ${claim.category}`.toLowerCase().includes(term),
+    );
+  }, [expenseClaims, query]);
+
+  async function handleCreate(values: Record<string, string>) {
+    await runAction("Submit claim", async () => {
+      await expensesApi.create(values);
+      refetch();
+    });
+  }
+
+  async function deleteClaim(claim: ExpenseClaim) {
+    await runAction(`Delete ${claim.ref}`, async () => {
+      await expensesApi.delete(claim.id);
+      refetch();
+    });
+  }
+
+  function handleExport() {
+    exportRows(
+      filteredClaims.map((claim) => ({
+        ref: claim.ref,
+        description: claim.description,
+        category: claim.category,
+        date: claim.date,
+        amount: claim.amount,
+        status: claim.status,
+      })),
+      "expenses.csv",
+    );
+  }
+
+  function handleRefresh() {
+    void runAction("Refresh", async () => {
+      refetch();
+    });
+  }
 
   return (
-    <AppShell>
+    <>
       <div className={payrollStyles.page}>
         <FinanceModuleTabs />
+        {loading ? <p>Loading expenses…</p> : null}
+        {error ? <p role="alert">Using cached expenses — {error}</p> : null}
 
         <div className={payrollStyles.topBar}>
           <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>
           <div className={payrollStyles.topActions}>
-            <button type="button" aria-label="Search" className={payrollStyles.iconButton}>
+            <button
+              type="button"
+              aria-label="Search"
+              className={payrollStyles.iconButton}
+              onClick={() => {
+                document
+                  .querySelector<HTMLInputElement>("[data-expenses-search]")
+                  ?.focus();
+              }}
+            >
               <Search size={16} />
             </button>
-            <button type="button" aria-label="Notifications" className={payrollStyles.iconButton}>
-              <Bell size={16} />
+            <NotificationsLink className={payrollStyles.iconButton} />
+            <button
+              type="button"
+              aria-label="Refresh"
+              className={payrollStyles.iconButton}
+              onClick={handleRefresh}
+            >
+              <RefreshCw size={16} />
             </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              MC
-            </button>
+            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
 
@@ -54,11 +148,15 @@ export function FinanceExpensesPage() {
             </p>
           </div>
           <div className={payrollStyles.headerActions}>
-            <button type="button" className={payrollStyles.exportButton}>
+            <button type="button" className={payrollStyles.exportButton} onClick={handleExport}>
               <Download size={15} />
               Export
             </button>
-            <button type="button" className={styles.submitButton}>
+            <button
+              type="button"
+              className={styles.submitButton}
+              onClick={() => setCreateOpen(true)}
+            >
               <Plus size={16} strokeWidth={2.5} />
               Submit claim
             </button>
@@ -113,6 +211,18 @@ export function FinanceExpensesPage() {
               </div>
             </div>
 
+            <label className={styles.searchField}>
+              <Search size={16} className={styles.searchIcon} />
+              <input
+                type="search"
+                data-expenses-search
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search claims..."
+                className={styles.searchInput}
+              />
+            </label>
+
             <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
@@ -127,7 +237,7 @@ export function FinanceExpensesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {expenseClaims.map((claim) => {
+                  {filteredClaims.map((claim) => {
                     const CategoryIcon = categoryIcons[claim.category];
                     return (
                       <tr key={claim.id}>
@@ -149,6 +259,7 @@ export function FinanceExpensesPage() {
                             type="button"
                             aria-label={`Delete ${claim.ref}`}
                             className={styles.deleteButton}
+                            onClick={() => void deleteClaim(claim)}
                           >
                             <Trash2 size={15} />
                           </button>
@@ -171,6 +282,16 @@ export function FinanceExpensesPage() {
           </section>
         )}
       </div>
-    </AppShell>
+
+      <SimpleModal
+        open={createOpen}
+        title="Submit expense claim"
+        description="Add a reimbursable expense with receipt details."
+        fields={createFields}
+        submitLabel="Submit claim"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreate}
+      />
+    </>
   );
 }

@@ -2,13 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, ChevronRight, Plus, Search } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
+import { ChevronRight, Plus, Search } from "lucide-react";
 import {
-  placementMembers,
-  placementStats,
+  placementMembers as fallbackMembers,
   type PlacementFilter,
 } from "@/data/placements";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { SimpleModal } from "@/components/ui/SimpleModal";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { nyscInternsApi } from "@/lib/api";
+import { listFrom, mapPlacement } from "@/lib/api/mappers";
 import styles from "./PlacementsPage.module.css";
 
 const filters: PlacementFilter[] = ["Active", "Exiting soon", "Exited", "All"];
@@ -20,6 +24,25 @@ const filterRoutes: Record<PlacementFilter, string> = {
   All: "/nysc-interns/all",
 };
 
+const addMemberFields = [
+  { name: "name", label: "Full name", required: true },
+  {
+    name: "type",
+    label: "Type",
+    type: "select" as const,
+    required: true,
+    defaultValue: "NYSC",
+    options: [
+      { label: "NYSC", value: "NYSC" },
+      { label: "Intern", value: "Intern" },
+    ],
+  },
+  { name: "school", label: "School / institution", required: true },
+  { name: "department", label: "Department", required: true },
+  { name: "supervisor", label: "Supervisor", required: true },
+  { name: "endDate", label: "End date", type: "date" as const, required: true },
+];
+
 type PlacementsPageProps = {
   initialFilter?: PlacementFilter;
 };
@@ -28,10 +51,48 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<PlacementFilter>(initialFilter);
   const [query, setQuery] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+
+  const { runAction, showToast } = usePageActions();
 
   useEffect(() => {
     setActiveFilter(initialFilter);
   }, [initialFilter]);
+
+  const statusParam =
+    activeFilter === "All"
+      ? undefined
+      : activeFilter === "Exiting soon"
+        ? "exiting"
+        : activeFilter.toLowerCase();
+
+  const { data, loading, error, refetch } = useAsyncData(
+    () =>
+      nyscInternsApi.list(
+        statusParam ? { status: statusParam } : undefined,
+      ),
+    [statusParam],
+  );
+
+  const placementMembers = useMemo(() => {
+    const records = listFrom(data ?? undefined);
+    return records.length > 0
+      ? records.map((record) => mapPlacement(record))
+      : fallbackMembers;
+  }, [data]);
+
+  const placementStats = useMemo(() => {
+    const active = placementMembers.filter((m) => m.status === "Active").length;
+    const exiting = placementMembers.filter((m) => m.status === "Exiting soon").length;
+    const nysc = placementMembers.filter((m) => m.type === "NYSC").length;
+    const interns = placementMembers.filter((m) => m.type === "Intern").length;
+    return [
+      { id: "active", label: "Active Members", value: String(active), badge: "Current" },
+      { id: "exiting", label: "Exiting in 60 Days", value: String(exiting), badge: "Alert" },
+      { id: "nysc", label: "NYSC Members", value: String(nysc), badge: "Active" },
+      { id: "interns", label: "Interns", value: String(interns), badge: "Active" },
+    ];
+  }, [placementMembers]);
 
   const filteredMembers = useMemo(() => {
     return placementMembers.filter((member) => {
@@ -41,18 +102,37 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
         `${member.name} ${member.school} ${member.department} ${member.supervisor} ${member.type}`.toLowerCase();
       return matchesFilter && haystack.includes(query.trim().toLowerCase());
     });
-  }, [activeFilter, query]);
+  }, [activeFilter, query, placementMembers]);
 
   function handleFilterChange(filter: PlacementFilter) {
     setActiveFilter(filter);
     router.push(filterRoutes[filter]);
   }
 
+  function viewProfile(member: (typeof placementMembers)[number]) {
+    showToast(
+      `${member.name} (${member.type}) — ${member.department}, ends ${member.endDate}`,
+      "info",
+    );
+  }
+
+  async function handleAddMember(values: Record<string, string>) {
+    await runAction("Add member", async () => {
+      await nyscInternsApi.create(values);
+      refetch();
+    });
+  }
+
   return (
-    <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
           <p className={styles.dateLabel}>Monday, August 3</p>
+          {loading ? <p className={styles.dateLabel}>Loading placements…</p> : null}
+          {error ? (
+            <p className={styles.dateLabel} role="alert">
+              Using cached placements — {error}
+            </p>
+          ) : null}
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -64,12 +144,8 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
               />
               <kbd className={styles.searchShortcut}>⌘K</kbd>
             </label>
-            <button type="button" aria-label="Notifications" className={styles.iconButton}>
-              <Bell size={16} />
-            </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              MC
-            </button>
+            <NotificationsLink className={styles.iconButton} />
+            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
 
@@ -82,7 +158,11 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
               and process conversions.
             </p>
           </div>
-          <button type="button" className={styles.addButton}>
+          <button
+            type="button"
+            className={styles.addButton}
+            onClick={() => setAddOpen(true)}
+          >
             <Plus size={16} strokeWidth={2.5} />
             Add member
           </button>
@@ -170,7 +250,11 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
               </div>
 
               <div className={styles.cardFooter}>
-                <button type="button" className={styles.profileLink}>
+                <button
+                  type="button"
+                  className={styles.profileLink}
+                  onClick={() => viewProfile(member)}
+                >
                   View profile
                   <ChevronRight size={14} strokeWidth={2.5} />
                 </button>
@@ -182,7 +266,16 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
             <div className={styles.empty}>No placements in this view.</div>
           )}
         </div>
+
+        <SimpleModal
+          open={addOpen}
+          title="Add member"
+          description="Register a new NYSC member or intern."
+          fields={addMemberFields}
+          submitLabel="Add member"
+          onClose={() => setAddOpen(false)}
+          onSubmit={handleAddMember}
+        />
       </div>
-    </AppShell>
   );
 }

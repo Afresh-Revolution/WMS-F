@@ -1,25 +1,35 @@
 "use client";
 
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import {
-  Bell,
   BookOpen,
+  Check,
   Gift,
   Headphones,
+  KeyRound,
   MoreVertical,
   Search,
   Shield,
+  UserPlus,
+  X,
 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { usePageActions } from "@/hooks/usePageActions";
 import {
   companyResources,
-  departmentPerformance,
-  employeesByDepartment,
-  leaveRequests,
-  overviewItems,
-  recentActivity,
-  stats,
+  departmentPerformance as fallbackDeptPerformance,
+  employeesByDepartment as fallbackEmployeesByDept,
+  leaveRequests as fallbackLeaveRequests,
+  overviewItems as fallbackOverviewItems,
+  recentActivity as fallbackRecentActivity,
+  stats as fallbackStats,
+  type LeaveRequest,
   type LeaveStatus,
 } from "@/data/dashboard";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { dashboardApi, hrApi } from "@/lib/api";
+import { avatarColor, initials, listFrom, num, str } from "@/lib/api/mappers";
 import styles from "./DashboardPage.module.css";
 
 const statusClass: Record<LeaveStatus, string> = {
@@ -35,12 +45,155 @@ const resourceIcons = {
   policy: Shield,
 } as const;
 
+const resourceLinks: Record<(typeof companyResources)[number]["icon"], string> = {
+  handbook: "/help",
+  benefits: "/help",
+  support: "/help",
+  policy: "/leave",
+};
+
 export function DashboardPage() {
+  const { runAction } = usePageActions();
+  const [leaveMenuId, setLeaveMenuId] = useState<string | null>(null);
+
+  const { data, loading, error, refetch } = useAsyncData(
+    () => dashboardApi.overview(),
+    [],
+  );
+
+  function approveLeave(id: string, name: string) {
+    void runAction(`Approve ${name}'s leave`, async () => {
+      await hrApi.leave.approve(id);
+      setLeaveMenuId(null);
+      refetch();
+    });
+  }
+
+  function rejectLeave(id: string, name: string) {
+    void runAction(`Decline ${name}'s leave`, async () => {
+      await hrApi.leave.reject(id);
+      setLeaveMenuId(null);
+      refetch();
+    });
+  }
+
+  const dashboardStats = useMemo(() => {
+    if (!data) return fallbackStats;
+    const overview = data as Record<string, unknown>;
+    const cards = (overview.stats ?? overview.cards ?? overview.summary) as
+      | Record<string, unknown>[]
+      | Record<string, unknown>
+      | undefined;
+    if (Array.isArray(cards) && cards.length > 0) {
+      return cards.map((card) => ({
+        label: str(card.label ?? card.title),
+        value: str(card.value ?? card.count),
+      }));
+    }
+    return [
+      {
+        label: "Total Employees",
+        value: str(overview.totalEmployees ?? overview.employees, fallbackStats[0].value),
+      },
+      {
+        label: "Total Departments",
+        value: str(overview.totalDepartments ?? overview.departments, fallbackStats[1].value),
+      },
+      {
+        label: "Total Monthly Payroll",
+        value: str(overview.monthlyPayroll ?? overview.payroll, fallbackStats[2].value),
+      },
+      {
+        label: "Pending Approvals",
+        value: str(overview.pendingApprovals ?? overview.pending, fallbackStats[3].value),
+      },
+    ];
+  }, [data]);
+
+  const leaveRequests = useMemo((): LeaveRequest[] => {
+    const overview = (data ?? {}) as Record<string, unknown>;
+    const records = listFrom(
+      (overview.leaveRequests ?? overview.leave ?? overview.pendingLeave) as never,
+    );
+    if (records.length === 0) return fallbackLeaveRequests;
+    return records.map((record) => {
+      const name = str(record.name ?? record.employeeName);
+      return {
+        id: str(record.id),
+        name,
+        initials: str(record.initials, initials(name)),
+        avatarColor: str(record.avatarColor, avatarColor(name)),
+        type: str(record.type ?? record.leaveType),
+        duration: str(record.duration ?? record.days),
+        status: str(record.status, "Pending") as LeaveStatus,
+      };
+    });
+  }, [data]);
+
+  const overviewItems = useMemo(() => {
+    const overview = (data ?? {}) as Record<string, unknown>;
+    const records = listFrom(
+      (overview.upcoming ?? overview.overview ?? overview.events) as never,
+    );
+    if (records.length === 0) return fallbackOverviewItems;
+    return records.map((record, index) => ({
+      id: str(record.id, String(index)),
+      date: str(record.date ?? record.startsAt),
+      title: str(record.title ?? record.name),
+    }));
+  }, [data]);
+
+  const employeesByDepartment = useMemo(() => {
+    const overview = (data ?? {}) as Record<string, unknown>;
+    const records = listFrom(
+      (overview.employeesByDepartment ?? overview.departments) as never,
+    );
+    if (records.length === 0) return fallbackEmployeesByDept;
+    const max = Math.max(...records.map((r) => num(r.value ?? r.count)), 1);
+    return records.map((record) => ({
+      name: str(record.name ?? record.department),
+      value: num(record.value ?? record.count ?? record.employees),
+      max,
+    }));
+  }, [data]);
+
+  const departmentPerformance = useMemo(() => {
+    const overview = (data ?? {}) as Record<string, unknown>;
+    const records = listFrom(
+      (overview.departmentPerformance ?? overview.performance) as never,
+    );
+    if (records.length === 0) return fallbackDeptPerformance;
+    return records.map((record) => ({
+      name: str(record.name ?? record.department),
+      value: num(record.value ?? record.score),
+      max: num(record.max, 100),
+    }));
+  }, [data]);
+
+  const recentActivity = useMemo(() => {
+    const overview = (data ?? {}) as Record<string, unknown>;
+    const records = listFrom(
+      (overview.recentActivity ?? overview.activity) as never,
+    );
+    if (records.length === 0) return fallbackRecentActivity;
+    return records.map((record, index) => ({
+      id: str(record.id, String(index)),
+      title: str(record.title ?? record.action),
+      description: str(record.description ?? record.summary),
+      time: str(record.time ?? record.createdAt),
+    }));
+  }, [data]);
+
   return (
-    <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
           <p className={styles.dateLabel}>Thursday, July 20</p>
+          {loading ? <p className={styles.dateLabel}>Loading dashboard…</p> : null}
+          {error ? (
+            <p className={styles.dateLabel} role="alert">
+              Using cached dashboard — {error}
+            </p>
+          ) : null}
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -50,12 +203,8 @@ export function DashboardPage() {
                 className={styles.searchInput}
               />
             </label>
-            <button type="button" aria-label="Notifications" className={styles.iconButton}>
-              <Bell size={16} />
-            </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              DS
-            </button>
+            <NotificationsLink className={styles.iconButton} />
+            <ProfileLink className={styles.avatarChip}>DS</ProfileLink>
           </div>
         </div>
 
@@ -66,9 +215,9 @@ export function DashboardPage() {
               Track attendance, manage approvals, and keep every department aligned
               from one shared workspace.
             </p>
-            <button type="button" className={styles.heroButton}>
+            <Link href="/employees" className={styles.heroButton}>
               Get started
-            </button>
+            </Link>
           </div>
           <div className={styles.heroAvatar} aria-hidden="true">
             DS
@@ -79,7 +228,7 @@ export function DashboardPage() {
         </section>
 
         <div className={styles.statsRow}>
-          {stats.map(({ label, value }) => (
+          {dashboardStats.map(({ label, value }) => (
             <article key={label} className={styles.statCard}>
               <p className={styles.statValue}>{value}</p>
               <p className={styles.statLabel}>{label}</p>
@@ -122,14 +271,52 @@ export function DashboardPage() {
                           {request.status}
                         </span>
                       </td>
-                      <td>
-                        <button
-                          type="button"
-                          aria-label={`Actions for ${request.name}`}
-                          className={styles.actionButton}
-                        >
-                          <MoreVertical size={16} />
-                        </button>
+                      <td className={styles.actionCell}>
+                        {request.status === "Pending" ? (
+                          <div className={styles.actionMenu}>
+                            <button
+                              type="button"
+                              aria-label={`Actions for ${request.name}`}
+                              aria-expanded={leaveMenuId === request.id}
+                              className={styles.actionButton}
+                              onClick={() =>
+                                setLeaveMenuId((current) =>
+                                  current === request.id ? null : request.id,
+                                )
+                              }
+                            >
+                              <MoreVertical size={16} />
+                            </button>
+                            {leaveMenuId === request.id ? (
+                              <div className={styles.actionDropdown}>
+                                <button
+                                  type="button"
+                                  className={styles.actionDropdownItem}
+                                  onClick={() =>
+                                    approveLeave(request.id, request.name)
+                                  }
+                                >
+                                  <Check size={14} />
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  className={styles.actionDropdownItem}
+                                  onClick={() =>
+                                    rejectLeave(request.id, request.name)
+                                  }
+                                >
+                                  <X size={14} />
+                                  Decline
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <Link href="/leave" className={styles.actionLink}>
+                            View
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -146,9 +333,9 @@ export function DashboardPage() {
                   <span className={styles.overviewDate}>{item.date}</span>
                   <div className={styles.overviewBody}>
                     <p className={styles.overviewTitle}>{item.title}</p>
-                    <a href="#" className={styles.overviewLink}>
+                    <Link href="/events" className={styles.overviewLink}>
                       View details
-                    </a>
+                    </Link>
                   </div>
                 </article>
               ))}
@@ -194,6 +381,37 @@ export function DashboardPage() {
           </section>
         </div>
 
+        <div className={styles.accessRow}>
+          <section className={styles.card}>
+            <div className={styles.panelHead}>
+              <h2 className={styles.cardTitleInline}>
+                <KeyRound size={16} />
+                Permission changes
+              </h2>
+              <Link href="/user-access" className={styles.panelLink}>
+                Manage →
+              </Link>
+            </div>
+            <div className={styles.emptyPanel}>No recent changes.</div>
+          </section>
+
+          <section className={styles.card}>
+            <div className={styles.panelHead}>
+              <h2 className={styles.cardTitleInline}>
+                <UserPlus size={16} />
+                Role changes
+              </h2>
+              <Link href="/user-access" className={styles.panelLink}>
+                User access →
+              </Link>
+            </div>
+            <div className={styles.roleChange}>
+              <h3>Ravi Kapoor: Accountant → HR (reverted)</h3>
+              <span>4h ago</span>
+            </div>
+          </section>
+        </div>
+
         <div className={styles.bottomRow}>
           <section className={styles.card}>
             <h2 className={styles.cardTitle}>Company resources</h2>
@@ -201,12 +419,16 @@ export function DashboardPage() {
               {companyResources.map((resource) => {
                 const Icon = resourceIcons[resource.icon];
                 return (
-                  <a key={resource.id} href="#" className={styles.resourceLink}>
+                  <Link
+                    key={resource.id}
+                    href={resourceLinks[resource.icon]}
+                    className={styles.resourceLink}
+                  >
                     <span className={styles.resourceIcon}>
                       <Icon size={16} />
                     </span>
                     {resource.label}
-                  </a>
+                  </Link>
                 );
               })}
             </div>
@@ -230,6 +452,5 @@ export function DashboardPage() {
           </section>
         </div>
       </div>
-    </AppShell>
   );
 }

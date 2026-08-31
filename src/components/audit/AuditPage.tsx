@@ -3,19 +3,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Bell,
   Check,
   Download,
   ScrollText,
   Search,
   X,
 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
 import {
-  auditEvents,
+  auditEvents as fallbackEvents,
   type AuditFilter,
   type AuditModule,
 } from "@/data/audit";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { auditLogsApi } from "@/lib/api";
+import { downloadApiBlob } from "@/lib/export/downloadBlob";
+import { listFrom, mapAuditEvent } from "@/lib/api/mappers";
 import styles from "./AuditPage.module.css";
 
 const filters: AuditFilter[] = ["All events", "Security", "Failed"];
@@ -43,6 +47,7 @@ type AuditPageProps = {
 
 export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
   const router = useRouter();
+  const { runAction, exportRows } = usePageActions();
   const [activeFilter, setActiveFilter] = useState<AuditFilter>(initialFilter);
   const [query, setQuery] = useState("");
 
@@ -50,8 +55,27 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
     setActiveFilter(initialFilter);
   }, [initialFilter]);
 
+  const { data: auditData, loading, error } = useAsyncData(
+    () =>
+      auditLogsApi.list(
+        activeFilter === "Security"
+          ? { category: "security" }
+          : activeFilter === "Failed"
+            ? { outcome: "failed" }
+            : undefined,
+      ),
+    [activeFilter],
+  );
+
+  const events = useMemo(() => {
+    const records = listFrom(auditData ?? undefined);
+    return records.length > 0
+      ? records.map((record) => mapAuditEvent(record))
+      : fallbackEvents;
+  }, [auditData]);
+
   const filtered = useMemo(() => {
-    return auditEvents.filter((event) => {
+    return events.filter((event) => {
       const matchesFilter =
         activeFilter === "All events" ||
         (activeFilter === "Security" && event.security) ||
@@ -60,15 +84,39 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
         `${event.user} ${event.action} ${event.target} ${event.module}`.toLowerCase();
       return matchesFilter && haystack.includes(query.trim().toLowerCase());
     });
-  }, [activeFilter, query]);
+  }, [activeFilter, query, events]);
 
   function handleFilterChange(filter: AuditFilter) {
     setActiveFilter(filter);
     router.push(filterRoutes[filter]);
   }
 
+  function exportLogs() {
+    void runAction("Export audit logs", async () => {
+      try {
+        await downloadApiBlob(
+          `/audit-logs/export${activeFilter === "Security" ? "?category=security" : activeFilter === "Failed" ? "?outcome=failed" : ""}`,
+          "audit-logs.csv",
+        );
+      } catch {
+        exportRows(
+          filtered.map((event) => ({
+            time: event.time,
+            date: event.date,
+            user: event.user,
+            action: event.action,
+            target: event.target,
+            module: event.module,
+            ip: event.ip,
+            outcome: event.outcome,
+          })),
+          "audit-logs.csv",
+        );
+      }
+    });
+  }
+
   return (
-    <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
           <p className={styles.dateLabel}>Monday, August 3</p>
@@ -83,12 +131,8 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
               />
               <kbd className={styles.searchShortcut}>⌘K</kbd>
             </label>
-            <button type="button" aria-label="Notifications" className={styles.iconButton}>
-              <Bell size={16} />
-            </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              DO
-            </button>
+            <NotificationsLink className={styles.iconButton} />
+            <ProfileLink className={styles.avatarChip}>DO</ProfileLink>
           </div>
         </div>
 
@@ -101,7 +145,7 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
               operational activity.
             </p>
           </div>
-          <button type="button" className={styles.exportButton}>
+          <button type="button" className={styles.exportButton} onClick={exportLogs}>
             <Download size={15} strokeWidth={2} />
             Export logs
           </button>
@@ -166,7 +210,9 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
                     <td className={styles.target}>{event.target}</td>
                     <td>
                       <span
-                        className={`${styles.module} ${moduleClass[event.module]}`}
+                        className={`${styles.module} ${
+                          moduleClass[event.module as AuditModule] ?? ""
+                        }`}
                       >
                         {event.module}
                       </span>
@@ -202,6 +248,5 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
           </div>
         </div>
       </div>
-    </AppShell>
   );
 }

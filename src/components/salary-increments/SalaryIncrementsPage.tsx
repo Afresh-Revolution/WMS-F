@@ -2,20 +2,24 @@
 
 import { useMemo, useState } from "react";
 import {
-  Bell,
   ChevronRight,
   Plus,
   Search,
   UserRound,
 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
 import {
   incrementFilters,
-  incrementStats,
-  salaryIncrements,
+  incrementStats as fallbackStats,
+  salaryIncrements as fallbackIncrements,
   type IncrementFilter,
   type IncrementStatus,
 } from "@/data/salaryIncrements";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { SimpleModal } from "@/components/ui/SimpleModal";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { hrApi, salaryIncrementsApi } from "@/lib/api";
+import { listFrom, mapSalaryIncrement } from "@/lib/api/mappers";
 import styles from "./SalaryIncrementsPage.module.css";
 
 const statusClass: Record<IncrementStatus, string> = {
@@ -30,36 +34,96 @@ const statusLabels: Record<IncrementStatus, string> = {
   Approved: "Approved",
 };
 
+const newIncrementFields = [
+  { name: "name", label: "Employee name", required: true },
+  { name: "department", label: "Department", required: true },
+  { name: "currentSalary", label: "Current salary", required: true },
+  { name: "proposedSalary", label: "Proposed salary", required: true },
+  { name: "effectiveDate", label: "Effective date", type: "date" as const },
+];
+
 export function SalaryIncrementsPage() {
   const [activeFilter, setActiveFilter] = useState<IncrementFilter>("All");
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const { runAction, showToast } = usePageActions();
+  const { data, loading, error, refetch } = useAsyncData(
+    () => salaryIncrementsApi.list(),
+    [],
+  );
+
+  const salaryIncrements = useMemo(() => {
+    const records = listFrom(data ?? undefined);
+    return records.length > 0
+      ? records.map((record) => mapSalaryIncrement(record))
+      : fallbackIncrements;
+  }, [data]);
+
+  const incrementStats = useMemo(() => {
+    const review = salaryIncrements.filter(
+      (item) => item.status === "Under admin review",
+    ).length;
+    const approved = salaryIncrements.filter((item) => item.status === "Approved").length;
+    return [
+      { id: "total", label: "Total", value: String(salaryIncrements.length), highlight: false },
+      { id: "review", label: "Under review", value: String(review), highlight: true },
+      { id: "approved", label: "Approved", value: String(approved), highlight: false },
+      { id: "avg", label: "Avg. increment", value: fallbackStats[3].value, highlight: false },
+    ];
+  }, [salaryIncrements]);
 
   const filteredIncrements = useMemo(() => {
     return salaryIncrements.filter((increment) => {
       if (activeFilter === "All") return true;
       return increment.status === activeFilter;
     });
-  }, [activeFilter]);
+  }, [activeFilter, salaryIncrements]);
+
+  function viewIncrement(increment: (typeof salaryIncrements)[number]) {
+    showToast(
+      `${increment.name}: ${increment.currentSalary} → ${increment.proposedSalary} (${increment.status})`,
+      "info",
+    );
+  }
+
+  async function handleCreateIncrement(values: Record<string, string>) {
+    await runAction("New recommendation", async () => {
+      await hrApi.salaryAdjustments.create(values);
+      refetch();
+    });
+  }
 
   return (
-    <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
           <p className={styles.dateLabel}>Monday, August 3</p>
+          {loading ? <p className={styles.dateLabel}>Loading increments…</p> : null}
+          {error ? (
+            <p className={styles.dateLabel} role="alert">
+              Using cached increments — {error}
+            </p>
+          ) : null}
           <div className={styles.topActions}>
-            <button type="button" aria-label="Search" className={styles.iconButton}>
-              <Search size={16} />
-            </button>
             <button
               type="button"
-              aria-label="Notifications"
-              className={`${styles.iconButton} ${styles.iconButtonBadge}`}
+              aria-label="Search"
+              className={styles.iconButton}
+              onClick={() => showToast("Use the search field below", "info")}
             >
-              <Bell size={16} />
+              <Search size={16} />
             </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              MC
-            </button>
-            <button type="button" aria-label="Team" className={styles.iconButton}>
+            <NotificationsLink
+              className={`${styles.iconButton} ${styles.iconButtonBadge}`}
+            />
+            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
+            <button
+              type="button"
+              aria-label="Team"
+              className={styles.iconButton}
+              onClick={() => {
+                window.location.href = "/employees";
+              }}
+            >
               <UserRound size={16} />
             </button>
           </div>
@@ -74,7 +138,11 @@ export function SalaryIncrementsPage() {
               apply approved changes on time.
             </p>
           </div>
-          <button type="button" className={styles.newButton}>
+          <button
+            type="button"
+            className={styles.newButton}
+            onClick={() => setCreateOpen(true)}
+          >
             <Plus size={16} strokeWidth={2.5} />
             New recommendation
           </button>
@@ -120,7 +188,18 @@ export function SalaryIncrementsPage() {
         <section className={styles.listSection}>
           <div className={styles.list}>
             {filteredIncrements.map((increment) => (
-              <article key={increment.id} className={styles.listRow}>
+              <article
+                key={increment.id}
+                className={styles.listRow}
+                role="button"
+                tabIndex={0}
+                onClick={() => viewIncrement(increment)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    viewIncrement(increment);
+                  }
+                }}
+              >
                 <div className={styles.rowIdentity}>
                   <span
                     className={styles.avatar}
@@ -162,7 +241,16 @@ export function SalaryIncrementsPage() {
             )}
           </div>
         </section>
+
+        <SimpleModal
+          open={createOpen}
+          title="New recommendation"
+          description="Submit a salary increment recommendation."
+          fields={newIncrementFields}
+          submitLabel="Submit recommendation"
+          onClose={() => setCreateOpen(false)}
+          onSubmit={handleCreateIncrement}
+        />
       </div>
-    </AppShell>
   );
 }

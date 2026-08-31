@@ -1,17 +1,23 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Bell, Check, Plus, Search, ShoppingCart, X } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
+import { Check, Plus, RefreshCw, Search, ShoppingCart, X } from "lucide-react";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   matchesPurchaseFilter,
   purchaseFilters,
-  purchaseRequests,
+  purchaseRequests as fallbackRequests,
   purchaseStats,
   type PurchaseFilter,
+  type PurchaseRequest,
   type PurchaseStatus,
 } from "@/data/financePurchases";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { purchaseRequestsApi } from "@/lib/api";
+import { listFrom, mapPurchaseRequest } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinancePurchasesPage.module.css";
 
@@ -23,6 +29,12 @@ const statusClass: Record<PurchaseStatus, string> = {
   Rejected: styles.statusRejected,
 };
 
+const createFields = [
+  { name: "item", label: "Item", required: true },
+  { name: "detail", label: "Details", required: true },
+  { name: "amount", label: "Amount", required: true, placeholder: "₦ 0" },
+];
+
 function isPending(status: PurchaseStatus): boolean {
   return (
     status === "Under Procurement Review" || status === "Awaiting Admin Approval"
@@ -31,30 +43,113 @@ function isPending(status: PurchaseStatus): boolean {
 
 export function FinancePurchasesPage() {
   const [activeFilter, setActiveFilter] = useState<PurchaseFilter>("All");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const { runAction, exportRows } = usePageActions();
+
+  const { data, loading, error, refetch } = useAsyncData(
+    () => purchaseRequestsApi.list(),
+    [],
+  );
+
+  const purchaseRequests = useMemo(() => {
+    const records = listFrom(data ?? undefined);
+    return records.length > 0
+      ? records.map((record) => mapPurchaseRequest(record))
+      : fallbackRequests;
+  }, [data]);
 
   const filteredRequests = useMemo(() => {
-    return purchaseRequests.filter((request) =>
-      matchesPurchaseFilter(request.status, activeFilter),
+    const term = query.trim().toLowerCase();
+    return purchaseRequests.filter((request) => {
+      const matchesFilter = matchesPurchaseFilter(request.status, activeFilter);
+      const haystack =
+        `${request.ref} ${request.item} ${request.detail} ${request.requester}`.toLowerCase();
+      return matchesFilter && (!term || haystack.includes(term));
+    });
+  }, [activeFilter, purchaseRequests, query]);
+
+  async function handleCreate(values: Record<string, string>) {
+    await runAction("Create request", async () => {
+      await purchaseRequestsApi.create(values);
+      refetch();
+    });
+  }
+
+  async function approveRequest(request: PurchaseRequest) {
+    await runAction(`Approve ${request.ref}`, async () => {
+      await purchaseRequestsApi.action(request.id, "approve");
+      refetch();
+    });
+  }
+
+  async function rejectRequest(request: PurchaseRequest) {
+    await runAction(`Reject ${request.ref}`, async () => {
+      await purchaseRequestsApi.action(request.id, "reject");
+      refetch();
+    });
+  }
+
+  async function orderRequest(request: PurchaseRequest) {
+    await runAction(`Order ${request.ref}`, async () => {
+      await purchaseRequestsApi.action(request.id, "order");
+      refetch();
+    });
+  }
+
+  function handleRefresh() {
+    void runAction("Refresh", async () => {
+      refetch();
+    });
+  }
+
+  function handleExport() {
+    exportRows(
+      filteredRequests.map((request) => ({
+        ref: request.ref,
+        item: request.item,
+        detail: request.detail,
+        requester: request.requester,
+        amount: request.amount,
+        submitted: request.submitted,
+        status: request.status,
+      })),
+      "purchase-requests.csv",
     );
-  }, [activeFilter]);
+  }
 
   return (
-    <AppShell>
+    <>
       <div className={payrollStyles.page}>
         <FinanceModuleTabs />
+        {loading ? <p>Loading purchases…</p> : null}
+        {error ? <p role="alert">Using cached purchases — {error}</p> : null}
 
         <div className={payrollStyles.topBar}>
           <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>
           <div className={payrollStyles.topActions}>
-            <button type="button" aria-label="Search" className={payrollStyles.iconButton}>
+            <button
+              type="button"
+              aria-label="Search"
+              className={payrollStyles.iconButton}
+              onClick={() => {
+                document
+                  .querySelector<HTMLInputElement>("[data-purchases-search]")
+                  ?.focus();
+              }}
+            >
               <Search size={16} />
             </button>
-            <button type="button" aria-label="Notifications" className={payrollStyles.iconButton}>
-              <Bell size={16} />
+            <NotificationsLink className={payrollStyles.iconButton} />
+            <button
+              type="button"
+              aria-label="Refresh"
+              className={payrollStyles.iconButton}
+              onClick={handleRefresh}
+            >
+              <RefreshCw size={16} />
             </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              MC
-            </button>
+            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
 
@@ -66,10 +161,15 @@ export function FinancePurchasesPage() {
               delivery and payment.
             </p>
           </div>
-          <button type="button" className={styles.newButton}>
-            <Plus size={16} strokeWidth={2.5} />
-            New request
-          </button>
+          <div className={payrollStyles.headerActions}>
+            <button type="button" className={payrollStyles.exportButton} onClick={handleExport}>
+              Export
+            </button>
+            <button type="button" className={styles.newButton} onClick={() => setCreateOpen(true)}>
+              <Plus size={16} strokeWidth={2.5} />
+              New request
+            </button>
+          </div>
         </div>
 
         <div className={styles.stats}>
@@ -96,6 +196,18 @@ export function FinancePurchasesPage() {
             );
           })}
         </div>
+
+        <label className={styles.searchField}>
+          <Search size={16} className={styles.searchIcon} />
+          <input
+            type="search"
+            data-purchases-search
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search requests..."
+            className={styles.searchInput}
+          />
+        </label>
 
         <section className={styles.tableSection}>
           <div className={styles.tableWrap}>
@@ -144,6 +256,7 @@ export function FinancePurchasesPage() {
                             type="button"
                             aria-label={`Reject ${request.ref}`}
                             className={styles.rejectButton}
+                            onClick={() => void rejectRequest(request)}
                           >
                             <X size={14} />
                           </button>
@@ -151,13 +264,18 @@ export function FinancePurchasesPage() {
                             type="button"
                             aria-label={`Approve ${request.ref}`}
                             className={styles.approveButton}
+                            onClick={() => void approveRequest(request)}
                           >
                             <Check size={14} strokeWidth={2.5} />
                           </button>
                         </span>
                       )}
                       {request.status === "Approved" && (
-                        <button type="button" className={styles.orderButton}>
+                        <button
+                          type="button"
+                          className={styles.orderButton}
+                          onClick={() => void orderRequest(request)}
+                        >
                           <ShoppingCart size={14} />
                           Order
                         </button>
@@ -174,6 +292,16 @@ export function FinancePurchasesPage() {
           )}
         </section>
       </div>
-    </AppShell>
+
+      <SimpleModal
+        open={createOpen}
+        title="New purchase request"
+        description="Submit a request for procurement review."
+        fields={createFields}
+        submitLabel="Submit request"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreate}
+      />
+    </>
   );
 }

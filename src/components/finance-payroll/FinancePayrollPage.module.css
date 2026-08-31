@@ -391,6 +391,30 @@
   }
 }
 
+.searchField {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid var(--afresh-border);
+  border-radius: 999px;
+  background: #fff;
+  max-width: 360px;
+}
+
+.searchIcon {
+  color: var(--afresh-muted);
+  flex-shrink: 0;
+}
+
+.searchInput {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  font-size: 0.875rem;
+}
+
 @media (max-width: 640px) {
   .page {
     padding: 16px 20px 48px;
