@@ -14,24 +14,16 @@ import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   taskFilters,
   taskStats,
-<<<<<<< HEAD
-=======
   tasks as fallbackTasks,
   type Task,
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   type TaskFilter,
   type TaskPriority,
   type TaskStatus,
 } from "@/data/tasks";
-<<<<<<< HEAD
-import { managerApi } from "@/lib/api/manager";
-import { useManagerTasks } from "@/lib/hooks/useManagerApi";
-=======
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { tasksApi } from "@/lib/api";
 import { listFrom, mapTask } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import styles from "./TasksPage.module.css";
 
 const priorityClass: Record<TaskPriority, string> = {
@@ -75,40 +67,6 @@ function matchesFilter(status: TaskStatus, filter: TaskFilter): boolean {
 
 export function TasksPage() {
   const [activeFilter, setActiveFilter] = useState<TaskFilter>("All");
-<<<<<<< HEAD
-  const { items: tasks, setItems, isLive, refresh } = useManagerTasks();
-
-  const liveStats = useMemo(() => {
-    const pending = tasks.filter((task) => task.status === "Not Started").length;
-    const inProgress = tasks.filter((task) => task.status === "In Progress").length;
-    const completed = tasks.filter((task) => task.status === "Completed").length;
-    return [
-      { id: "total", label: "Total tasks", value: String(tasks.length), badge: "Active" },
-      { id: "pending", label: "Pending", value: String(pending), badge: "Urgent" },
-      { id: "in-progress", label: "In progress", value: String(inProgress), badge: "Active" },
-      { id: "completed", label: "Completed", value: String(completed), badge: "Done" },
-    ];
-  }, [tasks]);
-
-  const displayedStats = isLive ? liveStats : taskStats;
-
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => matchesFilter(task.status, activeFilter));
-  }, [activeFilter, tasks]);
-
-  async function toggleComplete(id: string, completed: boolean) {
-    const nextStatus: TaskStatus = completed ? "Completed" : "In Progress";
-    if (isLive) {
-      await managerApi.updateTask(id, { status: nextStatus.toLowerCase().replace(" ", "_") });
-      await refresh();
-      return;
-    }
-
-    setItems((current) =>
-      current.map((task) =>
-        task.id === id ? { ...task, status: nextStatus } : task,
-      ),
-=======
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction, exportRows } = usePageActions();
@@ -166,7 +124,6 @@ export function TasksPage() {
         department: task.department,
       })),
       "tasks.csv",
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
     );
   }
 
@@ -228,7 +185,7 @@ export function TasksPage() {
         </div>
 
         <div className={styles.stats}>
-          {displayedStats.map((stat) => (
+          {taskStats.map((stat) => (
             <article key={stat.id} className={styles.statCard}>
               <div className={styles.statTop}>
                 <p className={styles.statLabel}>{stat.label}</p>
@@ -270,11 +227,7 @@ export function TasksPage() {
                       : `Mark ${task.title} complete`
                   }
                   className={`${styles.checkbox} ${completed ? styles.checkboxChecked : ""}`}
-<<<<<<< HEAD
-                  onClick={() => void toggleComplete(task.id, !completed)}
-=======
                   onClick={() => void toggleComplete(task)}
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
                 >
                   {completed && <Check size={12} strokeWidth={3} />}
                 </button>

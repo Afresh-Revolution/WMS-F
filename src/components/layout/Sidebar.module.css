@@ -113,16 +113,10 @@
 .navLabel {
   flex: 1;
   min-width: 0;
-<<<<<<< HEAD
-}
-
-.navBadge {
-=======
   line-height: 1.25;
 }
 
 .badge {
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -131,24 +125,12 @@
   padding: 0 6px;
   border-radius: 999px;
   background: #fff;
-<<<<<<< HEAD
-  color: #e11d48;
-=======
   color: var(--afresh-orange);
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
 }
 
-<<<<<<< HEAD
-.navLinkActive .navBadge {
-  background: var(--afresh-orange-soft);
-  color: #e11d48;
-}
-
-=======
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 .navLink:hover {
   background: rgba(255, 255, 255, 0.15);
 }

@@ -8,24 +8,16 @@ import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   matchesPurchaseFilter,
   purchaseFilters,
-<<<<<<< HEAD
-=======
   purchaseRequests as fallbackRequests,
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   purchaseStats,
   type PurchaseFilter,
   type PurchaseRequest,
   type PurchaseStatus,
 } from "@/data/financePurchases";
-<<<<<<< HEAD
-import { managerApi } from "@/lib/api/manager";
-import { useManagerProcurementRequests } from "@/lib/hooks/useManagerApi";
-=======
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { purchaseRequestsApi } from "@/lib/api";
 import { listFrom, mapPurchaseRequest } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinancePurchasesPage.module.css";
 
@@ -51,10 +43,6 @@ function isPending(status: PurchaseStatus): boolean {
 
 export function FinancePurchasesPage() {
   const [activeFilter, setActiveFilter] = useState<PurchaseFilter>("All");
-<<<<<<< HEAD
-  const { items: purchaseRequests, setItems, isLive, refresh } =
-    useManagerProcurementRequests();
-=======
   const [createOpen, setCreateOpen] = useState(false);
   const [query, setQuery] = useState("");
   const { runAction, exportRows } = usePageActions();
@@ -70,7 +58,6 @@ export function FinancePurchasesPage() {
       ? records.map((record) => mapPurchaseRequest(record))
       : fallbackRequests;
   }, [data]);
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   const filteredRequests = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -129,24 +116,6 @@ export function FinancePurchasesPage() {
       })),
       "purchase-requests.csv",
     );
-<<<<<<< HEAD
-  }, [activeFilter, purchaseRequests]);
-
-  async function decideRequest(id: string, next: "Approved" | "Rejected") {
-    if (isLive) {
-      if (next === "Approved") await managerApi.approveProcurementRequest(id);
-      else await managerApi.rejectProcurementRequest(id);
-      await refresh();
-      return;
-    }
-
-    setItems((current) =>
-      current.map((request) =>
-        request.id === id ? { ...request, status: next } : request,
-      ),
-    );
-=======
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   }
 
   return (
@@ -287,11 +256,7 @@ export function FinancePurchasesPage() {
                             type="button"
                             aria-label={`Reject ${request.ref}`}
                             className={styles.rejectButton}
-<<<<<<< HEAD
-                            onClick={() => void decideRequest(request.id, "Rejected")}
-=======
                             onClick={() => void rejectRequest(request)}
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
                           >
                             <X size={14} />
                           </button>
@@ -299,11 +264,7 @@ export function FinancePurchasesPage() {
                             type="button"
                             aria-label={`Approve ${request.ref}`}
                             className={styles.approveButton}
-<<<<<<< HEAD
-                            onClick={() => void decideRequest(request.id, "Approved")}
-=======
                             onClick={() => void approveRequest(request)}
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
                           >
                             <Check size={14} strokeWidth={2.5} />
                           </button>

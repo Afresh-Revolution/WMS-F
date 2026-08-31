@@ -1,28 +1,12 @@
 "use client";
 
-<<<<<<< HEAD
-import { useState } from "react";
-import { Bell, Check, Download, Plus, Search, Trash2, X } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
-=======
 import { useMemo, useState } from "react";
 import { Download, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   categoryIcons,
-<<<<<<< HEAD
-  expenseSectionTabs,
-  expenseStats,
-  type ExpenseCategory,
-  type ExpenseSectionTab,
-  type ExpenseStatus,
-} from "@/data/financeExpenses";
-import { managerApi } from "@/lib/api/manager";
-import { useManagerExpenses } from "@/lib/hooks/useManagerApi";
-=======
   expenseClaims as fallbackClaims,
   expenseSectionTabs,
   expenseStats,
@@ -34,7 +18,6 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { expensesApi } from "@/lib/api";
 import { listFrom, mapExpense } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceExpensesPage.module.css";
 
@@ -65,24 +48,6 @@ const createFields = [
 
 export function FinanceExpensesPage() {
   const [activeSection, setActiveSection] = useState<ExpenseSectionTab>("My expense");
-<<<<<<< HEAD
-  const { items: expenseClaims, setItems, isLive, refresh } = useManagerExpenses();
-
-  async function decideExpense(id: string, status: ExpenseStatus) {
-    if (isLive) {
-      if (status === "Approved") await managerApi.approveExpense(id);
-      else await managerApi.rejectExpense(id);
-      await refresh();
-      return;
-    }
-
-    setItems((current) =>
-      current.map((claim) => (claim.id === id ? { ...claim, status } : claim)),
-    );
-  }
-
-  const fallbackIcon = categoryIcons.Supplies;
-=======
   const [createOpen, setCreateOpen] = useState(false);
   const [query, setQuery] = useState("");
   const { runAction, exportRows } = usePageActions();
@@ -137,7 +102,6 @@ export function FinanceExpensesPage() {
       refetch();
     });
   }
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   return (
     <>
@@ -236,26 +200,13 @@ export function FinanceExpensesPage() {
           })}
         </div>
 
-        {activeSection === "Policies" ? (
-          <section className={styles.placeholder}>
-            <h2 className={styles.tableTitle}>{activeSection}</h2>
-            <p className={styles.tableSubtitle}>
-              View company expense policies and reimbursement limits.
-            </p>
-          </section>
-        ) : (
+        {activeSection === "My expense" ? (
           <section className={styles.tableSection}>
             <div className={styles.tableHeader}>
               <div>
-                <h2 className={styles.tableTitle}>
-                  {activeSection === "Team expenses"
-                    ? "Team claims"
-                    : "My claims — July 2026"}
-                </h2>
+                <h2 className={styles.tableTitle}>My claims — July 2026</h2>
                 <p className={styles.tableSubtitle}>
-                  {activeSection === "Team expenses"
-                    ? "Review and approve expense claims submitted by your team."
-                    : "All expense submission for the current month."}
+                  All expense submission for the current month.
                 </p>
               </div>
             </div>
@@ -286,14 +237,8 @@ export function FinanceExpensesPage() {
                   </tr>
                 </thead>
                 <tbody>
-<<<<<<< HEAD
-                  {expenseClaims.map((claim) => {
-                    const CategoryIcon =
-                      categoryIcons[claim.category as ExpenseCategory] ?? fallbackIcon;
-=======
                   {filteredClaims.map((claim) => {
                     const CategoryIcon = categoryIcons[claim.category];
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
                     return (
                       <tr key={claim.id}>
                         <td className={styles.refCell}>{claim.ref}</td>
@@ -310,36 +255,6 @@ export function FinanceExpensesPage() {
                           <span className={statusClass[claim.status]}>{claim.status}</span>
                         </td>
                         <td className={styles.actionCell}>
-<<<<<<< HEAD
-                          {activeSection === "Team expenses" && claim.status === "Pending" ? (
-                            <>
-                              <button
-                                type="button"
-                                aria-label={`Reject ${claim.ref}`}
-                                className={styles.deleteButton}
-                                onClick={() => void decideExpense(claim.id, "Rejected")}
-                              >
-                                <X size={15} />
-                              </button>
-                              <button
-                                type="button"
-                                aria-label={`Approve ${claim.ref}`}
-                                className={styles.deleteButton}
-                                onClick={() => void decideExpense(claim.id, "Approved")}
-                              >
-                                <Check size={15} />
-                              </button>
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              aria-label={`Delete ${claim.ref}`}
-                              className={styles.deleteButton}
-                            >
-                              <Trash2 size={15} />
-                            </button>
-                          )}
-=======
                           <button
                             type="button"
                             aria-label={`Delete ${claim.ref}`}
@@ -348,7 +263,6 @@ export function FinanceExpensesPage() {
                           >
                             <Trash2 size={15} />
                           </button>
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
                         </td>
                       </tr>
                     );
@@ -356,6 +270,15 @@ export function FinanceExpensesPage() {
                 </tbody>
               </table>
             </div>
+          </section>
+        ) : (
+          <section className={styles.placeholder}>
+            <h2 className={styles.tableTitle}>{activeSection}</h2>
+            <p className={styles.tableSubtitle}>
+              {activeSection === "Team expenses"
+                ? "Review and approve expense claims submitted by your team."
+                : "View company expense policies and reimbursement limits."}
+            </p>
           </section>
         )}
       </div>

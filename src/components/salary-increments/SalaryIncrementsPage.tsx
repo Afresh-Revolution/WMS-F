@@ -9,13 +9,6 @@ import {
 } from "lucide-react";
 import {
   incrementFilters,
-<<<<<<< HEAD
-  incrementStats,
-  type IncrementFilter,
-  type IncrementStatus,
-} from "@/data/salaryIncrements";
-import { useManagerSalaryRecommendations } from "@/lib/hooks/useManagerApi";
-=======
   incrementStats as fallbackStats,
   salaryIncrements as fallbackIncrements,
   type IncrementFilter,
@@ -27,7 +20,6 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { hrApi, salaryIncrementsApi } from "@/lib/api";
 import { listFrom, mapSalaryIncrement } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import styles from "./SalaryIncrementsPage.module.css";
 
 const statusClass: Record<IncrementStatus, string> = {
@@ -52,9 +44,6 @@ const newIncrementFields = [
 
 export function SalaryIncrementsPage() {
   const [activeFilter, setActiveFilter] = useState<IncrementFilter>("All");
-<<<<<<< HEAD
-  const { items: salaryIncrements } = useManagerSalaryRecommendations();
-=======
   const [createOpen, setCreateOpen] = useState(false);
 
   const { runAction, showToast } = usePageActions();
@@ -82,7 +71,6 @@ export function SalaryIncrementsPage() {
       { id: "avg", label: "Avg. increment", value: fallbackStats[3].value, highlight: false },
     ];
   }, [salaryIncrements]);
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   const filteredIncrements = useMemo(() => {
     return salaryIncrements.filter((increment) => {
@@ -90,8 +78,6 @@ export function SalaryIncrementsPage() {
       return increment.status === activeFilter;
     });
   }, [activeFilter, salaryIncrements]);
-<<<<<<< HEAD
-=======
 
   function viewIncrement(increment: (typeof salaryIncrements)[number]) {
     showToast(
@@ -106,7 +92,6 @@ export function SalaryIncrementsPage() {
       refetch();
     });
   }
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   return (
       <div className={styles.page}>

@@ -5,25 +5,17 @@ import { ChevronRight, Plus, RefreshCw, Search, Star } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
-<<<<<<< HEAD
-  targetStats,
-=======
   performanceReviews as fallbackReviews,
   targetStats as fallbackStats,
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   targetTabs,
   type PerformanceReview,
   type ReviewStatus,
   type TargetTab,
 } from "@/data/targets";
-<<<<<<< HEAD
-import { useManagerTargets } from "@/lib/hooks/useManagerApi";
-=======
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { targetsApi } from "@/lib/api";
 import { listFrom, mapPerformanceReview, str } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import styles from "./TargetsPage.module.css";
 
 const statusClass: Record<ReviewStatus, string> = {
@@ -67,9 +59,6 @@ function StarRating({ rating }: { rating: number }) {
 
 export function TargetsPage() {
   const [activeTab, setActiveTab] = useState<TargetTab>("Reviews");
-<<<<<<< HEAD
-  const { items: performanceReviews } = useManagerTargets();
-=======
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction, exportRows } = usePageActions();
@@ -159,7 +148,6 @@ export function TargetsPage() {
       "performance-reviews.csv",
     );
   }
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   return (
     <>

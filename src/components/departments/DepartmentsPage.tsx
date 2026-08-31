@@ -15,12 +15,6 @@ import {
 } from "lucide-react";
 import {
   departmentFilters,
-<<<<<<< HEAD
-  departmentStats,
-  type DepartmentFilter,
-} from "@/data/departments";
-import { useManagerDepartments } from "@/lib/hooks/useManagerApi";
-=======
   departments as fallbackDepartments,
   departmentStats as fallbackStats,
   type DepartmentFilter,
@@ -30,7 +24,6 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { departmentsApi } from "@/lib/api";
 import { listFrom, mapDepartmentRecord } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import styles from "./DepartmentsPage.module.css";
 
 const deptIcons = {
@@ -52,9 +45,6 @@ export function DepartmentsPage() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] =
     useState<DepartmentFilter>("All departments");
-<<<<<<< HEAD
-  const { items: departments, refresh } = useManagerDepartments();
-=======
   const [addOpen, setAddOpen] = useState(false);
 
   const { runAction, showToast } = usePageActions();
@@ -95,7 +85,6 @@ export function DepartmentsPage() {
       },
     ];
   }, [departments]);
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   const filteredDepartments = useMemo(() => {
     return departments.filter((department) => {
@@ -109,9 +98,6 @@ export function DepartmentsPage() {
         matchesFilter && haystack.includes(query.trim().toLowerCase())
       );
     });
-<<<<<<< HEAD
-  }, [activeFilter, departments, query]);
-=======
   }, [activeFilter, query, departments]);
 
   function viewDepartment(department: (typeof departments)[number]) {
@@ -134,7 +120,6 @@ export function DepartmentsPage() {
       refetch();
     });
   }
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   return (
     <div className={styles.page}>
@@ -161,11 +146,7 @@ export function DepartmentsPage() {
               type="button"
               aria-label="Refresh"
               className={styles.iconButton}
-<<<<<<< HEAD
-              onClick={() => void refresh()}
-=======
               onClick={() => refetch()}
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
             >
               <RefreshCw size={16} />
             </button>

@@ -12,27 +12,18 @@ import {
   FileText,
 } from "lucide-react";
 import {
-<<<<<<< HEAD
-  leaveBalances,
-=======
   leaveBalances as fallbackBalances,
   leaveRequests as fallbackRequests,
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   leaveTabs,
   type LeaveRequestStatus,
   type LeaveTab,
 } from "@/data/leave";
-<<<<<<< HEAD
-import { managerApi } from "@/lib/api/manager";
-import { useManagerLeave } from "@/lib/hooks/useManagerApi";
-=======
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { hrApi, leaveApi } from "@/lib/api";
 import { listFrom, mapLeaveBalance, mapLeaveRequest } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import styles from "./LeavePage.module.css";
 
 const balanceIcons = {
@@ -69,23 +60,6 @@ const requestLeaveFields = [
 
 export function LeavePage() {
   const [activeTab, setActiveTab] = useState<LeaveTab>("Requests");
-<<<<<<< HEAD
-  const { items: leaveRequests, setItems, isLive, refresh } = useManagerLeave();
-
-  async function updateLeaveStatus(id: string, status: LeaveRequestStatus) {
-    if (isLive) {
-      if (status === "Approved") await managerApi.approveLeave(id);
-      else await managerApi.rejectLeave(id);
-      await refresh();
-      return;
-    }
-
-    setItems((current) =>
-      current.map((request) =>
-        request.id === id ? { ...request, status } : request,
-      ),
-    );
-=======
   const [requestOpen, setRequestOpen] = useState(false);
 
   const { runAction, showToast } = usePageActions();
@@ -133,7 +107,6 @@ export function LeavePage() {
       await hrApi.leave.create(values);
       refetch();
     });
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   }
 
   return (
@@ -270,22 +243,14 @@ export function LeavePage() {
                           type="button"
                           aria-label={`Decline ${request.name}'s request`}
                           className={styles.declineButton}
-<<<<<<< HEAD
-                          onClick={() => void updateLeaveStatus(request.id, "Declined")}
-=======
                           onClick={() => rejectLeave(request.id, request.name)}
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
                         >
                           <X size={16} />
                         </button>
                         <button
                           type="button"
                           className={styles.approveButton}
-<<<<<<< HEAD
-                          onClick={() => void updateLeaveStatus(request.id, "Approved")}
-=======
                           onClick={() => approveLeave(request.id, request.name)}
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
                         >
                           Approve
                         </button>

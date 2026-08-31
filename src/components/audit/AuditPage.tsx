@@ -3,14 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-<<<<<<< HEAD
-  Bell,
-=======
   Check,
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   Download,
   ScrollText,
   Search,
+  X,
 } from "lucide-react";
 import {
   auditEvents as fallbackEvents,
@@ -229,6 +226,11 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
                             : styles.outcomeSuccess
                         }`}
                       >
+                        {event.outcome === "Failed" ? (
+                          <X size={12} strokeWidth={2.5} />
+                        ) : (
+                          <Check size={12} strokeWidth={2.5} />
+                        )}
                         {event.outcome}
                       </span>
                     </td>

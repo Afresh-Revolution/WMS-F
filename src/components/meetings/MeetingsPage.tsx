@@ -12,13 +12,6 @@ import {
 } from "lucide-react";
 import {
   meetingFilters,
-<<<<<<< HEAD
-  meetingStats,
-  type MeetingFilter,
-  type MeetingTag,
-} from "@/data/meetings";
-import { useManagerMeetings } from "@/lib/hooks/useManagerApi";
-=======
   meetings as fallbackMeetings,
   meetingStats as fallbackStats,
   type MeetingFilter,
@@ -29,7 +22,6 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { meetingsApi } from "@/lib/api";
 import { listFrom, mapMeeting, str } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import styles from "./MeetingsPage.module.css";
 
 const tagClass: Record<MeetingTag, string> = {
@@ -48,9 +40,6 @@ const createMeetingFields = [
 
 export function MeetingsPage() {
   const [activeFilter, setActiveFilter] = useState<MeetingFilter>("Upcoming");
-<<<<<<< HEAD
-  const { items: meetings } = useManagerMeetings();
-=======
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [editMeeting, setEditMeeting] = useState<(typeof fallbackMeetings)[number] | null>(null);
@@ -89,7 +78,6 @@ export function MeetingsPage() {
       },
     ];
   }, [data]);
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   const filteredMeetings = useMemo(() => {
     return meetings.filter((meeting) => {
@@ -106,9 +94,6 @@ export function MeetingsPage() {
         matchesFilter && haystack.includes(query.trim().toLowerCase())
       );
     });
-<<<<<<< HEAD
-  }, [activeFilter, meetings]);
-=======
   }, [activeFilter, query, meetings]);
 
   function viewDetails(meeting: (typeof meetings)[number]) {
@@ -145,7 +130,6 @@ export function MeetingsPage() {
     };
     return { ...field, defaultValue: defaults[field.name] };
   });
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   return (
       <div className={styles.page}>

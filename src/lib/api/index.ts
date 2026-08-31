@@ -1,13 +1,9 @@
-<<<<<<< HEAD
-export { getAccessToken, setAccessToken, clearAccessToken } from "./auth";
-export { managerApi } from "./manager";
-export { managerRequest, getManagerBaseUrl, isLiveApiEnabled, unwrapList, unwrapData } from "./client";
-export { ApiError } from "./types";
-export type { ManagerListParams, ListResult, PaginationMeta } from "./types";
-=======
 export { apiRequest, buildQuery, ApiError, getAccessToken, getRefreshToken, setTokens, clearTokens } from "./client";
 export type { ApiListResponse, PaginatedResponse, Id } from "./types";
 export { unwrapList } from "./types";
+
+export { managerApi } from "./manager";
+export type { ManagerApi, ManagerListParams } from "./manager";
 
 export { authApi, dashboardApi, healthApi, searchApi } from "./auth";
 export type { AuthUser, LoginPayload, LoginResponse, BootstrapPayload } from "./auth";
@@ -59,4 +55,3 @@ export {
   purchasesApi,
 } from "./resources";
 export type { ResourceModule } from "./resources";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9

@@ -1,17 +1,5 @@
 "use client";
 
-<<<<<<< HEAD
-import { useState } from "react";
-import Link from "next/link";
-import {
-  Bell,
-  Calendar,
-  Check,
-  FlaskConical,
-  MapPin,
-  Megaphone,
-  Search,
-=======
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -25,17 +13,10 @@ import {
   Shield,
   UserPlus,
   X,
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { usePageActions } from "@/hooks/usePageActions";
 import {
-<<<<<<< HEAD
-  internAccounts,
-  type InternAccountId,
-  type InternTaskStatus,
-} from "@/data/internHome";
-=======
   companyResources,
   departmentPerformance as fallbackDeptPerformance,
   employeesByDepartment as fallbackEmployeesByDept,
@@ -49,35 +30,14 @@ import {
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { dashboardApi, hrApi } from "@/lib/api";
 import { avatarColor, initials, listFrom, num, str } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import styles from "./DashboardPage.module.css";
 
-const statusClass: Record<InternTaskStatus, string> = {
-  "In Progress": styles.statusInProgress,
-  Overdue: styles.statusOverdue,
-  "Not Started": styles.statusNotStarted,
-  "In Review": styles.statusInReview,
+const statusClass: Record<LeaveStatus, string> = {
+  Approved: styles.statusApproved,
+  Pending: styles.statusPending,
+  Rejected: styles.statusRejected,
 };
 
-<<<<<<< HEAD
-export function DashboardPage() {
-  const [accountId, setAccountId] = useState<InternAccountId>("nysc");
-  const account = internAccounts.find((item) => item.id === accountId) ?? internAccounts[0];
-  const unreadCount = account.notifications.filter((item) => item.unread).length;
-
-  return (
-    <AppShell
-      variant="intern"
-      user={{
-        name: account.name,
-        initials: account.initials,
-        role: account.sidebarRole,
-      }}
-    >
-      <div className={styles.page}>
-        <div className={styles.topBar}>
-          <p className={styles.dateLabel}>Monday, August 17</p>
-=======
 const resourceIcons = {
   handbook: BookOpen,
   benefits: Gift,
@@ -234,7 +194,6 @@ export function DashboardPage() {
               Using cached dashboard — {error}
             </p>
           ) : null}
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />
@@ -242,103 +201,32 @@ export function DashboardPage() {
                 type="search"
                 placeholder="Search"
                 className={styles.searchInput}
-                aria-label="Search"
               />
-              <kbd className={styles.searchShortcut}>⌘ K</kbd>
             </label>
-<<<<<<< HEAD
-            <Link
-              href="/notifications"
-              aria-label="Notifications"
-              className={`${styles.iconButton} ${styles.iconButtonBadge}`}
-            >
-              <Bell size={16} />
-            </Link>
-            <Link href="/profile" aria-label="Profile" className={styles.avatarChip}>
-              {account.initials}
-            </Link>
-          </div>
-        </div>
-
-        <div className={styles.accountSwitcher}>
-          <p className={styles.accountLabel}>Example account</p>
-          <div className={styles.accountPills}>
-            {internAccounts.map((item) => {
-              const active = item.id === accountId;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setAccountId(item.id)}
-                  className={`${styles.accountPill} ${active ? styles.accountPillActive : ""}`}
-                  aria-pressed={active}
-                >
-                  {item.switcherLabel}
-                </button>
-              );
-            })}
-=======
             <NotificationsLink className={styles.iconButton} />
             <ProfileLink className={styles.avatarChip}>DS</ProfileLink>
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
           </div>
         </div>
 
         <section className={styles.hero}>
           <div className={styles.heroContent}>
-            <p className={styles.heroEyebrow}>
-              {account.typeLabel} · {account.track}
+            <h1 className={styles.heroTitle}>Your workforce is in motion.</h1>
+            <p className={styles.heroSubtitle}>
+              Track attendance, manage approvals, and keep every department aligned
+              from one shared workspace.
             </p>
-<<<<<<< HEAD
-            <h1 className={styles.heroTitle}>Welcome, {account.firstName}.</h1>
-            <p className={styles.heroSubtitle}>{account.roleLine}</p>
-            <p className={styles.heroLocation}>
-              <MapPin size={14} strokeWidth={2} />
-              {account.location}
-            </p>
-            <Link href="#progress" className={styles.heroButton}>
-              View my progress →
-=======
             <Link href="/employees" className={styles.heroButton}>
               Get started
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
             </Link>
           </div>
-          <div className={styles.heroCountdown}>
-            <p className={styles.countdownLabel}>Countdown to exit</p>
-            <p className={styles.countdownValue}>{account.daysToExit} days</p>
-            <p className={styles.countdownRange}>
-              {account.startDate} → {account.endDate}
-            </p>
+          <div className={styles.heroAvatar} aria-hidden="true">
+            DS
           </div>
-          <div className={styles.heroDecoration} aria-hidden="true">
+          <div className={styles.heroDecoration}>
             <div className={styles.heroDecorationInner} />
           </div>
         </section>
 
-<<<<<<< HEAD
-        <div className={styles.statsWrap}>
-          <div className={styles.statsRow}>
-            {account.stats.map((stat) => (
-              <article key={stat.id} className={styles.statCard}>
-                <p className={styles.statValue}>{stat.value}</p>
-                <p className={styles.statLabel}>{stat.label}</p>
-                <p className={styles.statHint}>{stat.hint}</p>
-              </article>
-            ))}
-          </div>
-          <div className={styles.prototypeBadge}>
-            <FlaskConical size={13} strokeWidth={2.25} />
-            Prototype: NYSC / Intern
-          </div>
-        </div>
-
-        <section className={styles.placementCard}>
-          <div className={styles.placementCol}>
-            <div>
-              <p className={styles.placementLabel}>Institution</p>
-              <p className={styles.placementValue}>{account.institution}</p>
-=======
         <div className={styles.statsRow}>
           {dashboardStats.map(({ label, value }) => (
             <article key={label} className={styles.statCard}>
@@ -434,115 +322,9 @@ export function DashboardPage() {
                   ))}
                 </tbody>
               </table>
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
             </div>
-            <div className={styles.placementDate}>
-              <span className={styles.placementIcon}>
-                <Calendar size={15} />
-              </span>
-              <div>
-                <p className={styles.placementLabel}>Start date</p>
-                <p className={styles.placementValue}>{account.startDate}</p>
-              </div>
-            </div>
-          </div>
-          <div className={styles.placementCol}>
-            <div>
-              <p className={styles.placementLabel}>Course of study</p>
-              <p className={styles.placementValue}>{account.course}</p>
-            </div>
-            <div className={styles.placementDate}>
-              <span className={styles.placementIcon}>
-                <Calendar size={15} />
-              </span>
-              <div>
-                <p className={styles.placementLabel}>Expected end date</p>
-                <p className={styles.placementValue}>{account.endDate}</p>
-              </div>
-            </div>
-          </div>
-        </section>
+          </section>
 
-<<<<<<< HEAD
-        <div className={styles.contentGrid}>
-          <div className={styles.mainColumn}>
-            <section className={styles.card}>
-              <div className={styles.cardHeader}>
-                <h2 className={styles.cardTitle}>My tasks</h2>
-                <Link href="/tasks" className={styles.cardLink}>
-                  View all
-                </Link>
-              </div>
-              <div className={styles.list}>
-                {account.tasks.map((task) => (
-                  <article key={task.id} className={styles.listRow}>
-                    <div className={styles.listBody}>
-                      <p className={styles.listTitle}>{task.title}</p>
-                      <p className={styles.listMeta}>{task.meta}</p>
-                    </div>
-                    <span className={statusClass[task.status]}>{task.status}</span>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section className={styles.card}>
-              <div className={styles.cardHeader}>
-                <h2 className={`${styles.cardTitle} ${styles.cardTitleSerif}`}>
-                  Upcoming meetings
-                </h2>
-                <Link href="/meetings" className={styles.cardLink}>
-                  View all
-                </Link>
-              </div>
-              <div className={styles.list}>
-                {account.meetings.map((meeting) => (
-                  <article key={meeting.id} className={styles.listRow}>
-                    <div className={styles.listBody}>
-                      <p className={styles.listTitle}>{meeting.title}</p>
-                      <p className={styles.listMeta}>{meeting.details}</p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <div className={styles.sideColumn}>
-            <section className={styles.card} id="progress">
-              <div className={styles.cardHeader}>
-                <h2 className={styles.cardTitle}>Progress summary</h2>
-              </div>
-              <div className={styles.progressList}>
-                {account.progress.map((meter) => (
-                  <div key={meter.id} className={styles.progressRow}>
-                    <div className={styles.progressMeta}>
-                      <span>{meter.label}</span>
-                      <span>{meter.value}%</span>
-                    </div>
-                    <div className={styles.progressTrack}>
-                      <div
-                        className={styles.progressFill}
-                        style={{ width: `${meter.value}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className={styles.milestoneList}>
-                {account.milestones.map((item) => (
-                  <div key={item.id} className={styles.milestone}>
-                    <span
-                      className={`${styles.milestoneMark} ${
-                        item.done ? styles.milestoneDone : ""
-                      }`}
-                    >
-                      {item.done ? <Check size={11} strokeWidth={3} /> : null}
-                    </span>
-                    <span className={item.done ? styles.milestoneLabelDone : undefined}>
-                      {item.label}
-                    </span>
-=======
           <section className={styles.card}>
             <h2 className={styles.cardTitle}>Overview 2024</h2>
             <div className={styles.overviewList}>
@@ -662,57 +444,12 @@ export function DashboardPage() {
                     <p className={styles.activityDescription}>
                       {activity.description}
                     </p>
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
                   </div>
-                ))}
-              </div>
-              <Link href="#progress" className={styles.footerLink}>
-                View full progress
-              </Link>
-            </section>
-
-            <section className={styles.card}>
-              <div className={styles.cardHeader}>
-                <h2 className={styles.cardTitle}>
-                  <Megaphone size={16} strokeWidth={2} />
-                  Announcements
-                </h2>
-              </div>
-              <div className={styles.list}>
-                {account.announcements.map((item) => (
-                  <article key={item.id} className={styles.compactRow}>
-                    <p className={styles.listTitle}>{item.title}</p>
-                    <p className={styles.listMeta}>{item.meta}</p>
-                  </article>
-                ))}
-              </div>
-              <Link href="/announcements" className={styles.footerLink}>
-                All announcements →
-              </Link>
-            </section>
-
-            <section className={styles.card}>
-              <div className={styles.cardHeader}>
-                <h2 className={styles.cardTitle}>Notifications</h2>
-                <span className={styles.newBadge}>{unreadCount} new</span>
-              </div>
-              <div className={styles.list}>
-                {account.notifications.map((item) => (
-                  <article key={item.id} className={styles.notificationRow}>
-                    {item.unread ? (
-                      <span className={styles.unreadDot} aria-hidden="true" />
-                    ) : (
-                      <span className={styles.unreadSpacer} aria-hidden="true" />
-                    )}
-                    <p className={styles.listTitle}>{item.message}</p>
-                  </article>
-                ))}
-              </div>
-              <Link href="/notifications" className={styles.footerLink}>
-                View all →
-              </Link>
-            </section>
-          </div>
+                  <span className={styles.activityTime}>{activity.time}</span>
+                </article>
+              ))}
+            </div>
+          </section>
         </div>
       </div>
   );

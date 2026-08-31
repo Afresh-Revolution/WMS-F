@@ -10,13 +10,6 @@ import {
   Search,
 } from "lucide-react";
 import {
-<<<<<<< HEAD
-  departmentFilters as defaultDepartmentFilters,
-  type DepartmentFilter,
-  type EmployeeStatus,
-} from "@/data/employees";
-import { useManagerEmployees } from "@/lib/hooks/useManagerApi";
-=======
   employees as fallbackEmployees,
   type DepartmentFilter,
   type EmployeeStatus,
@@ -27,7 +20,6 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { employeesApi } from "@/lib/api";
 import { listFrom, mapEmployee } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import styles from "./EmployeesPage.module.css";
 
 type ViewMode = "grid" | "list";
@@ -49,15 +41,6 @@ export function EmployeesPage() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<DepartmentFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
-<<<<<<< HEAD
-  const { items: employees } = useManagerEmployees();
-
-  const departmentFilters = useMemo(() => {
-    const unique = Array.from(
-      new Set(employees.map((employee) => employee.department).filter(Boolean)),
-    );
-    return unique.length ? ["All", ...unique] : defaultDepartmentFilters;
-=======
   const [addOpen, setAddOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -77,7 +60,6 @@ export function EmployeesPage() {
   const departmentFilters = useMemo((): DepartmentFilter[] => {
     const departments = new Set(employees.map((e) => e.department).filter(Boolean));
     return ["All", ...Array.from(departments)] as DepartmentFilter[];
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   }, [employees]);
 
   const filteredEmployees = useMemo(() => {
@@ -90,9 +72,6 @@ export function EmployeesPage() {
         matchesFilter && haystack.includes(query.trim().toLowerCase())
       );
     });
-<<<<<<< HEAD
-  }, [activeFilter, employees, query]);
-=======
   }, [activeFilter, query, employees]);
 
   function focusSearch() {
@@ -114,7 +93,6 @@ export function EmployeesPage() {
       refetch();
     });
   }
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   return (
       <div className={styles.page}>

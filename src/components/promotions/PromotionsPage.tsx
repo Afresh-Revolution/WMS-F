@@ -9,13 +9,6 @@ import {
 } from "lucide-react";
 import {
   promotionFilters,
-<<<<<<< HEAD
-  promotionStats,
-  type PromotionFilter,
-  type PromotionStatus,
-} from "@/data/promotions";
-import { useManagerPromotions } from "@/lib/hooks/useManagerApi";
-=======
   promotions as fallbackPromotions,
   promotionStats as fallbackStats,
   type PromotionFilter,
@@ -27,7 +20,6 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { hrApi, promotionsApi } from "@/lib/api";
 import { listFrom, mapPromotion } from "@/lib/api/mappers";
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import styles from "./PromotionsPage.module.css";
 
 const statusClass: Record<PromotionStatus, string> = {
@@ -54,9 +46,6 @@ const newPromotionFields = [
 
 export function PromotionsPage() {
   const [activeFilter, setActiveFilter] = useState<PromotionFilter>("All");
-<<<<<<< HEAD
-  const { items: promotions } = useManagerPromotions();
-=======
   const [createOpen, setCreateOpen] = useState(false);
 
   const { runAction, showToast } = usePageActions();
@@ -84,7 +73,6 @@ export function PromotionsPage() {
       { id: "draft", label: "Draft", value: String(draft) },
     ];
   }, [data, promotions]);
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   const filteredPromotions = useMemo(() => {
     return promotions.filter((promotion) => {
@@ -92,8 +80,6 @@ export function PromotionsPage() {
       return promotion.status === activeFilter;
     });
   }, [activeFilter, promotions]);
-<<<<<<< HEAD
-=======
 
   function viewPromotion(promotion: (typeof promotions)[number]) {
     showToast(
@@ -108,7 +94,6 @@ export function PromotionsPage() {
       refetch();
     });
   }
->>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   return (
       <div className={styles.page}>
