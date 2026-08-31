@@ -1,0 +1,79 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(28, 25, 23, 0.45);
+}
+
+.modal {
+  width: min(100%, 440px);
+  max-height: min(90vh, 640px);
+  overflow: auto;
+  padding: 1.25rem;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+}
+
+.head {
+  margin-bottom: 1rem;
+}
+
+.title {
+  margin: 0 0 0.35rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.description {
+  margin: 0;
+  color: #57534e;
+  font-size: 0.875rem;
+}
+
+.form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
+.field input,
+.field textarea,
+.field select {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.cancel,
+.submit {
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.cancel {
+  background: #f5f5f4;
+  color: #44403c;
+}
+
+.submit {
+  background: var(--afresh-orange);
+  color: #fff;
+}

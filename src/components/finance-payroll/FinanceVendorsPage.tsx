@@ -2,30 +2,54 @@
 
 import { useMemo, useState } from "react";
 import {
-  Bell,
   Building2,
   ChevronRight,
   Mail,
   MapPin,
   Plus,
+  RefreshCw,
   Search,
 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   matchesVendorFilter,
   vendorStats,
-  vendors,
+  vendors as fallbackVendors,
+  type Vendor,
   type VendorFilter,
 } from "@/data/financeVendors";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { vendorsApi } from "@/lib/api";
+import { listFrom, mapVendor } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceVendorsPage.module.css";
 
 const vendorFilters: VendorFilter[] = ["Active", "All"];
 
+const createFields = [
+  { name: "name", label: "Vendor name", required: true },
+  { name: "category", label: "Category", required: true },
+  { name: "location", label: "Location", required: true },
+  { name: "email", label: "Email", type: "email" as const, required: true },
+];
+
 export function FinanceVendorsPage() {
   const [activeFilter, setActiveFilter] = useState<VendorFilter>("Active");
   const [query, setQuery] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const { runAction, exportRows } = usePageActions();
+
+  const { data, loading, error, refetch } = useAsyncData(() => vendorsApi.list(), []);
+
+  const vendors = useMemo(() => {
+    const records = listFrom(data ?? undefined);
+    return records.length > 0
+      ? records.map((record) => mapVendor(record))
+      : fallbackVendors;
+  }, [data]);
 
   const filteredVendors = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -40,25 +64,75 @@ export function FinanceVendorsPage() {
         vendor.email.toLowerCase().includes(normalizedQuery)
       );
     });
-  }, [activeFilter, query]);
+  }, [activeFilter, query, vendors]);
+
+  async function handleCreate(values: Record<string, string>) {
+    await runAction("Add vendor", async () => {
+      await vendorsApi.create({ ...values, active: true });
+      refetch();
+    });
+  }
+
+  async function viewVendor(vendor: Vendor) {
+    await runAction(`Vendor — ${vendor.name}`, async () => {
+      await vendorsApi.get(vendor.id);
+    });
+  }
+
+  function handleRefresh() {
+    void runAction("Refresh", async () => {
+      refetch();
+    });
+  }
+
+  function handleExport() {
+    exportRows(
+      filteredVendors.map((vendor) => ({
+        name: vendor.name,
+        category: vendor.category,
+        location: vendor.location,
+        email: vendor.email,
+        ytdSpend: vendor.ytdSpend,
+        openBills: vendor.openBills,
+        active: vendor.active,
+      })),
+      "vendors.csv",
+    );
+  }
 
   return (
-    <AppShell>
+    <>
       <div className={payrollStyles.page}>
         <FinanceModuleTabs />
+        {loading ? <p>Loading vendors…</p> : null}
+        {error ? <p role="alert">Using cached vendors — {error}</p> : null}
 
         <div className={payrollStyles.topBar}>
           <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>
           <div className={payrollStyles.topActions}>
-            <button type="button" aria-label="Search" className={payrollStyles.iconButton}>
+            <button
+              type="button"
+              aria-label="Search"
+              className={payrollStyles.iconButton}
+              onClick={() => {
+                const input = document.querySelector<HTMLInputElement>(
+                  "[data-vendor-search]",
+                );
+                input?.focus();
+              }}
+            >
               <Search size={16} />
             </button>
-            <button type="button" aria-label="Notifications" className={payrollStyles.iconButton}>
-              <Bell size={16} />
+            <NotificationsLink className={payrollStyles.iconButton} />
+            <button
+              type="button"
+              aria-label="Refresh"
+              className={payrollStyles.iconButton}
+              onClick={handleRefresh}
+            >
+              <RefreshCw size={16} />
             </button>
-            <button type="button" aria-label="Profile" className={styles.avatarChip}>
-              MC
-            </button>
+            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
 
@@ -71,10 +145,15 @@ export function FinanceVendorsPage() {
               bills by vendor.
             </p>
           </div>
-          <button type="button" className={styles.addButton}>
-            <Plus size={16} strokeWidth={2.5} />
-            Add vendor
-          </button>
+          <div className={payrollStyles.headerActions}>
+            <button type="button" className={payrollStyles.exportButton} onClick={handleExport}>
+              Export
+            </button>
+            <button type="button" className={styles.addButton} onClick={() => setCreateOpen(true)}>
+              <Plus size={16} strokeWidth={2.5} />
+              Add vendor
+            </button>
+          </div>
         </div>
 
         <div className={styles.stats}>
@@ -91,6 +170,7 @@ export function FinanceVendorsPage() {
             <Search size={16} className={styles.searchIcon} />
             <input
               type="search"
+              data-vendor-search
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search vendors..."
@@ -151,7 +231,11 @@ export function FinanceVendorsPage() {
                   )}
                 </div>
 
-                <button type="button" className={styles.detailsButton}>
+                <button
+                  type="button"
+                  className={styles.detailsButton}
+                  onClick={() => void viewVendor(vendor)}
+                >
                   View details
                   <ChevronRight size={15} />
                 </button>
@@ -162,6 +246,16 @@ export function FinanceVendorsPage() {
           <div className={styles.empty}>No vendors match your search.</div>
         )}
       </div>
-    </AppShell>
+
+      <SimpleModal
+        open={createOpen}
+        title="Add vendor"
+        description="Create a supplier record for bills and purchases."
+        fields={createFields}
+        submitLabel="Add vendor"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreate}
+      />
+    </>
   );
 }

@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { X } from "lucide-react";
 import type { DisciplineCase } from "@/data/discipline";
+import { usePageActions } from "@/hooks/usePageActions";
+import { disciplineApi } from "@/lib/api";
 import styles from "./DisciplineRecordModal.module.css";
 
 const tagClass = {
@@ -17,13 +19,32 @@ const tagClass = {
 type DisciplineRecordModalProps = {
   record: DisciplineCase;
   onClose: () => void;
+  onUpdated?: () => void;
 };
 
 export function DisciplineRecordModal({
   record,
   onClose,
+  onUpdated,
 }: DisciplineRecordModalProps) {
+  const { runAction } = usePageActions();
   const isActive = record.status === "Active";
+
+  function acknowledgeRecord() {
+    void runAction(`Acknowledge case ${record.ref}`, async () => {
+      await disciplineApi.action(record.id, "acknowledge");
+      onUpdated?.();
+      onClose();
+    });
+  }
+
+  function closeCase() {
+    void runAction(`Close case ${record.ref}`, async () => {
+      await disciplineApi.action(record.id, "close");
+      onUpdated?.();
+      onClose();
+    });
+  }
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -99,10 +120,18 @@ export function DisciplineRecordModal({
 
         {isActive && (
           <div className={styles.actions}>
-            <button type="button" className={styles.acknowledgeButton}>
+            <button
+              type="button"
+              className={styles.acknowledgeButton}
+              onClick={acknowledgeRecord}
+            >
               Mark as acknowledged
             </button>
-            <button type="button" className={styles.closeCaseButton}>
+            <button
+              type="button"
+              className={styles.closeCaseButton}
+              onClick={closeCase}
+            >
               Close case
             </button>
           </div>

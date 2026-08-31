@@ -13,13 +13,24 @@ import {
   Shirt,
   Users,
 } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
 import {
   departmentFilters,
+<<<<<<< HEAD
   departmentStats,
   type DepartmentFilter,
 } from "@/data/departments";
 import { useManagerDepartments } from "@/lib/hooks/useManagerApi";
+=======
+  departments as fallbackDepartments,
+  departmentStats as fallbackStats,
+  type DepartmentFilter,
+} from "@/data/departments";
+import { SimpleModal } from "@/components/ui/SimpleModal";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { departmentsApi } from "@/lib/api";
+import { listFrom, mapDepartmentRecord } from "@/lib/api/mappers";
+>>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 import styles from "./DepartmentsPage.module.css";
 
 const deptIcons = {
@@ -31,11 +42,60 @@ const deptIcons = {
   model: Layers,
 } as const;
 
+const addDepartmentFields = [
+  { name: "name", label: "Department name", required: true },
+  { name: "managerName", label: "Head of department", required: true },
+  { name: "description", label: "Description", type: "textarea" as const },
+];
+
 export function DepartmentsPage() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] =
     useState<DepartmentFilter>("All departments");
+<<<<<<< HEAD
   const { items: departments, refresh } = useManagerDepartments();
+=======
+  const [addOpen, setAddOpen] = useState(false);
+
+  const { runAction, showToast } = usePageActions();
+  const { data, loading, error, refetch } = useAsyncData(
+    () => departmentsApi.list(),
+    [],
+  );
+
+  const departments = useMemo(() => {
+    const records = listFrom(data ?? undefined);
+    return records.length > 0
+      ? records.map((record, index) => mapDepartmentRecord(record, index))
+      : fallbackDepartments;
+  }, [data]);
+
+  const departmentStats = useMemo(() => {
+    const totalHeadcount = departments.reduce(
+      (sum, dept) => sum + dept.activeCount,
+      0,
+    );
+    return [
+      {
+        id: "departments",
+        label: "Departments",
+        value: String(departments.length || fallbackStats[0].value),
+      },
+      {
+        id: "headcount",
+        label: "Total Headcount",
+        value: totalHeadcount
+          ? totalHeadcount.toLocaleString()
+          : fallbackStats[1].value,
+      },
+      {
+        id: "regions",
+        label: "For All Regions",
+        value: fallbackStats[2].value,
+      },
+    ];
+  }, [departments]);
+>>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   const filteredDepartments = useMemo(() => {
     return departments.filter((department) => {
@@ -49,11 +109,37 @@ export function DepartmentsPage() {
         matchesFilter && haystack.includes(query.trim().toLowerCase())
       );
     });
+<<<<<<< HEAD
   }, [activeFilter, departments, query]);
+=======
+  }, [activeFilter, query, departments]);
+
+  function viewDepartment(department: (typeof departments)[number]) {
+    void (async () => {
+      try {
+        await departmentsApi.get(department.id);
+      } catch {
+        /* fallback to local info if API unavailable */
+      }
+      showToast(
+        `${department.name} — ${department.activeCount} active, HOD: ${department.managerName}`,
+        "info",
+      );
+    })();
+  }
+
+  async function handleAddDepartment(values: Record<string, string>) {
+    await runAction("Add department", async () => {
+      await departmentsApi.create(values);
+      refetch();
+    });
+  }
+>>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
 
   return (
-    <AppShell>
-      <div className={styles.page}>
+    <div className={styles.page}>
+      {loading ? <p>Loading departments…</p> : null}
+      {error ? <p role="alert">Using cached departments — {error}</p> : null}
         <div className={styles.headerRow}>
           <div>
             <p className={styles.eyebrow}>Departments &amp; how they work</p>
@@ -75,11 +161,20 @@ export function DepartmentsPage() {
               type="button"
               aria-label="Refresh"
               className={styles.iconButton}
+<<<<<<< HEAD
               onClick={() => void refresh()}
+=======
+              onClick={() => refetch()}
+>>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
             >
               <RefreshCw size={16} />
             </button>
-            <button type="button" aria-label="Add department" className={styles.iconButton}>
+            <button
+              type="button"
+              aria-label="Add department"
+              className={styles.iconButton}
+              onClick={() => setAddOpen(true)}
+            >
               <Plus size={16} />
             </button>
           </div>
@@ -151,7 +246,11 @@ export function DepartmentsPage() {
                   </div>
                 </div>
                 <div className={styles.cardFooter}>
-                  <button type="button" className={styles.viewLink}>
+                  <button
+                    type="button"
+                    className={styles.viewLink}
+                    onClick={() => viewDepartment(department)}
+                  >
                     View department &gt;
                   </button>
                 </div>
@@ -163,7 +262,16 @@ export function DepartmentsPage() {
             <div className={styles.empty}>No departments match this view.</div>
           )}
         </div>
+
+        <SimpleModal
+          open={addOpen}
+          title="Add department"
+          description="Create a new department."
+          fields={addDepartmentFields}
+          submitLabel="Add department"
+          onClose={() => setAddOpen(false)}
+          onSubmit={handleAddDepartment}
+        />
       </div>
-    </AppShell>
   );
 }

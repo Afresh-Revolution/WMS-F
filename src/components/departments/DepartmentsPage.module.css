@@ -359,3 +359,28 @@
     flex-wrap: wrap;
   }
 }
+
+@media (max-width: 768px) {
+  .headerRow {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .headerActions {
+    width: 100%;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 12px 16px 40px;
+  }
+
+  .title {
+    font-size: 28px;
+  }
+}

@@ -1,0 +1,66 @@
+.page {
+  padding: 2rem;
+  max-width: 960px;
+}
+
+.eyebrow {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #78716c;
+  margin-bottom: 0.5rem;
+}
+
+.title {
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.subtitle {
+  color: #57534e;
+  margin-bottom: 1.5rem;
+}
+
+.list {
+  display: grid;
+  gap: 1rem;
+}
+
+.card {
+  padding: 1rem 1.25rem;
+  border: 1px solid #e7e5e4;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.card h2 {
+  font-size: 1rem;
+  margin: 0 0 0.35rem;
+}
+
+.card p {
+  margin: 0;
+  color: #57534e;
+  font-size: 0.9rem;
+}
+
+.empty {
+  color: #78716c;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 1rem;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 0.85rem;
+  }
+}

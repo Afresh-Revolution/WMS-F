@@ -135,6 +135,26 @@
   color: #78716c;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.exportButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #44403c;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .newButton {
   display: inline-flex;
   align-items: center;

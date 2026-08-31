@@ -1,0 +1,250 @@
+.afresh-dept-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.afresh-dept-head-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.afresh-dept-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a08b80;
+}
+
+.afresh-dept-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--afresh);
+}
+
+.afresh-dept-sub {
+  margin: 0;
+  max-width: 34rem;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.afresh-dept-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--afresh);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+}
+
+.afresh-dept-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.afresh-dept-stat {
+  padding: 16px 18px;
+}
+
+.afresh-dept-stat.highlight {
+  background: #fff6ef;
+  border-color: #f3d4c2;
+}
+
+.afresh-dept-stat-label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.afresh-dept-stat-value {
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--afresh);
+}
+
+.afresh-dept-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.afresh-dept-tab {
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #8d776b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.afresh-dept-tab.active {
+  background: var(--afresh);
+  color: #fff;
+}
+
+.afresh-dept-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.afresh-dept-card {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.afresh-dept-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.afresh-dept-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--afresh-soft);
+  color: var(--afresh);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.afresh-dept-name {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--afresh);
+}
+
+.afresh-dept-hod {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.afresh-dept-hod-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--afresh-soft);
+  color: var(--afresh);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex: none;
+}
+
+.afresh-dept-hod span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4d3b32;
+}
+
+.afresh-dept-metrics {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.afresh-dept-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.afresh-dept-active svg {
+  color: #b09a8e;
+}
+
+.afresh-dept-metrics .afresh-progress-track {
+  flex: 1;
+}
+
+.afresh-dept-targets {
+  font-size: 12px;
+  font-weight: 600;
+  color: #8d776b;
+  white-space: nowrap;
+}
+
+.afresh-dept-view {
+  width: 100%;
+  margin-top: auto;
+  padding-top: 4px;
+  border: 0;
+  background: transparent;
+  color: #6f5a50;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+}
+
+@media (max-width: 1180px) {
+  .afresh-dept-grid,
+  .afresh-dept-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .afresh-dept-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .afresh-dept-grid,
+  .afresh-dept-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .afresh-dept-metrics {
+    flex-wrap: wrap;
+  }
+}

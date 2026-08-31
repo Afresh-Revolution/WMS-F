@@ -269,6 +269,29 @@
   color: #78716c;
 }
 
+.searchField {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 1rem;
+  max-width: 420px;
+  padding: 0 16px;
+  height: 44px;
+  border: 1px solid #ebe6e1;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.searchIcon {
+  color: #a8a29e;
+  flex-shrink: 0;
+}
+
+.searchInput {
+  width: 100%;
+  font-size: 14px;
+}
+
 @media (max-width: 980px) {
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));

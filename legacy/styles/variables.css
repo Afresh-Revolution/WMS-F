@@ -1,0 +1,22 @@
+:root {
+  --color-bg: #f3f5f8;
+  --color-surface: #ffffff;
+  --color-border: #d7dee8;
+  --color-text: #152033;
+  --color-muted: #5b6b82;
+  --color-primary: #1f6feb;
+  --color-primary-hover: #1858c1;
+  --color-danger: #c62828;
+  --radius: 10px;
+  --shadow: 0 8px 24px rgba(21, 32, 51, 0.08);
+  --sidebar-width: 240px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 export type ProfileTab = "Overview" | "Leave" | "Expenses";
 
 export type LeaveHistoryStatus = "Approved" | "Pending";
@@ -11,12 +12,16 @@ export type LeaveHistoryItem = {
 };
 
 export type LeaveBalanceItem = {
+=======
+export type ProfileLeaveBalance = {
+>>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   id: string;
   label: string;
   remaining: number;
   total: number;
 };
 
+<<<<<<< HEAD
 export type ProfileDetail = {
   label: string;
   value: string;
@@ -57,10 +62,37 @@ export const employmentDetails: ProfileDetail[] = [
 ];
 
 export const leaveBalances: LeaveBalanceItem[] = [
+=======
+export const profileRecord = {
+  initials: "MC",
+  name: "Maya Chen",
+  jobTitle: "Staff Operations Manager",
+  department: "HR",
+  status: "Active" as const,
+  employeeId: "AFR-2024-0142",
+  annualLeaveDays: 13,
+  personal: {
+    companyEmail: "maya@afresh.com",
+    personalEmail: "maya.chen@gmail.com",
+    phone: "+44 7700 900123",
+    location: "London, UK",
+  },
+  employment: {
+    role: "Staff Operations Manager",
+    department: "HR",
+    startDate: "January 15, 2024",
+    type: "Full-time",
+    reportsTo: "",
+  },
+};
+
+export const profileLeaveBalances: ProfileLeaveBalance[] = [
+>>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9
   { id: "annual", label: "Annual Leave", remaining: 13, total: 25 },
   { id: "sick", label: "Sick Leave", remaining: 7, total: 10 },
   { id: "personal", label: "Personal Leave", remaining: 3, total: 5 },
 ];
+<<<<<<< HEAD
 
 export const leaveHistory: LeaveHistoryItem[] = [
   {
@@ -92,3 +124,5 @@ export const leaveHistory: LeaveHistoryItem[] = [
     status: "Pending",
   },
 ];
+=======
+>>>>>>> 37eb1224d5b2fc1ab1c618b51d1c98ba658180c9

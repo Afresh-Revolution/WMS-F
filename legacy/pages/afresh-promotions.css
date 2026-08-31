@@ -1,0 +1,383 @@
+.afresh-promo-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.afresh-promo-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a08b80;
+}
+
+.afresh-promo-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(28px, 3vw, 36px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--afresh);
+}
+
+.afresh-promo-sub {
+  margin: 0;
+  max-width: 38rem;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.afresh-promo-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.afresh-promo-stat {
+  padding: 16px 18px;
+}
+
+.afresh-promo-stat.highlight {
+  background: #fff6ef;
+  border-color: #f3d4c2;
+}
+
+.afresh-promo-stat-label {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.afresh-promo-stat-value {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--afresh);
+}
+
+.afresh-promo-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.afresh-promo-tab {
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #8d776b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.afresh-promo-tab.active {
+  background: var(--afresh);
+  color: #fff;
+}
+
+.afresh-promo-panel {
+  padding: 18px 18px 8px;
+}
+
+.afresh-promo-panel-head {
+  margin-bottom: 8px;
+}
+
+.afresh-promo-panel-head h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--afresh);
+}
+
+.afresh-promo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 0;
+  border: 0;
+  border-top: 1px solid #f3e7de;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.afresh-promo-row:first-of-type {
+  border-top: 0;
+}
+
+.afresh-promo-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.afresh-promo-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--afresh-soft);
+  color: var(--afresh);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex: none;
+}
+
+.afresh-promo-person h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #2f241e;
+}
+
+.afresh-promo-path {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.afresh-promo-path em {
+  font-style: normal;
+  color: var(--afresh);
+  font-weight: 600;
+}
+
+.afresh-promo-dates {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.afresh-promo-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.afresh-promo-status {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.afresh-promo-status.review {
+  background: var(--afresh-badge);
+  color: var(--afresh);
+}
+
+.afresh-promo-status.draft {
+  background: #f4ebe4;
+  color: #9a7b68;
+}
+
+.afresh-promo-status.approved {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-line);
+}
+
+.afresh-promo-status.rejected {
+  background: var(--crit-bg);
+  color: var(--crit);
+  border: 1px solid var(--crit-line);
+}
+
+.afresh-promo-chevron {
+  color: #c4ada0;
+  display: grid;
+  place-items: center;
+}
+
+.afresh-promo-row:hover {
+  background: #fffaf6;
+}
+
+.afresh-promo-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(62, 38, 24, 0.28);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.afresh-promo-modal {
+  width: min(560px, 100%);
+  background: #fffdfb;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(80, 40, 16, 0.18);
+  padding: 22px 24px 20px;
+}
+
+.afresh-promo-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.afresh-promo-modal-head h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--afresh);
+  letter-spacing: -0.02em;
+}
+
+.afresh-promo-modal-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: #9a8478;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.afresh-promo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.afresh-promo-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.afresh-promo-field span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4d3b32;
+}
+
+.afresh-promo-field input,
+.afresh-promo-field select,
+.afresh-promo-field textarea {
+  width: 100%;
+  border: 1px solid #f0dfd3;
+  border-radius: 12px;
+  background: #fbf6f1;
+  padding: 11px 14px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  outline: none;
+}
+
+.afresh-promo-field textarea {
+  resize: vertical;
+  min-height: 92px;
+}
+
+.afresh-promo-field input::placeholder,
+.afresh-promo-field textarea::placeholder {
+  color: #b09a8e;
+}
+
+.afresh-promo-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.afresh-promo-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.afresh-promo-draft,
+.afresh-promo-submit {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.afresh-promo-draft {
+  background: #fff;
+  border: 1px solid var(--line);
+  color: #4d3b32;
+}
+
+.afresh-promo-submit {
+  background: var(--afresh);
+  border: 0;
+  color: #fff;
+}
+
+@media (max-width: 1180px) {
+  .afresh-promo-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .afresh-promo-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .afresh-promo-tabs {
+    flex-wrap: wrap;
+    border-radius: 18px;
+  }
+
+  .afresh-promo-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .afresh-promo-field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .afresh-promo-meta {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
