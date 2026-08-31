@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
-const apiRoot = process.env.NEXT_PUBLIC_API_ROOT_URL ?? "http://localhost:3001";
+/** Backend API — proxied in next.config rewrites (build-time env on Render). */
+const apiRoot = (
+  process.env.NEXT_PUBLIC_API_ROOT_URL ?? "http://localhost:3001"
+).replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
   async rewrites() {

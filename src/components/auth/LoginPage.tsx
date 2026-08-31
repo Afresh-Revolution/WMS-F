@@ -29,32 +29,11 @@ export function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [checkingBootstrap, setCheckingBootstrap] = useState(true);
-  const [needsBootstrap, setNeedsBootstrap] = useState(false);
-  const [apiUnavailable, setApiUnavailable] = useState(false);
-  const [name, setName] = useState("");
-
-  const apiRoot =
-    process.env.NEXT_PUBLIC_API_ROOT_URL ?? "http://localhost:3001";
 
   useEffect(() => {
     if (getAccessToken()) {
       router.replace("/dashboard");
-      return;
     }
-
-    authApi
-      .bootstrapStatus()
-      .then((status) => {
-        setApiUnavailable(false);
-        const isComplete = status.complete ?? status.bootstrapped ?? false;
-        setNeedsBootstrap(!isComplete);
-      })
-      .catch(() => {
-        setApiUnavailable(true);
-        setNeedsBootstrap(true);
-      })
-      .finally(() => setCheckingBootstrap(false));
   }, [router]);
 
   async function handleSubmit(event: FormEvent) {
@@ -62,15 +41,7 @@ export function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      if (needsBootstrap) {
-        await authApi.bootstrap({
-          email,
-          password,
-          name: name || undefined,
-        });
-      } else {
-        await authApi.login({ email, password });
-      }
+      await authApi.login({ email, password });
 
       if (remember) {
         localStorage.setItem("wms_remember_me", "1");
@@ -84,16 +55,6 @@ export function LoginPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  if (checkingBootstrap) {
-    return (
-      <div className={styles.page}>
-        <div className={styles.loadingShell}>
-          <p className={styles.loadingText}>Loading workspace…</p>
-        </div>
-      </div>
-    );
   }
 
   return (
@@ -126,44 +87,13 @@ export function LoginPage() {
           <div className={styles.formInner}>
             <header className={styles.formHeader}>
               <p className={styles.formEyebrow}>Afresh workspace</p>
-              <h2 className={styles.formTitle}>
-                {needsBootstrap ? "Set up your workspace" : "Welcome back"}
-              </h2>
+              <h2 className={styles.formTitle}>Welcome back</h2>
               <p className={styles.formSubtitle}>
-                {needsBootstrap
-                  ? "Create the first Super Admin account to get started."
-                  : "Sign in to continue to your workspace."}
+                Sign in to continue to your workspace.
               </p>
             </header>
 
-            {apiUnavailable ? (
-              <div className={styles.apiNotice} role="status">
-                <p className={styles.apiNoticeTitle}>Backend not reachable</p>
-                <p className={styles.apiNoticeText}>
-                  Start the API server at{" "}
-                  <code className={styles.apiNoticeCode}>{apiRoot}</code>, then
-                  refresh this page. Login requests are proxied through Next.js
-                  to that URL (see <code className={styles.apiNoticeCode}>.env</code>
-                  ).
-                </p>
-              </div>
-            ) : null}
-
             <form className={styles.form} onSubmit={(event) => void handleSubmit(event)}>
-              {needsBootstrap ? (
-                <label className={styles.field}>
-                  <span className={styles.label}>Full name</span>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder="Christy Ishaku"
-                    className={styles.input}
-                    autoComplete="name"
-                  />
-                </label>
-              ) : null}
-
               <label className={styles.field}>
                 <span className={styles.label}>Work email</span>
                 <input
@@ -186,27 +116,23 @@ export function LoginPage() {
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="••••••••••••"
                   className={styles.input}
-                  autoComplete={
-                    needsBootstrap ? "new-password" : "current-password"
-                  }
+                  autoComplete="current-password"
                 />
               </label>
 
-              {!needsBootstrap ? (
-                <div className={styles.formRow}>
-                  <label className={styles.checkbox}>
-                    <input
-                      type="checkbox"
-                      checked={remember}
-                      onChange={(event) => setRemember(event.target.checked)}
-                    />
-                    <span>Keep me signed in</span>
-                  </label>
-                  <Link href="/help" className={styles.textLink}>
-                    Forgot password?
-                  </Link>
-                </div>
-              ) : null}
+              <div className={styles.formRow}>
+                <label className={styles.checkbox}>
+                  <input
+                    type="checkbox"
+                    checked={remember}
+                    onChange={(event) => setRemember(event.target.checked)}
+                  />
+                  <span>Keep me signed in</span>
+                </label>
+                <Link href="/help" className={styles.textLink}>
+                  Forgot password?
+                </Link>
+              </div>
 
               {error ? (
                 <p className={styles.error} role="alert">
@@ -215,42 +141,34 @@ export function LoginPage() {
               ) : null}
 
               <button type="submit" className={styles.primaryButton} disabled={loading}>
-                {loading
-                  ? "Please wait…"
-                  : needsBootstrap
-                    ? "Create workspace"
-                    : "Sign in to Afresh"}
-                {!loading && !needsBootstrap ? (
+                {loading ? "Please wait…" : "Sign in to Afresh"}
+                {!loading ? (
                   <ChevronRight size={18} strokeWidth={2.25} aria-hidden />
                 ) : null}
               </button>
             </form>
 
-            {!needsBootstrap ? (
-              <>
-                <div className={styles.divider}>
-                  <span>or</span>
-                </div>
+            <div className={styles.divider}>
+              <span>or</span>
+            </div>
 
-                <button
-                  type="button"
-                  className={styles.ssoButton}
-                  onClick={() => {
-                    setError("SSO is not configured for this environment yet.");
-                  }}
-                >
-                  <SsoMark />
-                  Continue with SSO
-                </button>
+            <button
+              type="button"
+              className={styles.ssoButton}
+              onClick={() => {
+                setError("SSO is not configured for this environment yet.");
+              }}
+            >
+              <SsoMark />
+              Continue with SSO
+            </button>
 
-                <p className={styles.support}>
-                  Need help?{" "}
-                  <Link href="/help" className={styles.textLink}>
-                    Contact support
-                  </Link>
-                </p>
-              </>
-            ) : null}
+            <p className={styles.support}>
+              Need help?{" "}
+              <Link href="/help" className={styles.textLink}>
+                Contact support
+              </Link>
+            </p>
           </div>
 
           <footer className={styles.legal}>
