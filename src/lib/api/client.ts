@@ -1,5 +1,6 @@
 const API_ROOT_URL = (
-  process.env.NEXT_PUBLIC_API_ROOT_URL ?? "https://wms-b.onrender.com"
+  process.env.NEXT_PUBLIC_API_ROOT_URL?.trim() ||
+  "https://wms-b.onrender.com"
 ).replace(/\/$/, "");
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 
@@ -240,7 +241,26 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
     return "Access denied. Check your Super Admin credentials and try again.";
   }
 
-  return fallback || "Request failed";
+  if (
+    fallback.toLowerCase() === "bad gateway" ||
+    fallback.toLowerCase() === "service unavailable"
+  ) {
+    return "The sign-in service is temporarily unavailable. Please try again in a moment.";
+  }
+
+  if (
+    fallback.toLowerCase().includes("internal server error") ||
+    fallback.toLowerCase() === "internal server error"
+  ) {
+    return "The sign-in service returned an error. If this continues, redeploy the frontend on Render.";
+  }
+
+  const lowerFallback = fallback.trim().toLowerCase();
+  if (!lowerFallback || GENERIC_ERROR_MESSAGES.has(lowerFallback)) {
+    return "Sign in failed. Check your email and password, then try again.";
+  }
+
+  return fallback;
 }
 
 function responseLooksLikeAuthFailure(payload: unknown): boolean {
