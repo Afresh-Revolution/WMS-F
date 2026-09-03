@@ -33,6 +33,8 @@ import {
   CircleHelp,
   Settings,
   LogOut,
+  BookUser,
+  Bell,
 } from "lucide-react";
 import { AfreshLogo } from "./AfreshLogo";
 import { GlobalSearch } from "./GlobalSearch";
@@ -45,7 +47,7 @@ type NavItem = {
   badge?: string;
 };
 
-const primaryNav: NavItem[] = [
+const adminPrimaryNav: NavItem[] = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/employees", label: "Employees", icon: Users },
   { href: "/departments", label: "Departments", icon: Building2 },
@@ -74,15 +76,41 @@ const primaryNav: NavItem[] = [
   { href: "/profile", label: "Profile", icon: UserRound },
 ];
 
+const secretaryPrimaryNav: NavItem[] = [
+  { href: "/secretary", label: "Overview", icon: LayoutDashboard },
+  {
+    href: "/secretary/email-requests",
+    label: "Company Email Requests",
+    icon: Mail,
+    badge: "2",
+  },
+  {
+    href: "/secretary/email-directory",
+    label: "Company Email Directory",
+    icon: BookUser,
+  },
+  { href: "/secretary/calendar", label: "Calendar", icon: CalendarRange },
+  { href: "/secretary/meetings", label: "Meetings", icon: CalendarDays },
+  { href: "/secretary/tasks", label: "Management Tasks", icon: ListTodo },
+  { href: "/secretary/reminders", label: "Reminders", icon: Bell },
+];
+
 const footerNav: NavItem[] = [
   { href: "/help", label: "Help center", icon: CircleHelp },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/sign-out", label: "Sign out", icon: LogOut },
 ];
 
+function isSecretaryPath(pathname: string) {
+  return pathname === "/secretary" || pathname.startsWith("/secretary/");
+}
+
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") {
     return pathname === "/" || pathname === "/dashboard";
+  }
+  if (href === "/secretary") {
+    return pathname === "/secretary";
   }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -96,23 +124,29 @@ export function Sidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const secretary = isSecretaryPath(pathname);
+  const primaryNav = secretary ? secretaryPrimaryNav : adminPrimaryNav;
+  const homeHref = secretary ? "/secretary" : "/dashboard";
+  const user = secretary
+    ? { name: "Grace Bello", role: "Secretary", initials: "GB" }
+    : { name: "Christy Ishaku", role: "Super Admin", initials: "CI" };
 
   return (
     <aside className={`${styles.sidebar} ${open ? styles.sidebarOpen : ""}`}>
-      <Link href="/dashboard" onClick={onNavigate} className={styles.brand}>
+      <Link href={homeHref} onClick={onNavigate} className={styles.brand}>
         <AfreshLogo />
       </Link>
 
-      <GlobalSearch />
+      {secretary ? null : <GlobalSearch />}
 
       <Link href="/profile" onClick={onNavigate} className={`${styles.userCard} ${
           isActive(pathname, "/profile") ? styles.userCardActive : ""
         }`}
       >
-        <div className={styles.avatar}>CI</div>
+        <div className={styles.avatar}>{user.initials}</div>
         <div className={styles.userMeta}>
-          <p className={styles.userName}>Christy Ishaku</p>
-          <p className={styles.userRole}>Super Admin</p>
+          <p className={styles.userName}>{user.name}</p>
+          <p className={styles.userRole}>{user.role}</p>
         </div>
       </Link>
 

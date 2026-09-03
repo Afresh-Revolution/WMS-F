@@ -1,12 +1,25 @@
-export { apiRequest, buildQuery, ApiError, getAccessToken, getRefreshToken, setTokens, clearTokens } from "./client";
+export {
+  apiRequest,
+  buildQuery,
+  ApiError,
+  extractErrorMessage,
+  getSessionToken,
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+  clearTokens,
+} from "./client";
 export type { ApiListResponse, PaginatedResponse, Id } from "./types";
 export { unwrapList } from "./types";
 
 export { managerApi } from "./manager";
 export type { ManagerApi, ManagerListParams } from "./manager";
 
+export { secretaryApi } from "./secretary";
+export type { SecretaryListParams } from "./secretary";
+
 export { authApi, dashboardApi, healthApi, searchApi } from "./auth";
-export type { AuthUser, LoginPayload, LoginResponse, BootstrapPayload } from "./auth";
+export type { AuthUser, LoginPayload, LoginResponse, BootstrapPayload, BootstrapStatus } from "./auth";
 
 export { profileApi } from "./profile";
 export type { ProfileRecord } from "./profile";

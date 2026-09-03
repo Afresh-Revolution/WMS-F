@@ -1,0 +1,17 @@
+# Render — frontend web service (https://wms-f.onrender.com)
+# Set NEXT_PUBLIC_API_ROOT_URL at build time so API rewrites target the backend.
+
+services:
+  - type: web
+    name: wms-f
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: NEXT_PUBLIC_API_ROOT_URL
+        value: https://wms-b.onrender.com
+      - key: NEXT_PUBLIC_API_BASE_URL
+        value: /api/v1

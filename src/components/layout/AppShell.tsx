@@ -1,5 +1,6 @@
 "use client";
 
+import { AuthGate } from "@/components/auth/AuthGate";
 import { Sidebar } from "./Sidebar";
 import { MobileHeader } from "./MobileHeader";
 import { AppUiProvider, useAppUi } from "./AppUiProvider";
@@ -25,7 +26,9 @@ function ShellInner({ children }: { children: React.ReactNode }) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <AppUiProvider>
-      <ShellInner>{children}</ShellInner>
+      <AuthGate>
+        <ShellInner>{children}</ShellInner>
+      </AuthGate>
     </AppUiProvider>
   );
 }

@@ -1,4 +1,12 @@
-import { apiRequest, buildQuery, clearTokens, setTokens } from "./client";
+import {
+  apiRequest,
+  buildQuery,
+  clearTokens,
+  extractErrorMessage,
+  getSessionToken,
+  setTokens,
+  ApiError,
+} from "./client";
 
 export type AuthUser = {
   id: string;
@@ -14,12 +22,81 @@ export type LoginPayload = {
 };
 
 export type LoginResponse = {
-  accessToken: string;
+  accessToken?: string;
+  access_token?: string;
+  token?: string;
   refreshToken?: string;
+  refresh_token?: string;
   user?: AuthUser;
   mfaRequired?: boolean;
   challengeToken?: string;
+  data?: Record<string, unknown>;
 };
+
+function readTokenField(
+  source: Record<string, unknown>,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return "";
+}
+
+function storeAuthTokens(response: LoginResponse) {
+  const nested =
+    response.data && typeof response.data === "object"
+      ? (response.data as Record<string, unknown>)
+      : {};
+  const tokenBucket =
+    nested.tokens && typeof nested.tokens === "object"
+      ? (nested.tokens as Record<string, unknown>)
+      : {};
+
+  const access = readTokenField(response as Record<string, unknown>, [
+    "accessToken",
+    "access_token",
+    "token",
+  ]) ||
+    readTokenField(nested, ["accessToken", "access_token", "token"]) ||
+    readTokenField(tokenBucket, ["accessToken", "access_token", "token"]);
+
+  const refresh = readTokenField(response as Record<string, unknown>, [
+    "refreshToken",
+    "refresh_token",
+  ]) ||
+    readTokenField(nested, ["refreshToken", "refresh_token"]) ||
+    readTokenField(tokenBucket, ["refreshToken", "refresh_token"]);
+
+  if (access) {
+    setTokens(access, refresh || undefined);
+  }
+}
+
+function assertLoginSucceeded(
+  response: LoginResponse & { success?: boolean; message?: string },
+) {
+  if (response.success === false) {
+    throw new ApiError(
+      401,
+      extractErrorMessage(response, "Invalid email or password."),
+      response,
+    );
+  }
+
+  storeAuthTokens(response);
+
+  if (!getSessionToken()) {
+    throw new ApiError(
+      401,
+      "Sign in succeeded but no access token was returned. Contact support if this continues.",
+      response,
+    );
+  }
+}
 
 export type BootstrapPayload = {
   email: string;
@@ -27,9 +104,14 @@ export type BootstrapPayload = {
   name?: string;
 };
 
+export type BootstrapStatus = {
+  complete?: boolean;
+  bootstrapped?: boolean;
+};
+
 export const authApi = {
   bootstrapStatus: () =>
-    apiRequest<{ complete: boolean }>("/api/superadmin/bootstrap/status", {
+    apiRequest<BootstrapStatus>("/api/superadmin/bootstrap/status", {
       auth: false,
       root: true,
     }),
@@ -41,22 +123,20 @@ export const authApi = {
       auth: false,
       root: true,
     });
-    if (response.accessToken) {
-      setTokens(response.accessToken, response.refreshToken);
-    }
+    storeAuthTokens(response);
     return response;
   },
 
   login: async (body: LoginPayload) => {
-    const response = await apiRequest<LoginResponse>("/api/superadmin/login", {
+    const response = await apiRequest<
+      LoginResponse & { success?: boolean; message?: string }
+    >("/api/superadmin/login", {
       method: "POST",
       body,
       auth: false,
       root: true,
     });
-    if (response.accessToken) {
-      setTokens(response.accessToken, response.refreshToken);
-    }
+    assertLoginSucceeded(response);
     return response;
   },
 
@@ -66,9 +146,7 @@ export const authApi = {
       body,
       auth: false,
     });
-    if (response.accessToken) {
-      setTokens(response.accessToken, response.refreshToken);
-    }
+    storeAuthTokens(response);
     return response;
   },
 
@@ -79,15 +157,16 @@ export const authApi = {
       auth: false,
       root: true,
     });
-    if (response.accessToken) {
-      setTokens(response.accessToken, response.refreshToken);
-    }
+    storeAuthTokens(response);
     return response;
   },
 
   logout: async () => {
-    await apiRequest<void>("/api/superadmin/logout", { method: "POST", root: true });
-    clearTokens();
+    try {
+      await apiRequest<void>("/api/superadmin/logout", { method: "POST", root: true });
+    } finally {
+      clearTokens();
+    }
   },
 
   me: () => apiRequest<AuthUser>("/api/superadmin/me", { root: true }),

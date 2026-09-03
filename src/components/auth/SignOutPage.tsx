@@ -10,7 +10,7 @@ export function SignOutPage() {
 
   useEffect(() => {
     void authApi.logout().finally(() => {
-      router.replace("/dashboard");
+      router.replace("/");
     });
   }, [router]);
 
