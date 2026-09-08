@@ -1,0 +1,269 @@
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 34px 60px;
+}
+
+.topBar,
+.topActions,
+.search,
+.card h2,
+.employmentRow,
+.contactRow {
+  display: flex;
+  align-items: center;
+}
+
+.topBar {
+  justify-content: space-between;
+  margin-bottom: 34px;
+}
+
+.topBar > p,
+.heading > p {
+  margin: 0;
+  color: #a8a29e;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.topActions {
+  gap: 8px;
+}
+
+.search {
+  gap: 7px;
+  width: 190px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #a8a29e;
+}
+
+.search input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  font-size: 12px;
+}
+
+.search kbd {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: #f5f5f4;
+  font-size: 9px;
+}
+
+.iconButton,
+.profileButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--afresh-orange);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.heading {
+  margin-bottom: 26px;
+}
+
+.heading h1 {
+  margin: 10px 0 8px;
+  color: var(--afresh-orange);
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.05;
+}
+
+.heading span {
+  display: block;
+  max-width: 610px;
+  color: #78716c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.profileGrid {
+  display: grid;
+  grid-template-columns: minmax(290px, 0.72fr) minmax(440px, 1.28fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.identityCard,
+.card {
+  border: 1px solid #ebe6e1;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.04);
+}
+
+.identityCard {
+  padding: 24px;
+}
+
+.identity {
+  padding-bottom: 20px;
+  text-align: center;
+  border-bottom: 1px solid #eeeae6;
+}
+
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 16px;
+  border-radius: 999px;
+  background: var(--afresh-orange-soft);
+  color: var(--afresh-orange);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.identity h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 500;
+  color: var(--afresh-ink);
+}
+
+.identity p {
+  margin: 4px 0 8px;
+  color: #78716c;
+  font-size: 12px;
+}
+
+.activeBadge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eaf7ec;
+  color: #3f7c4b;
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.employmentList {
+  padding-top: 7px;
+}
+
+.employmentRow {
+  align-items: flex-start;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid #eeeae6;
+  color: var(--afresh-orange);
+}
+
+.employmentRow:last-child {
+  border-bottom: 0;
+}
+
+.employmentRow div,
+.contactRow div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.employmentRow span,
+.contactRow span {
+  color: #a8a29e;
+  font-size: 10px;
+}
+
+.employmentRow strong,
+.contactRow strong {
+  color: var(--afresh-ink);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.rightColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.card {
+  padding: 24px 26px;
+}
+
+.card h2 {
+  gap: 8px;
+  margin: 0 0 20px;
+  color: var(--afresh-orange);
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.contactGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px 34px;
+}
+
+.contactRow {
+  align-items: flex-start;
+  gap: 12px;
+  color: var(--afresh-orange);
+}
+
+.contactWide {
+  grid-column: 1 / -1;
+}
+
+.privacy {
+  margin: 0;
+  color: #78716c;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.privacy strong {
+  color: var(--afresh-ink);
+}
+
+@media (max-width: 850px) {
+  .profileGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .page {
+    padding: 18px 16px 44px;
+  }
+
+  .search {
+    display: none;
+  }
+
+  .heading h1 {
+    font-size: 32px;
+  }
+
+  .contactGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .contactWide {
+    grid-column: auto;
+  }
+}

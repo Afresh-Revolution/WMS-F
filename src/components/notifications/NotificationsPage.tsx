@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Check, FileText, Search } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
@@ -34,22 +34,16 @@ export function NotificationsPage({
   initialFilter = "All",
 }: NotificationsPageProps) {
   const router = useRouter();
-  const [activeFilter, setActiveFilter] = useState<NotificationFilter>(initialFilter);
-
-  useEffect(() => {
-    setActiveFilter(initialFilter);
-  }, [initialFilter]);
 
   const filtered = useMemo(() => {
     return notifications.filter((item) => {
-      if (activeFilter === "All") return true;
-      if (activeFilter === "Unread") return item.unread;
-      return item.type === activeFilter;
+      if (initialFilter === "All") return true;
+      if (initialFilter === "Unread") return item.unread;
+      return item.type === initialFilter;
     });
-  }, [activeFilter]);
+  }, [initialFilter]);
 
   function handleFilterChange(filter: NotificationFilter) {
-    setActiveFilter(filter);
     router.push(filterRoutes[filter]);
   }
 
@@ -113,7 +107,7 @@ export function NotificationsPage({
                 type="button"
                 onClick={() => handleFilterChange(filter)}
                 className={`${styles.filterChip} ${
-                  activeFilter === filter ? styles.filterChipActive : ""
+                  initialFilter === filter ? styles.filterChipActive : ""
                 }`}
               >
                 {filter}

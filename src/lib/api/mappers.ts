@@ -8,6 +8,22 @@ export function str(value: unknown, fallback = ""): string {
   return String(value);
 }
 
+export function nestedStr(
+  value: unknown,
+  keys: string[] = ["name", "title", "label", "email"],
+  fallback = "",
+): string {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value !== "object") return str(value, fallback);
+  const record = value as Record<string, unknown>;
+  for (const key of keys) {
+    if (record[key] !== null && record[key] !== undefined) {
+      return str(record[key], fallback);
+    }
+  }
+  return fallback;
+}
+
 export function num(value: unknown, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
