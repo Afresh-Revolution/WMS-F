@@ -33,6 +33,8 @@ export type LoginResponse = {
   data?: Record<string, unknown>;
 };
 
+const JWT_PATTERN = /^eyJ[\w-]*\.[\w-]*\.[\w-]*$/i;
+
 function readTokenField(
   source: Record<string, unknown>,
   keys: string[],
@@ -46,7 +48,33 @@ function readTokenField(
   return "";
 }
 
+function findJwtDeep(value: unknown, depth = 0): string {
+  if (depth > 6 || value === null || value === undefined) return "";
+
+  if (typeof value === "string" && JWT_PATTERN.test(value.trim())) {
+    return value.trim();
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findJwtDeep(item, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+
+  if (typeof value === "object") {
+    for (const nested of Object.values(value as Record<string, unknown>)) {
+      const found = findJwtDeep(nested, depth + 1);
+      if (found) return found;
+    }
+  }
+
+  return "";
+}
+
 function storeAuthTokens(response: LoginResponse) {
+  const root = response as Record<string, unknown>;
   const nested =
     response.data && typeof response.data === "object"
       ? (response.data as Record<string, unknown>)
@@ -55,21 +83,38 @@ function storeAuthTokens(response: LoginResponse) {
     nested.tokens && typeof nested.tokens === "object"
       ? (nested.tokens as Record<string, unknown>)
       : {};
+  const sessionBucket =
+    nested.session && typeof nested.session === "object"
+      ? (nested.session as Record<string, unknown>)
+      : {};
+  const authBucket =
+    nested.auth && typeof nested.auth === "object"
+      ? (nested.auth as Record<string, unknown>)
+      : {};
 
-  const access = readTokenField(response as Record<string, unknown>, [
+  const accessKeys = [
     "accessToken",
     "access_token",
+    "access",
     "token",
-  ]) ||
-    readTokenField(nested, ["accessToken", "access_token", "token"]) ||
-    readTokenField(tokenBucket, ["accessToken", "access_token", "token"]);
+    "jwt",
+  ];
+  const refreshKeys = ["refreshToken", "refresh_token", "refresh"];
 
-  const refresh = readTokenField(response as Record<string, unknown>, [
-    "refreshToken",
-    "refresh_token",
-  ]) ||
-    readTokenField(nested, ["refreshToken", "refresh_token"]) ||
-    readTokenField(tokenBucket, ["refreshToken", "refresh_token"]);
+  const access =
+    readTokenField(root, accessKeys) ||
+    readTokenField(nested, accessKeys) ||
+    readTokenField(tokenBucket, accessKeys) ||
+    readTokenField(sessionBucket, accessKeys) ||
+    readTokenField(authBucket, accessKeys) ||
+    findJwtDeep(response);
+
+  const refresh =
+    readTokenField(root, refreshKeys) ||
+    readTokenField(nested, refreshKeys) ||
+    readTokenField(tokenBucket, refreshKeys) ||
+    readTokenField(sessionBucket, refreshKeys) ||
+    readTokenField(authBucket, refreshKeys);
 
   if (access) {
     setTokens(access, refresh || undefined);
