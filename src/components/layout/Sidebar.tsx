@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { AfreshLogo } from "./AfreshLogo";
 import { GlobalSearch } from "./GlobalSearch";
+import { useCurrentUser } from "./CurrentUserProvider";
 import styles from "./Sidebar.module.css";
 
 type NavItem = {
@@ -171,11 +172,17 @@ export function Sidebar({
       ? employeePrimaryNav
       : adminPrimaryNav;
   const homeHref = secretary ? "/secretary" : employee ? "/employee" : "/dashboard";
-  const user = secretary
-    ? { name: "Grace Bello", role: "Secretary", initials: "GB" }
+  const { user: currentUser } = useCurrentUser();
+  const fallbackRole = secretary
+    ? "Secretary"
     : employee
-      ? { name: "Tunde Balogun", role: "Employee", initials: "TB" }
-      : { name: "Christy Ishaku", role: "Super Admin", initials: "CI" };
+      ? "Employee"
+      : "Super Admin";
+  const user = {
+    initials: currentUser?.initials ?? "",
+    name: currentUser?.name ?? "",
+    role: currentUser?.role || fallbackRole,
+  };
   const profileHref = secretary
     ? "/secretary/profile"
     : employee
@@ -193,10 +200,13 @@ export function Sidebar({
       <Link href={profileHref} onClick={onNavigate} className={`${styles.userCard} ${
           isActive(pathname, profileHref) ? styles.userCardActive : ""
         }`}
+        aria-label={user.name ? `${user.name}, ${user.role}` : user.role}
       >
-        <div className={styles.avatar}>{user.initials}</div>
+        <div className={styles.avatar} aria-hidden={!user.initials}>
+          {user.initials}
+        </div>
         <div className={styles.userMeta}>
-          <p className={styles.userName}>{user.name}</p>
+          {user.name ? <p className={styles.userName}>{user.name}</p> : null}
           <p className={styles.userRole}>{user.role}</p>
         </div>
       </Link>

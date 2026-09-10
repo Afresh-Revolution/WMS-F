@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell } from "lucide-react";
+import { useCurrentUser } from "./CurrentUserProvider";
 
 type LinkButtonProps = {
   className?: string;
@@ -33,8 +34,9 @@ export function NotificationsLink({ className, children }: LinkButtonProps) {
 export function ProfileLink({
   className,
   children,
-}: LinkButtonProps & { children: React.ReactNode }) {
+}: LinkButtonProps & { children?: React.ReactNode }) {
   const pathname = usePathname();
+  const { user, ready } = useCurrentUser();
   const href = pathname.startsWith("/secretary")
     ? "/secretary/profile"
     : pathname.startsWith("/employee")
@@ -42,7 +44,7 @@ export function ProfileLink({
       : "/profile";
   return (
     <Link href={href} className={className} aria-label="Profile" style={linkStyle}>
-      {children}
+      {user?.initials || (ready ? children : null)}
     </Link>
   );
 }

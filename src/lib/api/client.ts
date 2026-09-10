@@ -6,6 +6,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 
 const ACCESS_TOKEN_KEY = "wms_access_token";
 const REFRESH_TOKEN_KEY = "wms_refresh_token";
+export const CURRENT_USER_KEY = "wms_current_user";
 
 function envAccessToken(): string | null {
   const token = process.env.NEXT_PUBLIC_JWT_TOKEN?.trim();
@@ -61,6 +62,7 @@ export function clearTokens() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
+  localStorage.removeItem(CURRENT_USER_KEY);
 }
 
 type RequestOptions = Omit<RequestInit, "body"> & {
