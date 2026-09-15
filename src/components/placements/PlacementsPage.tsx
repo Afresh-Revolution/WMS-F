@@ -3,26 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Download, Plus, Search } from "lucide-react";
-import {
-  placementMembers as fallbackMembers,
-  type PlacementFilter,
-} from "@/data/placements";
+import { type PlacementFilter } from "@/data/placements";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import {
-  departmentsApi,
-  internSettled,
-  nyscInternsApi,
-  nyscInternsManageApi,
-} from "@/lib/api";
-import { mapDepartment, mapPlacement, str } from "@/lib/api/mappers";
-import {
-  asInternRecord,
-  unwrapInternData,
-  unwrapInternList,
-} from "@/lib/api/internMappers";
+import { nyscInternsManageApi, superAdminApi } from "@/lib/api";
+import { listFrom, mapDepartment, mapPlacement, str } from "@/lib/api/mappers";
+import { asInternRecord } from "@/lib/api/internMappers";
 import styles from "./PlacementsPage.module.css";
 
 const filters: PlacementFilter[] = ["Active", "Exiting soon", "Exited", "All"];
@@ -61,23 +49,19 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
 
   const { data, loading, error, refetch } = useAsyncData(
     () =>
-      nyscInternsApi.list(
+      superAdminApi.nyscInterns.list(
         statusParam ? { status: statusParam } : undefined,
       ),
     [statusParam],
   );
 
-  const { data: dashboardPayload } = useAsyncData(
-    () => internSettled(nyscInternsManageApi.dashboard()),
-    [],
-  );
   const { data: departmentsPayload } = useAsyncData(
-    () => internSettled(departmentsApi.list()),
+    () => superAdminApi.departments.list(),
     [],
   );
 
   const departmentOptions = useMemo(() => {
-    return unwrapInternList(departmentsPayload)
+    return listFrom(departmentsPayload ?? undefined)
       .map(mapDepartment)
       .filter((item) => item.id && item.name)
       .map((item) => ({ label: item.name, value: item.id }));
@@ -132,42 +116,10 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   );
 
   const placementMembers = useMemo(() => {
-    const records = unwrapInternList(data);
-    return records.length > 0
-      ? records.map((record) => mapPlacement(record))
-      : fallbackMembers;
+    return listFrom(data ?? undefined).map((record) => mapPlacement(record));
   }, [data]);
 
   const placementStats = useMemo(() => {
-    const dash = asInternRecord(unwrapInternData(dashboardPayload));
-    if (dash.activeMembers != null || dash.activeNYSC != null) {
-      return [
-        {
-          id: "active",
-          label: "Active Members",
-          value: str(dash.activeMembers, "0"),
-          badge: "Current",
-        },
-        {
-          id: "exiting",
-          label: "Exiting in 60 Days",
-          value: str(dash.endingSoon, "0"),
-          badge: "Alert",
-        },
-        {
-          id: "nysc",
-          label: "NYSC Members",
-          value: str(dash.activeNYSC, "0"),
-          badge: "Active",
-        },
-        {
-          id: "interns",
-          label: "Interns",
-          value: str(dash.activeInterns, "0"),
-          badge: "Active",
-        },
-      ];
-    }
     const active = placementMembers.filter((m) => m.status === "Active").length;
     const exiting = placementMembers.filter((m) => m.status === "Exiting soon").length;
     const nysc = placementMembers.filter((m) => m.type === "NYSC").length;
@@ -178,7 +130,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       { id: "nysc", label: "NYSC Members", value: String(nysc), badge: "Active" },
       { id: "interns", label: "Interns", value: String(interns), badge: "Active" },
     ];
-  }, [dashboardPayload, placementMembers]);
+  }, [placementMembers]);
 
   const filteredMembers = useMemo(() => {
     return placementMembers.filter((member) => {
@@ -216,7 +168,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
 
   async function handleAddMember(values: Record<string, string>) {
     await runAction("Add member", async () => {
-      const created = await nyscInternsApi.create({
+      const created = await superAdminApi.nyscInterns.create({
         fullName: values.name,
         type: values.type === "INTERN" ? "INTERN" : "NYSC",
         institution: values.school,
@@ -232,7 +184,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       const profile = asInternRecord(payload.profile ?? payload);
       const id = str(profile.id ?? payload.id ?? envelope.id);
       if (id && values.employeeId.trim()) {
-        await nyscInternsApi.action(id, "supervisor", {
+        await superAdminApi.nyscInterns.action(id, "supervisor", {
           employeeId: values.employeeId.trim(),
         });
       }
@@ -247,7 +199,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
           {loading ? <p className={styles.dateLabel}>Loading placements…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached placements — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>

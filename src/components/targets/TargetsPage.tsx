@@ -5,8 +5,6 @@ import { ChevronRight, Plus, RefreshCw, Search, Star } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
-  performanceReviews as fallbackReviews,
-  targetStats as fallbackStats,
   targetTabs,
   type PerformanceReview,
   type ReviewStatus,
@@ -14,7 +12,7 @@ import {
 } from "@/data/targets";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { targetsApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapPerformanceReview, str } from "@/lib/api/mappers";
 import styles from "./TargetsPage.module.css";
 
@@ -25,10 +23,26 @@ const statusClass: Record<ReviewStatus, string> = {
 };
 
 const createFields = [
+  {
+    name: "title",
+    label: "Review title",
+    required: true,
+    placeholder: "Q2 2026 performance review",
+    minLength: 3,
+    maxLength: 180,
+  },
   { name: "name", label: "Employee name", required: true },
   { name: "role", label: "Role", required: true },
   { name: "reviewedBy", label: "Reviewed by", required: true },
-  { name: "rating", label: "Rating (1–5)", type: "number" as const, defaultValue: "4" },
+  {
+    name: "rating",
+    label: "Rating (1–5)",
+    type: "number" as const,
+    defaultValue: "4",
+    min: 1,
+    max: 5,
+    step: 0.1,
+  },
 ];
 
 function StarRating({ rating }: { rating: number }) {
@@ -63,45 +77,52 @@ export function TargetsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction, exportRows } = usePageActions();
 
-  const { data, loading, error, refetch } = useAsyncData(() => targetsApi.list(), []);
+  const { data, loading, error, refetch } = useAsyncData(
+    () => superAdminApi.targets.list(),
+    [],
+  );
 
   const performanceReviews = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapPerformanceReview(record))
-      : fallbackReviews;
+    return listFrom(data ?? undefined).map((record) => mapPerformanceReview(record));
   }, [data]);
 
   const targetStats = useMemo(() => {
-    if (!data) return fallbackStats;
-    const summary = data as Record<string, unknown>;
+    const summary = unwrapRecord(data);
+    const ratings = performanceReviews.map((review) => review.rating);
+    const avgScore =
+      ratings.length > 0
+        ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1)
+        : "—";
+    const reviewsDue = performanceReviews.filter(
+      (review) => review.status === "In review" || review.status === "Overdue",
+    ).length;
     return [
       {
         id: "avg-score",
         label: "Avg. review score",
-        value: str(summary.avgScore ?? summary.averageRating, fallbackStats[0].value),
-        badge: str(summary.cycle ?? fallbackStats[0].badge),
+        value: str(summary.avgScore ?? summary.averageRating, avgScore),
+        badge: str(summary.cycle, "—"),
       },
       {
         id: "reviews-due",
         label: "Reviews due",
-        value: str(summary.reviewsDue ?? summary.pending, fallbackStats[1].value),
-        badge: fallbackStats[1].badge,
+        value: str(summary.reviewsDue ?? summary.pending, String(reviewsDue)),
+        badge: "Pending",
       },
       {
         id: "kpi-attainment",
         label: "KPI attainment",
-        value: str(summary.kpiAttainment ?? summary.kpi, fallbackStats[2].value),
-        badge: fallbackStats[2].badge,
+        value: str(summary.kpiAttainment ?? summary.kpi, "—"),
+        badge: "Cycle",
       },
       {
         id: "total-reviews",
         label: "Total reviews",
-        value: str(summary.totalReviews ?? performanceReviews.length, fallbackStats[3].value),
-        badge: fallbackStats[3].badge,
+        value: str(summary.totalReviews, String(performanceReviews.length)),
+        badge: "All",
       },
     ];
-  }, [data, performanceReviews.length]);
+  }, [data, performanceReviews]);
 
   const filteredReviews = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -115,9 +136,28 @@ export function TargetsPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Create review", async () => {
-      await targetsApi.create({
-        ...values,
-        rating: Number(values.rating) || 0,
+      const name = values.name.trim();
+      const role = values.role.trim();
+      const reviewedBy = values.reviewedBy.trim();
+      const title = (values.title.trim() || `${name} performance review`).slice(
+        0,
+        180,
+      );
+      if (title.length < 3) {
+        throw new Error("Review title must be between 3 and 180 characters.");
+      }
+      const rating = Math.min(5, Math.max(1, Number(values.rating) || 1));
+
+      await superAdminApi.targets.create({
+        title,
+        name,
+        employeeName: name,
+        role,
+        jobTitle: role,
+        reviewedBy,
+        reviewer: reviewedBy,
+        rating,
+        score: rating,
         status: "In review",
       });
       refetch();
@@ -126,7 +166,7 @@ export function TargetsPage() {
 
   async function openReview(review: PerformanceReview) {
     await runAction(`Review — ${review.name}`, async () => {
-      await targetsApi.get(review.id);
+      await superAdminApi.targets.get(review.id);
     });
   }
 
@@ -157,7 +197,7 @@ export function TargetsPage() {
           {loading ? <p className={styles.dateLabel}>Loading targets…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached targets — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>

@@ -14,16 +14,14 @@ import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTab
 import { NotificationsLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
-  payRuns as fallbackPayRuns,
   payrollSectionTabs,
-  payrollStats as fallbackStats,
   type PayRun,
   type PayRunStatus,
   type PayrollSectionTab,
 } from "@/data/financePayroll";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { operationalAuditApi, payrollApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapPayRun, str } from "@/lib/api/mappers";
 import styles from "./FinancePayrollPage.module.css";
 
@@ -43,13 +41,13 @@ export function FinancePayrollPage() {
   const [query, setQuery] = useState("");
   const { runAction, exportRows, showToast } = usePageActions();
 
-  const { data, loading, error, refetch } = useAsyncData(() => payrollApi.list(), []);
+  const { data, loading, error, refetch } = useAsyncData(
+    () => superAdminApi.payroll.list(),
+    [],
+  );
 
   const payRuns = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapPayRun(record))
-      : fallbackPayRuns;
+    return listFrom(data ?? undefined).map((record) => mapPayRun(record));
   }, [data]);
 
   const filteredPayRuns = useMemo(() => {
@@ -61,26 +59,26 @@ export function FinancePayrollPage() {
   }, [payRuns, query]);
 
   const payrollStats = useMemo(() => {
-    if (!data) return fallbackStats;
-    const summary = data as Record<string, unknown>;
+    const summary = unwrapRecord(data);
+    const totalStaff = payRuns.reduce((sum, run) => sum + run.staff, 0);
     return [
       {
         id: "attainment",
-        value: str(summary.attainment ?? fallbackStats[0].value),
-        label: fallbackStats[0].label,
+        value: str(summary.attainment, "—"),
+        label: "Cycle attainment",
       },
       {
         id: "cycle-total",
-        value: str(summary.cycleTotal ?? summary.total, fallbackStats[1].value),
-        label: fallbackStats[1].label,
+        value: str(summary.cycleTotal ?? summary.total, String(payRuns.length || "0")),
+        label: "Pay runs",
       },
       {
         id: "active-staff",
-        value: str(summary.activeStaff ?? summary.staff, fallbackStats[2].value),
-        label: fallbackStats[2].label,
+        value: str(summary.activeStaff ?? summary.staff, String(totalStaff || "0")),
+        label: "Staff in latest runs",
       },
     ];
-  }, [data]);
+  }, [data, payRuns]);
 
   function handleExport() {
     exportRows(
@@ -98,14 +96,14 @@ export function FinancePayrollPage() {
 
   async function handleRunPayroll(values: Record<string, string>) {
     await runAction("Run payroll", async () => {
-      await payrollApi.collectionAction("run", values);
+      await superAdminApi.payroll.collectionAction("run", values);
       refetch();
     });
   }
 
   async function downloadRun(run: PayRun) {
     await runAction(`Download ${run.ref}`, async () => {
-      await payrollApi.getAction(run.id, "download");
+      await superAdminApi.payroll.getAction(run.id, "download");
     });
   }
 
@@ -117,7 +115,7 @@ export function FinancePayrollPage() {
 
   async function openAuditLog() {
     await runAction("Audit log", async () => {
-      await operationalAuditApi.list({ module: "payroll" });
+      await superAdminApi.operationalAudit.list({ module: "payroll" });
     });
   }
 
@@ -126,7 +124,7 @@ export function FinancePayrollPage() {
       <div className={styles.page}>
         <FinanceModuleTabs />
         {loading ? <p>Loading payroll…</p> : null}
-        {error ? <p role="alert">Using cached payroll — {error}</p> : null}
+        {error ? <p role="alert">{error}</p> : null}
 
         <div className={styles.header}>
           <div>

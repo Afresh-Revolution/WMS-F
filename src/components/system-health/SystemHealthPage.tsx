@@ -9,10 +9,6 @@ import {
   Server,
 } from "lucide-react";
 import {
-  healthConfiguration as fallbackConfig,
-  healthInfrastructure as fallbackInfra,
-  healthServices as fallbackServices,
-  healthStats as fallbackStats,
   type HealthMetric,
   type HealthService,
   type ServiceStatus,
@@ -20,7 +16,7 @@ import {
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { systemHealthApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapServiceStatus, num, str } from "@/lib/api/mappers";
 import styles from "./SystemHealthPage.module.css";
 
@@ -38,59 +34,57 @@ export function SystemHealthPage() {
   const { runAction } = usePageActions();
 
   const { data: summary, loading, error, refetch } = useAsyncData(
-    () => systemHealthApi.summary(),
+    () => superAdminApi.systemHealth.summary(),
     [],
   );
 
   const { data: servicesData } = useAsyncData(
-    () => systemHealthApi.services(),
+    () => superAdminApi.systemHealth.services(),
     [],
   );
 
   const { data: infraData } = useAsyncData(
-    () => systemHealthApi.infrastructure(),
+    () => superAdminApi.systemHealth.infrastructure(),
     [],
   );
 
   const { data: metricsData } = useAsyncData(
-    () => systemHealthApi.metrics(),
+    () => superAdminApi.systemHealth.metrics(),
     [],
   );
 
   const stats = useMemo(() => {
-    const s = (summary ?? {}) as Record<string, unknown>;
+    const s = unwrapRecord(summary);
     return [
       {
         id: "uptime",
         label: "Uptime",
-        value: str(s.uptime ?? s.uptimePercent, fallbackStats[0].value),
-        badge: str(s.uptimeWindow ?? fallbackStats[0].badge),
+        value: str(s.uptime ?? s.uptimePercent, "—"),
+        badge: str(s.uptimeWindow, "Live"),
       },
       {
         id: "services",
         label: "Services healthy",
-        value: str(s.servicesHealthy ?? s.healthyServices, fallbackStats[1].value),
-        badge: str(s.servicesBadge ?? fallbackStats[1].badge),
+        value: str(s.servicesHealthy ?? s.healthyServices, "—"),
+        badge: str(s.servicesBadge, ""),
       },
       {
         id: "sessions",
         label: "Active sessions",
-        value: str(s.activeSessions ?? s.sessions, fallbackStats[2].value),
-        badge: str(s.sessionsBadge ?? fallbackStats[2].badge),
+        value: str(s.activeSessions ?? s.sessions, "—"),
+        badge: str(s.sessionsBadge, ""),
       },
       {
         id: "latency",
         label: "Avg API latency",
-        value: str(s.avgLatency ?? s.latency, fallbackStats[3].value),
-        badge: str(s.latencyBadge ?? fallbackStats[3].badge),
+        value: str(s.avgLatency ?? s.latency, "—"),
+        badge: str(s.latencyBadge, ""),
       },
     ];
   }, [summary]);
 
   const services = useMemo((): HealthService[] => {
-    const records = listFrom(servicesData ?? undefined);
-    if (records.length === 0) return fallbackServices;
-    return records.map((record, index) => ({
+    return listFrom(servicesData ?? undefined).map((record, index) => ({
       id: str(record.id ?? record.name ?? index),
       name: str(record.name ?? record.service),
       latency: str(record.latency ?? record.responseTime, "—"),
@@ -99,13 +93,8 @@ export function SystemHealthPage() {
   }, [servicesData]);
 
   const infrastructure = useMemo((): HealthMetric[] => {
-    const infra = (infraData ?? metricsData ?? {}) as Record<string, unknown>;
-    const metrics = listFrom(
-      Array.isArray(infraData) || (infraData && "data" in (infraData as object))
-        ? (infraData as never)
-        : undefined,
-    );
-
+    const infra = unwrapRecord(infraData ?? metricsData);
+    const metrics = listFrom(infraData ?? metricsData);
     if (metrics.length > 0) {
       return metrics.map((record, index) => ({
         id: str(record.id ?? index),
@@ -114,32 +103,20 @@ export function SystemHealthPage() {
       }));
     }
 
-    const cpu = num(infra.cpu ?? infra.cpuUsage);
-    const memory = num(infra.memory ?? infra.memoryUsage);
-    const disk = num(infra.disk ?? infra.diskUsage);
-
-    if (cpu || memory || disk) {
-      return [
-        { id: "cpu", label: "CPU usage", value: cpu || fallbackInfra[0].value },
-        { id: "memory", label: "Memory usage", value: memory || fallbackInfra[1].value },
-        { id: "disk", label: "Disk usage", value: disk || fallbackInfra[2].value },
-      ];
-    }
-
-    return fallbackInfra;
+    return [
+      { id: "cpu", label: "CPU usage", value: num(infra.cpu ?? infra.cpuUsage) },
+      { id: "memory", label: "Memory usage", value: num(infra.memory ?? infra.memoryUsage) },
+      { id: "disk", label: "Disk usage", value: num(infra.disk ?? infra.diskUsage) },
+    ];
   }, [infraData, metricsData]);
 
   const configuration = useMemo(() => {
-    const config = (summary ?? {}) as Record<string, unknown>;
-    const items = listFrom(config.configuration as never);
-    if (items.length > 0) {
-      return items.map((record, index) => ({
-        id: str(record.id ?? index),
-        label: str(record.label ?? record.name),
-        status: mapServiceStatus(record.status),
-      }));
-    }
-    return fallbackConfig;
+    const config = unwrapRecord(summary);
+    return listFrom(config.configuration as never).map((record, index) => ({
+      id: str(record.id ?? index),
+      label: str(record.label ?? record.name),
+      status: mapServiceStatus(record.status),
+    }));
   }, [summary]);
 
   function refreshHealth() {
@@ -174,7 +151,7 @@ export function SystemHealthPage() {
         {loading ? <p className={styles.dateLabel}>Loading health data…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
-            Showing cached health — {error}
+            {error}
           </p>
         ) : null}
         <button

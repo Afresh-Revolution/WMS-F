@@ -15,15 +15,13 @@ import {
 } from "lucide-react";
 import {
   departmentFilters,
-  departments as fallbackDepartments,
-  departmentStats as fallbackStats,
   type DepartmentFilter,
 } from "@/data/departments";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { departmentsApi } from "@/lib/api";
-import { listFrom, mapDepartmentRecord } from "@/lib/api/mappers";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
+import { listFrom, mapDepartmentRecord, str } from "@/lib/api/mappers";
 import styles from "./DepartmentsPage.module.css";
 
 const deptIcons = {
@@ -35,11 +33,50 @@ const deptIcons = {
   model: Layers,
 } as const;
 
-const addDepartmentFields = [
-  { name: "name", label: "Department name", required: true },
-  { name: "managerName", label: "Head of department", required: true },
-  { name: "description", label: "Description", type: "textarea" as const },
-];
+type HodOption = {
+  id: string;
+  label: string;
+};
+
+function hodRecordsFrom(payload: unknown): Record<string, unknown>[] {
+  const records = listFrom(payload ?? undefined);
+  if (records.length > 0) return records;
+  const meta = unwrapRecord(payload).hods;
+  return Array.isArray(meta) ? (meta as Record<string, unknown>[]) : [];
+}
+
+function mapHodOption(record: Record<string, unknown>): HodOption | null {
+  const id = str(
+    record.hodId ?? record.userId ?? record.employeeId ?? record.id,
+  );
+  if (!id) return null;
+  const name = str(record.fullName ?? record.name, "Unnamed");
+  const email = str(record.email);
+  return {
+    id,
+    label: email ? `${name} (${email})` : name,
+  };
+}
+
+async function loadHodOptions(): Promise<HodOption[]> {
+  const loaders = [
+    () => superAdminApi.lookups.hods(),
+    () => superAdminApi.departments.hodOptions(),
+    () => superAdminApi.lookups.employees(),
+    () => superAdminApi.departments.list(),
+  ];
+  for (const load of loaders) {
+    try {
+      const options = hodRecordsFrom(await load())
+        .map(mapHodOption)
+        .filter((option): option is HodOption => Boolean(option));
+      if (options.length > 0) return options;
+    } catch {
+      /* try the next live source */
+    }
+  }
+  return [];
+}
 
 export function DepartmentsPage() {
   const [query, setQuery] = useState("");
@@ -49,16 +86,18 @@ export function DepartmentsPage() {
 
   const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
-    () => departmentsApi.list(),
+    () => superAdminApi.departments.list(),
     [],
   );
+  const { data: hodOptions } = useAsyncData(loadHodOptions, []);
 
-  const departments = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record, index) => mapDepartmentRecord(record, index))
-      : fallbackDepartments;
-  }, [data]);
+  const departments = useMemo(
+    () =>
+      listFrom(data ?? undefined).map((record, index) =>
+        mapDepartmentRecord(record, index),
+      ),
+    [data],
+  );
 
   const departmentStats = useMemo(() => {
     const totalHeadcount = departments.reduce(
@@ -69,19 +108,17 @@ export function DepartmentsPage() {
       {
         id: "departments",
         label: "Departments",
-        value: String(departments.length || fallbackStats[0].value),
+        value: String(departments.length),
       },
       {
         id: "headcount",
         label: "Total Headcount",
-        value: totalHeadcount
-          ? totalHeadcount.toLocaleString()
-          : fallbackStats[1].value,
+        value: totalHeadcount.toLocaleString(),
       },
       {
         id: "regions",
         label: "For All Regions",
-        value: fallbackStats[2].value,
+        value: "All",
       },
     ];
   }, [departments]);
@@ -100,12 +137,32 @@ export function DepartmentsPage() {
     });
   }, [activeFilter, query, departments]);
 
+  const addDepartmentFields = useMemo(
+    () => [
+      { name: "name", label: "Department name", required: true },
+      {
+        name: "hodId",
+        label: "Head of department",
+        type: "select" as const,
+        options: [
+          { label: "No HOD", value: "" },
+          ...(hodOptions ?? []).map((option) => ({
+            label: option.label,
+            value: option.id,
+          })),
+        ],
+      },
+      { name: "description", label: "Description", type: "textarea" as const },
+    ],
+    [hodOptions],
+  );
+
   function viewDepartment(department: (typeof departments)[number]) {
     void (async () => {
       try {
-        await departmentsApi.get(department.id);
+        await superAdminApi.departments.get(department.id);
       } catch {
-        /* fallback to local info if API unavailable */
+        /* keep local card details if the overview endpoint is unavailable */
       }
       showToast(
         `${department.name} — ${department.activeCount} active, HOD: ${department.managerName}`,
@@ -116,7 +173,14 @@ export function DepartmentsPage() {
 
   async function handleAddDepartment(values: Record<string, string>) {
     await runAction("Add department", async () => {
-      await departmentsApi.create(values);
+      const body: Record<string, unknown> = {
+        name: values.name.trim(),
+        description: values.description.trim(),
+      };
+      if (values.hodId) {
+        body.hodId = values.hodId;
+      }
+      await superAdminApi.departments.create(body);
       refetch();
     });
   }
@@ -124,7 +188,7 @@ export function DepartmentsPage() {
   return (
     <div className={styles.page}>
       {loading ? <p>Loading departments…</p> : null}
-      {error ? <p role="alert">Using cached departments — {error}</p> : null}
+      {error ? <p role="alert">{error}</p> : null}
         <div className={styles.headerRow}>
           <div>
             <p className={styles.eyebrow}>Departments &amp; how they work</p>

@@ -12,8 +12,6 @@ import {
   FileText,
 } from "lucide-react";
 import {
-  leaveBalances as fallbackBalances,
-  leaveRequests as fallbackRequests,
   leaveTabs,
   type LeaveRequestStatus,
   type LeaveTab,
@@ -22,7 +20,7 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { hrApi, leaveApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapLeaveBalance, mapLeaveRequest } from "@/lib/api/mappers";
 import styles from "./LeavePage.module.css";
 
@@ -65,46 +63,47 @@ export function LeavePage() {
   const { runAction, showToast } = usePageActions();
 
   const { data: leaveData, loading, error, refetch } = useAsyncData(
-    () => leaveApi.list(),
+    () => superAdminApi.leave.list(),
     [],
   );
 
-  const { data: hrLeaveData } = useAsyncData(() => hrApi.leave.list(), []);
+  const { data: hrLeaveData } = useAsyncData(
+    () => superAdminApi.hr.leave.list(),
+    [],
+  );
 
-  const leaveRequests = useMemo(() => {
-    const records = listFrom(leaveData ?? hrLeaveData ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapLeaveRequest(record))
-      : fallbackRequests;
-  }, [leaveData, hrLeaveData]);
+  const leaveRequests = useMemo(
+    () =>
+      listFrom(leaveData ?? hrLeaveData ?? undefined).map((record) =>
+        mapLeaveRequest(record),
+      ),
+    [leaveData, hrLeaveData],
+  );
 
   const leaveBalances = useMemo(() => {
     const overview = (leaveData ?? hrLeaveData ?? {}) as Record<string, unknown>;
-    const balances = listFrom(
+    return listFrom(
       (overview.balances ?? overview.leaveBalances) as never,
-    );
-    return balances.length > 0
-      ? balances.map((record, index) => mapLeaveBalance(record, index))
-      : fallbackBalances;
+    ).map((record, index) => mapLeaveBalance(record, index));
   }, [leaveData, hrLeaveData]);
 
   function approveLeave(id: string, name: string) {
     void runAction(`Approve ${name}'s leave`, async () => {
-      await hrApi.leave.approve(id);
+      await superAdminApi.hr.leave.approve(id);
       refetch();
     });
   }
 
   function rejectLeave(id: string, name: string) {
     void runAction(`Decline ${name}'s leave`, async () => {
-      await hrApi.leave.reject(id);
+      await superAdminApi.hr.leave.reject(id);
       refetch();
     });
   }
 
   async function handleRequestLeave(values: Record<string, string>) {
     await runAction("Request leave", async () => {
-      await hrApi.leave.create(values);
+      await superAdminApi.hr.leave.create(values);
       refetch();
     });
   }
@@ -116,7 +115,7 @@ export function LeavePage() {
           {loading ? <p className={styles.dateLabel}>Loading leave…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached leave — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>

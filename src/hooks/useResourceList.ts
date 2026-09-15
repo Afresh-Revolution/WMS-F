@@ -12,7 +12,7 @@ type ListApi = {
 export function useResourceList<T>(
   api: ListApi,
   mapper: (record: Record<string, unknown>, index: number) => T,
-  fallback: T[],
+  _fallback?: T[],
   params?: Record<string, unknown>,
 ) {
   const { data, loading, error, refetch } = useAsyncData(
@@ -21,11 +21,10 @@ export function useResourceList<T>(
   );
 
   const items = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record, index) => mapper(record, index))
-      : fallback;
-  }, [data, fallback, mapper]);
+    return listFrom(data ?? undefined).map((record, index) =>
+      mapper(record, index),
+    );
+  }, [data, mapper]);
 
   return { items, loading, error, refetch, raw: data };
 }

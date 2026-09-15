@@ -12,15 +12,14 @@ import {
 } from "lucide-react";
 import {
   meetingFilters,
-  meetings as fallbackMeetings,
-  meetingStats as fallbackStats,
+  type Meeting,
   type MeetingFilter,
   type MeetingTag,
 } from "@/data/meetings";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { meetingsApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapMeeting, str } from "@/lib/api/mappers";
 import styles from "./MeetingsPage.module.css";
 
@@ -33,8 +32,8 @@ const tagClass: Record<MeetingTag, string> = {
 const createMeetingFields = [
   { name: "title", label: "Meeting title", required: true },
   { name: "date", label: "Date", type: "date" as const, required: true },
-  { name: "time", label: "Time", placeholder: "10:00 AM", required: true },
-  { name: "duration", label: "Duration", placeholder: "1 hour" },
+  { name: "time", label: "Time", placeholder: "10:00AM", required: true },
+  { name: "duration", label: "Duration", placeholder: "1 HOUR" },
   { name: "location", label: "Location", required: true },
 ];
 
@@ -42,42 +41,44 @@ export function MeetingsPage() {
   const [activeFilter, setActiveFilter] = useState<MeetingFilter>("Upcoming");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const [editMeeting, setEditMeeting] = useState<(typeof fallbackMeetings)[number] | null>(null);
+  const [editMeeting, setEditMeeting] = useState<Meeting | null>(null);
 
   const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
-    () => meetingsApi.list(),
+    () => superAdminApi.meetings.list(),
     [],
   );
 
   const meetings = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapMeeting(record))
-      : fallbackMeetings;
+    return listFrom(data ?? undefined).map((record) => mapMeeting(record));
   }, [data]);
 
   const meetingStats = useMemo(() => {
-    if (!data) return fallbackStats;
-    const summary = data as Record<string, unknown>;
+    const summary = unwrapRecord(data);
+    const upcoming = meetings.filter((meeting) =>
+      meeting.tags.includes("Upcoming"),
+    ).length;
+    const companyWide = meetings.filter((meeting) =>
+      meeting.tags.includes("Company-wide"),
+    ).length;
     return [
       {
         id: "today",
         label: "Today's meeting",
-        value: str(summary.today ?? summary.todayCount, fallbackStats[0].value),
+        value: str(summary.today ?? summary.todayCount, String(upcoming || "0")),
       },
       {
         id: "week",
         label: "This week",
-        value: str(summary.week ?? summary.weekCount, fallbackStats[1].value),
+        value: str(summary.week ?? summary.weekCount, String(meetings.length || "0")),
       },
       {
         id: "company",
         label: "Company-wide",
-        value: str(summary.companyWide ?? summary.company, fallbackStats[2].value),
+        value: str(summary.companyWide ?? summary.company, String(companyWide || "0")),
       },
     ];
-  }, [data]);
+  }, [data, meetings]);
 
   const filteredMeetings = useMemo(() => {
     return meetings.filter((meeting) => {
@@ -105,7 +106,13 @@ export function MeetingsPage() {
 
   async function handleCreateMeeting(values: Record<string, string>) {
     await runAction("Create meeting", async () => {
-      await meetingsApi.create(values);
+      await superAdminApi.meetings.create({
+        title: values.title.trim(),
+        date: values.date.trim(),
+        time: values.time.replace(/\s+/g, ""),
+        duration: values.duration.trim(),
+        location: values.location.trim(),
+      });
       refetch();
     });
   }
@@ -113,7 +120,13 @@ export function MeetingsPage() {
   async function handleEditMeeting(values: Record<string, string>) {
     if (!editMeeting) return;
     await runAction("Update meeting", async () => {
-      await meetingsApi.patch(editMeeting.id, values);
+      await superAdminApi.meetings.patch(editMeeting.id, {
+        title: values.title.trim(),
+        date: values.date.trim(),
+        time: values.time.replace(/\s+/g, ""),
+        duration: values.duration.trim(),
+        location: values.location.trim(),
+      });
       refetch();
     });
     setEditMeeting(null);
@@ -138,7 +151,7 @@ export function MeetingsPage() {
           {loading ? <p className={styles.dateLabel}>Loading meetings…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached meetings — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>

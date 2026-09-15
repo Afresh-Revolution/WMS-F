@@ -3,17 +3,12 @@
 import { useMemo, useState } from "react";
 import { Pencil, Search } from "lucide-react";
 import { Clock3, KeyRound, Lock, Wrench } from "lucide-react";
-import {
-  securitySections as fallbackSections,
-  securitySummaries as fallbackSummaries,
-  type SecuritySection,
-  type SecuritySummary,
-} from "@/data/security";
+import { type SecuritySection, type SecuritySummary } from "@/data/security";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { securityApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import {
   bool,
   formatAttempts,
@@ -221,18 +216,13 @@ export function SecurityPage() {
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => securityApi.dashboard(),
+    () => superAdminApi.security.dashboard(),
     [],
   );
 
-  const sections = useMemo(
-    () => (data ? buildSections(data) : fallbackSections),
-    [data],
-  );
-  const summaries = useMemo(
-    () => (data ? buildSummaries(data) : fallbackSummaries),
-    [data],
-  );
+  const payload = useMemo(() => unwrapRecord(data), [data]);
+  const sections = useMemo(() => buildSections(payload), [payload]);
+  const summaries = useMemo(() => buildSummaries(payload), [payload]);
 
   async function saveSetting(values: Record<string, string>) {
     if (!editTarget) return;
@@ -242,24 +232,24 @@ export function SecurityPage() {
     await runAction(`Update ${editTarget.label}`, async () => {
       if (editTarget.sectionId === "password") {
         if (editTarget.settingId === "min-length") {
-          await securityApi.passwordPolicy({ minLength: numeric });
+          await superAdminApi.security.passwordPolicy({ minLength: numeric });
         } else if (editTarget.settingId === "require-symbol") {
-          await securityApi.passwordPolicy({ requireSymbol: enabled });
+          await superAdminApi.security.passwordPolicy({ requireSymbol: enabled });
         } else if (editTarget.settingId === "require-number") {
-          await securityApi.passwordPolicy({ requireNumber: enabled });
+          await superAdminApi.security.passwordPolicy({ requireNumber: enabled });
         } else if (editTarget.settingId === "require-mfa") {
-          await securityApi.mfa({ required: enabled });
+          await superAdminApi.security.mfa({ required: enabled });
         }
       } else if (editTarget.sectionId === "lockout") {
         if (editTarget.settingId === "failed-attempts") {
-          await securityApi.loginPolicy({ maxAttempts: numeric });
+          await superAdminApi.security.loginPolicy({ maxAttempts: numeric });
         } else if (editTarget.settingId === "lockout-duration") {
-          await securityApi.loginPolicy({ lockoutDurationMinutes: numeric });
+          await superAdminApi.security.loginPolicy({ lockoutDurationMinutes: numeric });
         }
       } else if (editTarget.sectionId === "sessions") {
-        await securityApi.sessionPolicy({ timeoutMinutes: numeric });
+        await superAdminApi.security.sessionPolicy({ timeoutMinutes: numeric });
       } else if (editTarget.sectionId === "maintenance") {
-        await securityApi.maintenance({ enabled });
+        await superAdminApi.security.maintenance({ enabled });
       }
       refetch();
     });
@@ -296,7 +286,7 @@ export function SecurityPage() {
         {loading ? <p className={styles.subtitle}>Loading security settings…</p> : null}
         {error ? (
           <p className={styles.subtitle} role="alert">
-            Using cached settings — {error}
+            {error}
           </p>
         ) : null}
       </div>

@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { searchApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, str } from "@/lib/api/mappers";
 import styles from "./GlobalSearch.module.css";
 
@@ -19,11 +19,11 @@ export function GlobalSearch() {
     if (!q) return;
     setLoading(true);
     try {
-      const response = await searchApi.globalSearch(q);
+      const response = await superAdminApi.globalSearch(q);
       setResults(listFrom((response.results ?? response.data ?? response) as never));
       setOpen(true);
     } catch {
-      const fallback = await searchApi.search(q).catch(() => null);
+      const fallback = await superAdminApi.search(q).catch(() => null);
       const payload = (fallback ?? {}) as Record<string, unknown>;
       setResults(listFrom((payload.results ?? payload.data ?? payload) as never));
       setOpen(true);

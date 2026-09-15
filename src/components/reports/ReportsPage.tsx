@@ -11,16 +11,12 @@ import {
   Users,
 } from "lucide-react";
 import {
-  departmentHeadcount as fallbackDeptHeadcount,
-  headcountGrowth as fallbackHeadcountGrowth,
   quickExports,
-  reportKpis as fallbackKpis,
-  weeklyAttendance as fallbackAttendance,
 } from "@/data/reports";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { reportsApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import { downloadApiBlob } from "@/lib/export/downloadBlob";
 import { listFrom, num, str } from "@/lib/api/mappers";
 import styles from "./ReportsPage.module.css";
@@ -42,10 +38,10 @@ const quickExportActions: Record<
   (typeof quickExports)[number],
   () => Promise<Record<string, unknown>>
 > = {
-  "Full headcount roster": () => reportsApi.headcount(),
-  "This month's attendance": () => reportsApi.attendance(),
-  "Leave balances snapshot": () => reportsApi.leave(),
-  "Payroll summary": () => reportsApi.payroll(),
+  "Full headcount roster": () => superAdminApi.reports.headcount(),
+  "This month's attendance": () => superAdminApi.reports.attendance(),
+  "Leave balances snapshot": () => superAdminApi.reports.leave(),
+  "Payroll summary": () => superAdminApi.reports.payroll(),
 };
 
 function HeadcountChart({ data }: { data: GrowthPoint[] }) {
@@ -56,13 +52,19 @@ function HeadcountChart({ data }: { data: GrowthPoint[] }) {
   const padTop = 12;
   const padBottom = 28;
   const values = data.map((d) => d.value);
-  const min = 1100;
-  const max = 1300;
-  const yTicks = [1100, 1150, 1200, 1250, 1300];
+  if (values.length === 0) {
+    return <p className={styles.subtitle}>No headcount growth data yet.</p>;
+  }
+  const min = Math.min(...values, 0);
+  const max = Math.max(...values, min + 1);
+  const yTicks = [min, min + (max - min) / 2, max].map((tick) =>
+    Math.round(tick),
+  );
+  const span = Math.max(values.length - 1, 1);
 
   const points = values.map((value, i) => {
     const x =
-      padLeft + (i * (width - padLeft - padRight)) / (values.length - 1);
+      padLeft + (i * (width - padLeft - padRight)) / span;
     const y =
       height -
       padBottom -
@@ -108,7 +110,7 @@ function HeadcountChart({ data }: { data: GrowthPoint[] }) {
       {data.map((item, i) => (
         <text
           key={item.month}
-          x={padLeft + (i * (width - padLeft - padRight)) / (values.length - 1)}
+          x={padLeft + (i * (width - padLeft - padRight)) / span}
           y={height - 8}
           textAnchor="middle"
           fontSize="11"
@@ -125,15 +127,19 @@ function DepartmentDonut({ data }: { data: DeptPoint[] }) {
   const total = data.reduce((sum, item) => sum + item.value, 0) || 1;
   const radius = 58;
   const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+  const slices = data.map((item, index) => {
+    const length = (item.value / total) * circumference;
+    const offset = data
+      .slice(0, index)
+      .reduce((sum, prev) => sum + (prev.value / total) * circumference, 0);
+    return { ...item, length, offset };
+  });
 
   return (
     <div className={styles.donutWrap}>
       <svg width="160" height="160" viewBox="0 0 160 160" aria-hidden>
         <g transform="rotate(-90 80 80)">
-          {data.map((item) => {
-            const length = (item.value / total) * circumference;
-            const circle = (
+          {slices.map((item) => (
               <circle
                 key={item.label}
                 cx="80"
@@ -142,13 +148,10 @@ function DepartmentDonut({ data }: { data: DeptPoint[] }) {
                 fill="transparent"
                 stroke={item.color}
                 strokeWidth="22"
-                strokeDasharray={`${length} ${circumference - length}`}
-                strokeDashoffset={-offset}
+                strokeDasharray={`${item.length} ${circumference - item.length}`}
+                strokeDashoffset={-item.offset}
               />
-            );
-            offset += length;
-            return circle;
-          })}
+            ))}
         </g>
         <circle cx="80" cy="80" r="38" fill="#fff" />
       </svg>
@@ -170,99 +173,89 @@ export function ReportsPage() {
   const [query, setQuery] = useState("");
 
   const { data: overview, loading, error } = useAsyncData(
-    () => reportsApi.overview(),
+    () => superAdminApi.reports.overview(),
     [],
   );
   const { data: growthData } = useAsyncData(
-    () => reportsApi.headcountGrowth(),
+    () => superAdminApi.reports.headcountGrowth(),
     [],
   );
-  const { data: deptData } = useAsyncData(() => reportsApi.departments(), []);
+  const { data: deptData } = useAsyncData(
+    () => superAdminApi.reports.departments(),
+    [],
+  );
   const { data: attendanceData } = useAsyncData(
-    () => reportsApi.attendance(),
+    () => superAdminApi.reports.attendance(),
     [],
   );
   const { data: savedData } = useAsyncData(
-    () => reportsApi.saved.list(),
+    () => superAdminApi.reports.saved.list(),
     [],
   );
 
   const reportKpis = useMemo(() => {
-    if (!overview) return fallbackKpis;
-    const data = overview as Record<string, unknown>;
+    const data = unwrapRecord(overview);
     return [
       {
         id: "headcount",
         label: "Total Headcount",
-        value: str(data.headcount ?? data.totalHeadcount, fallbackKpis[0].value),
-        badge: str(data.headcountChange ?? fallbackKpis[0].badge),
+        value: str(data.headcount ?? data.totalHeadcount, "—"),
+        badge: str(data.headcountChange, ""),
         tone: "up" as const,
       },
       {
         id: "attendance",
         label: "Avg Attendance",
-        value: str(data.attendance ?? data.avgAttendance, fallbackKpis[1].value),
-        badge: fallbackKpis[1].badge,
+        value: str(data.attendance ?? data.avgAttendance, "—"),
+        badge: str(data.attendanceWindow, ""),
         tone: "meta" as const,
       },
       {
         id: "attrition",
         label: "Attrition Rate",
-        value: str(data.attrition ?? data.attritionRate, fallbackKpis[2].value),
-        badge: str(data.attritionChange ?? fallbackKpis[2].badge),
+        value: str(data.attrition ?? data.attritionRate, "—"),
+        badge: str(data.attritionChange, ""),
         tone: "down" as const,
       },
       {
         id: "accuracy",
         label: "Report Accuracy",
-        value: str(data.accuracy ?? data.reportAccuracy, fallbackKpis[3].value),
-        badge: fallbackKpis[3].badge,
+        value: str(data.accuracy ?? data.reportAccuracy, "—"),
+        badge: str(data.accuracyNote, ""),
         tone: "good" as const,
       },
     ];
   }, [overview]);
 
   const headcountGrowth = useMemo((): GrowthPoint[] => {
-    const payload = growthData as Record<string, unknown> | undefined;
-    const records = listFrom(
-      (payload?.points ?? payload?.series ?? payload?.data ?? payload) as never,
-    );
-    if (records.length > 0) {
-      return records.map((record) => ({
-        month: str(record.month ?? record.label),
-        value: num(record.value ?? record.count),
-      }));
-    }
-    return fallbackHeadcountGrowth;
+    const payload = unwrapRecord(growthData);
+    return listFrom(
+      (payload.points ?? payload.series ?? payload.data ?? growthData) as never,
+    ).map((record) => ({
+      month: str(record.month ?? record.label),
+      value: num(record.value ?? record.count),
+    }));
   }, [growthData]);
 
   const departmentHeadcount = useMemo((): DeptPoint[] => {
-    const payload = deptData as Record<string, unknown> | undefined;
-    const records = listFrom(
-      (payload?.departments ?? payload?.breakdown ?? payload?.data ?? payload) as never,
-    );
-    if (records.length > 0) {
-      return records.map((record, index) => ({
-        label: str(record.label ?? record.name ?? record.department),
-        value: num(record.value ?? record.count),
-        color: str(record.color, deptColors[index % deptColors.length]),
-      }));
-    }
-    return fallbackDeptHeadcount;
+    const payload = unwrapRecord(deptData);
+    return listFrom(
+      (payload.departments ?? payload.breakdown ?? payload.data ?? deptData) as never,
+    ).map((record, index) => ({
+      label: str(record.label ?? record.name ?? record.department),
+      value: num(record.value ?? record.count),
+      color: str(record.color, deptColors[index % deptColors.length]),
+    }));
   }, [deptData]);
 
   const weeklyAttendance = useMemo((): AttendancePoint[] => {
-    const payload = attendanceData as Record<string, unknown> | undefined;
-    const records = listFrom(
-      (payload?.days ?? payload?.weekly ?? payload?.data ?? payload) as never,
-    );
-    if (records.length > 0) {
-      return records.map((record) => ({
-        day: str(record.day ?? record.label),
-        value: num(record.value ?? record.percent),
-      }));
-    }
-    return fallbackAttendance;
+    const payload = unwrapRecord(attendanceData);
+    return listFrom(
+      (payload.days ?? payload.weekly ?? payload.data ?? attendanceData) as never,
+    ).map((record) => ({
+      day: str(record.day ?? record.label),
+      value: num(record.value ?? record.percent),
+    }));
   }, [attendanceData]);
 
   const savedReports = useMemo(() => listFrom(savedData ?? undefined), [savedData]);
@@ -280,7 +273,10 @@ export function ReportsPage() {
 
   function exportFullReport() {
     void runAction("Export report", async () => {
-      await downloadApiBlob("/reports/export", "workforce-report.csv");
+      await downloadApiBlob(
+        superAdminApi.reports.exportPath(),
+        "workforce-report.csv",
+      );
     });
   }
 
@@ -301,7 +297,7 @@ export function ReportsPage() {
 
   function runSavedReport(id: string, name: string) {
     void runAction(`Run ${name}`, async () => {
-      await reportsApi.saved.run(id);
+      await superAdminApi.reports.saved.action(id, "run");
     });
   }
 
@@ -312,7 +308,7 @@ export function ReportsPage() {
           {loading ? <p className={styles.dateLabel}>Loading reports…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached reports — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>

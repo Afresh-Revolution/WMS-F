@@ -3,13 +3,15 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Check, FileText, Search } from "lucide-react";
-import { AppShell } from "@/components/layout/AppShell";
 import {
-  notificationUnreadCount,
-  notifications,
+  type Notification,
   type NotificationFilter,
   type NotificationType,
 } from "@/data/notifications";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { superAdminApi } from "@/lib/api";
+import { bool, listFrom, str } from "@/lib/api/mappers";
 import styles from "./NotificationsPage.module.css";
 
 const filters: NotificationFilter[] = ["All", "Unread", "Workflow", "System"];
@@ -34,21 +36,58 @@ export function NotificationsPage({
   initialFilter = "All",
 }: NotificationsPageProps) {
   const router = useRouter();
+  const { runAction } = usePageActions();
+  const { data, loading, error, refetch } = useAsyncData(
+    () => superAdminApi.notifications.list(),
+    [],
+  );
+
+  const items = useMemo((): Notification[] => {
+    return listFrom(data ?? undefined).map((record, index) => {
+      const typeRaw = str(record.type ?? record.category, "System").toLowerCase();
+      const type: NotificationType = typeRaw.includes("work")
+        ? "Workflow"
+        : "System";
+      return {
+        id: str(record.id ?? index),
+        type,
+        referenceId: str(record.referenceId ?? record.reference ?? record.code) || undefined,
+        message: str(record.message ?? record.body ?? record.title),
+        timeAgo: str(record.timeAgo ?? record.createdAt) || undefined,
+        unread: bool(record.unread ?? record.isUnread ?? !record.readAt),
+      };
+    });
+  }, [data]);
 
   const filtered = useMemo(() => {
-    return notifications.filter((item) => {
+    return items.filter((item) => {
       if (initialFilter === "All") return true;
       if (initialFilter === "Unread") return item.unread;
       return item.type === initialFilter;
     });
-  }, [initialFilter]);
+  }, [initialFilter, items]);
+
+  const unreadCount = items.filter((item) => item.unread).length;
 
   function handleFilterChange(filter: NotificationFilter) {
     router.push(filterRoutes[filter]);
   }
 
+  function markAllRead() {
+    void runAction("Mark all as read", async () => {
+      await superAdminApi.notifications.markAllRead();
+      refetch();
+    });
+  }
+
+  function markOneRead(id: string) {
+    void runAction("Mark notification read", async () => {
+      await superAdminApi.notifications.markRead(id);
+      refetch();
+    });
+  }
+
   return (
-    <AppShell>
       <div className={styles.page}>
         <div className={styles.topBar}>
           <p className={styles.dateLabel}>Monday, August 3</p>
@@ -81,7 +120,11 @@ export function NotificationsPage({
               one place.
             </p>
           </div>
-          <button type="button" className={styles.markReadButton}>
+          <button
+            type="button"
+            className={styles.markReadButton}
+            onClick={markAllRead}
+          >
             <Check size={15} strokeWidth={2} />
             Mark all as read
           </button>
@@ -93,7 +136,7 @@ export function NotificationsPage({
               <Bell size={16} strokeWidth={2} />
             </div>
             <div className={styles.summaryText}>
-              <p className={styles.summaryUnread}>{notificationUnreadCount} unread</p>
+              <p className={styles.summaryUnread}>{unreadCount} unread</p>
               <p className={styles.summaryTotal}>
                 {filtered.length} total in this view
               </p>
@@ -121,6 +164,7 @@ export function NotificationsPage({
             <article
               key={item.id}
               className={`${styles.item} ${item.unread ? styles.itemUnread : ""}`}
+              onClick={() => item.unread && markOneRead(item.id)}
             >
               <div
                 className={`${styles.itemIcon} ${
@@ -153,11 +197,18 @@ export function NotificationsPage({
             </article>
           ))}
 
-          {filtered.length === 0 && (
+          {loading ? (
+            <div className={styles.empty}>Loading notifications…</div>
+          ) : null}
+          {error ? (
+            <div className={styles.empty} role="alert">
+              {error}
+            </div>
+          ) : null}
+          {filtered.length === 0 && !loading ? (
             <div className={styles.empty}>No notifications in this view.</div>
-          )}
+          ) : null}
         </div>
       </div>
-    </AppShell>
   );
 }

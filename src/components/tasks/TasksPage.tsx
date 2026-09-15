@@ -13,8 +13,6 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   taskFilters,
-  taskStats,
-  tasks as fallbackTasks,
   type Task,
   type TaskFilter,
   type TaskPriority,
@@ -22,7 +20,7 @@ import {
 } from "@/data/tasks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { tasksApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapTask } from "@/lib/api/mappers";
 import styles from "./TasksPage.module.css";
 
@@ -71,14 +69,27 @@ export function TasksPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction, exportRows } = usePageActions();
 
-  const { data, loading, error, refetch } = useAsyncData(() => tasksApi.list(), []);
+  const { data, loading, error, refetch } = useAsyncData(
+    () => superAdminApi.tasks.list(),
+    [],
+  );
 
   const tasks = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapTask(record))
-      : fallbackTasks;
+    return listFrom(data ?? undefined).map((record) => mapTask(record));
   }, [data]);
+
+  const taskStats = useMemo(() => {
+    const inProgress = tasks.filter((task) => task.status === "In Progress").length;
+    const overdue = tasks.filter((task) => task.status === "Overdue").length;
+    const completed = tasks.filter((task) => task.status === "Completed").length;
+    const pending = tasks.filter((task) => task.status === "Not Started").length;
+    return [
+      { id: "total", label: "Total tasks", value: String(tasks.length), badge: "Active" },
+      { id: "pending", label: "Pending", value: String(pending), badge: overdue > 0 ? "Urgent" : "Active" },
+      { id: "in-progress", label: "In progress", value: String(inProgress), badge: "Active" },
+      { id: "completed", label: "Completed", value: String(completed), badge: "Done" },
+    ];
+  }, [tasks]);
 
   const filteredTasks = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -93,7 +104,7 @@ export function TasksPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Create task", async () => {
-      await tasksApi.create({ ...values, status: "Not Started" });
+      await superAdminApi.tasks.create({ ...values, status: "Not Started" });
       refetch();
     });
   }
@@ -101,7 +112,7 @@ export function TasksPage() {
   async function toggleComplete(task: Task) {
     const nextStatus = task.status === "Completed" ? "In Progress" : "Completed";
     await runAction("Update task", async () => {
-      await tasksApi.patch(task.id, { status: nextStatus });
+      await superAdminApi.tasks.patch(task.id, { status: nextStatus });
       refetch();
     });
   }
@@ -131,7 +142,7 @@ export function TasksPage() {
     <>
       <div className={styles.page}>
         {loading ? <p>Loading tasks…</p> : null}
-        {error ? <p role="alert">Using cached tasks — {error}</p> : null}
+        {error ? <p role="alert">{error}</p> : null}
         <div className={styles.topBar}>
           <p className={styles.dateLabel}>Monday, August 3</p>
           <div className={styles.topActions}>

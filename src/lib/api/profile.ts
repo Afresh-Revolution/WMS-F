@@ -9,6 +9,9 @@ export const profileApi = {
   update: (body: Record<string, unknown>) =>
     apiRequest<ProfileRecord>("/profile", { method: "PUT", body }),
 
+  patch: (body: Record<string, unknown>) =>
+    apiRequest<ProfileRecord>("/profile", { method: "PATCH", body }),
+
   changePassword: (body: {
     currentPassword: string;
     newPassword: string;

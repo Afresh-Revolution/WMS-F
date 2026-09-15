@@ -2,15 +2,12 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Eye, FileText, Search } from "lucide-react";
-import {
-  documentTemplates as fallbackTemplates,
-  type DocumentTemplateStatus,
-} from "@/data/documentTemplates";
+import { type DocumentTemplateStatus } from "@/data/documentTemplates";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { documentsApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapDocumentTemplate, str } from "@/lib/api/mappers";
 import styles from "./DocumentTemplatesPage.module.css";
 
@@ -27,15 +24,12 @@ export function DocumentTemplatesPage() {
   );
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => documentsApi.list(),
+    () => superAdminApi.systemManagement.documentTemplates.list(),
     [],
   );
 
   const templates = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapDocumentTemplate(record))
-      : fallbackTemplates;
+    return listFrom(data ?? undefined).map((record) => mapDocumentTemplate(record));
   }, [data]);
 
   const toggleStatus = useCallback(
@@ -43,7 +37,7 @@ export function DocumentTemplatesPage() {
       await runAction(
         `${current === "Active" ? "Deactivate" : "Activate"} ${name}`,
         async () => {
-          await documentsApi.patch(id, {
+          await superAdminApi.systemManagement.documentTemplates.patch(id, {
             status: current === "Active" ? "inactive" : "active",
           });
           refetch();
@@ -56,7 +50,7 @@ export function DocumentTemplatesPage() {
   async function openPreview(id: string, name: string) {
     setPreviewId(id);
     await runAction(`Preview ${name}`, async () => {
-      const record = await documentsApi.get(id);
+      const record = await superAdminApi.systemManagement.documentTemplates.get(id);
       setPreviewData(record as Record<string, unknown>);
     }).catch(() => {
       setPreviewData({ name, id, message: "Preview unavailable offline." });
@@ -93,7 +87,7 @@ export function DocumentTemplatesPage() {
         {loading ? <p className={styles.subtitle}>Loading templates…</p> : null}
         {error ? (
           <p className={styles.subtitle} role="alert">
-            Showing cached templates — {error}
+            {error}
           </p>
         ) : null}
       </div>

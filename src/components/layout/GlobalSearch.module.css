@@ -1,5 +1,6 @@
 .wrap {
   position: relative;
+  flex-shrink: 0;
   margin-bottom: 0.75rem;
 }
 

@@ -15,14 +15,12 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   matchesVendorFilter,
-  vendorStats,
-  vendors as fallbackVendors,
   type Vendor,
   type VendorFilter,
 } from "@/data/financeVendors";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { vendorsApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapVendor } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceVendorsPage.module.css";
@@ -42,14 +40,25 @@ export function FinanceVendorsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction, exportRows } = usePageActions();
 
-  const { data, loading, error, refetch } = useAsyncData(() => vendorsApi.list(), []);
+  const { data, loading, error, refetch } = useAsyncData(
+    () => superAdminApi.vendors.list(),
+    [],
+  );
 
   const vendors = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapVendor(record))
-      : fallbackVendors;
+    return listFrom(data ?? undefined).map((record) => mapVendor(record));
   }, [data]);
+
+  const vendorStats = useMemo(() => {
+    const active = vendors.filter((vendor) => vendor.active).length;
+    const openBills = vendors.reduce((sum, vendor) => sum + vendor.openBills, 0);
+    return [
+      { id: "total", label: "Total vendors", value: String(vendors.length) },
+      { id: "active", label: "Active vendors", value: String(active) },
+      { id: "open-bills", label: "Open bills", value: String(openBills) },
+      { id: "inactive", label: "Inactive", value: String(vendors.length - active) },
+    ];
+  }, [vendors]);
 
   const filteredVendors = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -68,14 +77,14 @@ export function FinanceVendorsPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Add vendor", async () => {
-      await vendorsApi.create({ ...values, active: true });
+      await superAdminApi.vendors.create({ ...values, active: true });
       refetch();
     });
   }
 
   async function viewVendor(vendor: Vendor) {
     await runAction(`Vendor — ${vendor.name}`, async () => {
-      await vendorsApi.get(vendor.id);
+      await superAdminApi.vendors.get(vendor.id);
     });
   }
 
@@ -105,7 +114,7 @@ export function FinanceVendorsPage() {
       <div className={payrollStyles.page}>
         <FinanceModuleTabs />
         {loading ? <p>Loading vendors…</p> : null}
-        {error ? <p role="alert">Using cached vendors — {error}</p> : null}
+        {error ? <p role="alert">{error}</p> : null}
 
         <div className={payrollStyles.topBar}>
           <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>

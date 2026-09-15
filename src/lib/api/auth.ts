@@ -124,6 +124,21 @@ function storeAuthTokens(response: LoginResponse) {
   cacheCurrentUserFromPayload(response);
 }
 
+function readMfaChallenge(response: LoginResponse) {
+  const nested =
+    response.data && typeof response.data === "object"
+      ? (response.data as Record<string, unknown>)
+      : {};
+  const required = Boolean(
+    response.mfaRequired ?? nested.mfaRequired ?? nested.mfa_required,
+  );
+  const challengeToken =
+    response.challengeToken ||
+    (typeof nested.challengeToken === "string" ? nested.challengeToken : "") ||
+    (typeof nested.challenge_token === "string" ? nested.challenge_token : "");
+  return { required, challengeToken };
+}
+
 function assertLoginSucceeded(
   response: LoginResponse & { success?: boolean; message?: string },
 ) {
@@ -135,6 +150,10 @@ function assertLoginSucceeded(
     );
   }
 
+  if (readMfaChallenge(response).required) {
+    return;
+  }
+
   storeAuthTokens(response);
 
   if (!getSessionToken()) {
@@ -143,6 +162,21 @@ function assertLoginSucceeded(
       "Sign in succeeded but no access token was returned. Contact support if this continues.",
       response,
     );
+  }
+}
+
+async function v1ThenLegacy<T>(
+  v1Path: string,
+  legacyPath: string,
+  options: Parameters<typeof apiRequest>[1] = {},
+): Promise<T> {
+  try {
+    return await apiRequest<T>(v1Path, options);
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 404 || err.status === 405)) {
+      return await apiRequest<T>(legacyPath, { ...options, root: true });
+    }
+    throw err;
   }
 }
 
@@ -159,18 +193,18 @@ export type BootstrapStatus = {
 
 export const authApi = {
   bootstrapStatus: () =>
-    apiRequest<BootstrapStatus>("/api/superadmin/bootstrap/status", {
-      auth: false,
-      root: true,
-    }),
+    v1ThenLegacy<BootstrapStatus>(
+      "/auth/bootstrap/status",
+      "/api/superadmin/bootstrap/status",
+      { auth: false },
+    ),
 
   bootstrap: async (body: BootstrapPayload) => {
-    const response = await apiRequest<LoginResponse>("/api/superadmin/bootstrap", {
-      method: "POST",
-      body,
-      auth: false,
-      root: true,
-    });
+    const response = await v1ThenLegacy<LoginResponse>(
+      "/auth/bootstrap",
+      "/api/superadmin/bootstrap",
+      { method: "POST", body, auth: false },
+    );
     storeAuthTokens(response);
     return response;
   },
@@ -178,14 +212,18 @@ export const authApi = {
   login: async (body: LoginPayload) => {
     const response = await apiRequest<
       LoginResponse & { success?: boolean; message?: string }
-    >("/api/superadmin/login", {
+    >("/auth/login", {
       method: "POST",
       body,
       auth: false,
-      root: true,
     });
     assertLoginSucceeded(response);
-    return response;
+    const challenge = readMfaChallenge(response);
+    return {
+      ...response,
+      mfaRequired: challenge.required,
+      challengeToken: challenge.challengeToken || response.challengeToken,
+    };
   },
 
   verifyMfa: async (body: { code: string; challengeToken?: string }) => {
@@ -199,33 +237,47 @@ export const authApi = {
   },
 
   refresh: async (refreshToken?: string) => {
-    const response = await apiRequest<LoginResponse>("/api/superadmin/refresh", {
-      method: "POST",
-      body: refreshToken ? { refreshToken } : {},
-      auth: false,
-      root: true,
-    });
+    const response = await v1ThenLegacy<LoginResponse>(
+      "/auth/refresh",
+      "/api/superadmin/refresh",
+      {
+        method: "POST",
+        body: refreshToken ? { refreshToken } : {},
+        auth: false,
+      },
+    );
     storeAuthTokens(response);
     return response;
   },
 
   logout: async () => {
     try {
-      await apiRequest<void>("/api/superadmin/logout", { method: "POST", root: true });
+      await v1ThenLegacy<void>("/auth/logout", "/api/superadmin/logout", {
+        method: "POST",
+      });
     } finally {
       clearTokens();
     }
   },
 
-  me: () => apiRequest<AuthUser>("/api/superadmin/me", { root: true }),
+  me: async () => {
+    try {
+      return await apiRequest<AuthUser>("/auth/me");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        return await apiRequest<AuthUser>("/api/superadmin/me", { root: true });
+      }
+      throw err;
+    }
+  },
 
-  superAdminMe: () => apiRequest<AuthUser>("/api/superadmin/me", { root: true }),
+  superAdminMe: () =>
+    v1ThenLegacy<AuthUser>("/auth/superadmin/me", "/api/superadmin/me"),
 
   changePassword: (body: { currentPassword: string; newPassword: string }) =>
-    apiRequest<void>("/api/superadmin/change-password", {
+    v1ThenLegacy<void>("/auth/change-password", "/api/superadmin/change-password", {
       method: "POST",
       body,
-      root: true,
     }),
 
   forgotPassword: (body: { email: string }) =>

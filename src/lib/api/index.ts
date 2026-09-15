@@ -10,7 +10,7 @@ export {
   clearTokens,
 } from "./client";
 export type { ApiListResponse, PaginatedResponse, Id } from "./types";
-export { unwrapList } from "./types";
+export { unwrapList, unwrapData, unwrapRecord, asRecord } from "./types";
 
 export { managerApi } from "./manager";
 export type { ManagerApi, ManagerListParams } from "./manager";
@@ -31,6 +31,8 @@ export { emailConfigApi, notificationConfigApi, notificationsApi } from "./notif
 export { usersApi, rolesApi, permissionsApi } from "./users";
 export { departmentsApi, hrApi } from "./departments";
 export { reportsApi, auditLogsApi } from "./reports";
+export { superAdminApi, saRequest } from "./superAdmin";
+
 export { accountantApi, accountantSettled } from "./accountant";
 export { internApi, internSettled, nyscInternsManageApi } from "./intern";
 export { attendanceApi, attendanceSettled } from "./attendance";

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect } from "react";
+import { FormEvent, Fragment, useEffect } from "react";
 import styles from "./SimpleModal.module.css";
 
 export type ModalField = {
@@ -11,6 +11,13 @@ export type ModalField = {
   required?: boolean;
   defaultValue?: string;
   options?: { label: string; value: string }[];
+  group?: string;
+  fullWidth?: boolean;
+  min?: number;
+  max?: number;
+  step?: number | string;
+  minLength?: number;
+  maxLength?: number;
 };
 
 type SimpleModalProps = {
@@ -19,6 +26,7 @@ type SimpleModalProps = {
   description?: string;
   fields: ModalField[];
   submitLabel?: string;
+  wide?: boolean;
   onClose: () => void;
   onSubmit: (values: Record<string, string>) => void | Promise<void>;
 };
@@ -29,6 +37,7 @@ export function SimpleModal({
   description,
   fields,
   submitLabel = "Save",
+  wide = false,
   onClose,
   onSubmit,
 }: SimpleModalProps) {
@@ -65,7 +74,7 @@ export function SimpleModal({
   return (
     <div className={styles.backdrop} onClick={onClose} role="presentation">
       <div
-        className={styles.modal}
+        className={`${styles.modal} ${wide ? styles.modalWide : ""}`}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -77,41 +86,64 @@ export function SimpleModal({
           </h2>
           {description ? <p className={styles.description}>{description}</p> : null}
         </div>
-        <form className={styles.form} onSubmit={handleSubmit}>
-          {fields.map((field) => (
-            <label key={field.name} className={styles.field}>
-              <span>{field.label}</span>
-              {field.type === "textarea" ? (
-                <textarea
-                  name={field.name}
-                  defaultValue={field.defaultValue}
-                  placeholder={field.placeholder}
-                  required={field.required}
-                  rows={4}
-                />
-              ) : field.type === "select" ? (
-                <select
-                  name={field.name}
-                  defaultValue={field.defaultValue}
-                  required={field.required}
+        <form
+          className={`${styles.form} ${wide ? styles.formWide : ""}`}
+          onSubmit={handleSubmit}
+        >
+          {fields.map((field, index) => {
+            const showGroup =
+              Boolean(field.group) && field.group !== fields[index - 1]?.group;
+            return (
+              <Fragment key={field.name}>
+                {showGroup ? (
+                  <p className={styles.group}>{field.group}</p>
+                ) : null}
+                <label
+                  className={`${styles.field} ${
+                    field.fullWidth ? styles.fieldFull : ""
+                  }`}
                 >
-                  {(field.options ?? []).map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  name={field.name}
-                  type={field.type ?? "text"}
-                  defaultValue={field.defaultValue}
-                  placeholder={field.placeholder}
-                  required={field.required}
-                />
-              )}
-            </label>
-          ))}
+                  <span>{field.label}</span>
+                  {field.type === "textarea" ? (
+                    <textarea
+                      name={field.name}
+                      defaultValue={field.defaultValue}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      minLength={field.minLength}
+                      maxLength={field.maxLength}
+                      rows={4}
+                    />
+                  ) : field.type === "select" ? (
+                    <select
+                      name={field.name}
+                      defaultValue={field.defaultValue}
+                      required={field.required}
+                    >
+                      {(field.options ?? []).map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      name={field.name}
+                      type={field.type ?? "text"}
+                      defaultValue={field.defaultValue}
+                      placeholder={field.placeholder}
+                      required={field.required}
+                      min={field.min}
+                      max={field.max}
+                      step={field.step}
+                      minLength={field.minLength}
+                      maxLength={field.maxLength}
+                    />
+                  )}
+                </label>
+              </Fragment>
+            );
+          })}
           <div className={styles.actions}>
             <button type="button" className={styles.cancel} onClick={onClose}>
               Cancel

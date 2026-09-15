@@ -6,14 +6,12 @@ import { CalendarDays, Check, Plus, RefreshCw, Search, Send } from "lucide-react
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import {
-  events as fallbackEvents,
-  statsByFilter as fallbackStatsByFilter,
   type EventFilter,
   type EventItem,
 } from "@/data/events";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { eventsApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapEvent } from "@/lib/api/mappers";
 import styles from "./EventsPage.module.css";
 
@@ -80,18 +78,60 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
     activeFilter === "All" ? undefined : activeFilter.toLowerCase();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => eventsApi.list(filterParam ? { category: filterParam } : undefined),
+    () =>
+      superAdminApi.events.list(
+        filterParam ? { category: filterParam } : undefined,
+      ),
     [filterParam],
   );
 
   const events = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapEvent(record))
-      : fallbackEvents;
+    return listFrom(data ?? undefined).map((record) => mapEvent(record));
   }, [data]);
 
-  const currentStats = fallbackStatsByFilter[activeFilter];
+  const currentStats = useMemo(() => {
+    const filtered =
+      activeFilter === "All"
+        ? events
+        : events.filter((event) => event.category === activeFilter);
+    const sent = filtered.filter((event) => event.action === "sent").length;
+    return [
+      {
+        id: "total",
+        label: "Events",
+        value: String(filtered.length),
+        badge: activeFilter === "All" ? "All" : activeFilter,
+        badgeTone: "meta" as const,
+      },
+      {
+        id: "upcoming",
+        label: "Upcoming",
+        value: String(
+          filtered.filter((event) => event.category === "Upcoming").length,
+        ),
+        badge: "Scheduled",
+        badgeTone: "confirmed" as const,
+      },
+      {
+        id: "sent",
+        label: "Sent to HODs",
+        value: String(sent),
+        badge: "Delivered",
+        badgeTone: "confirmed" as const,
+      },
+      {
+        id: "draft",
+        label: "Draft",
+        value: String(
+          filtered.filter((event) =>
+            event.tags.some((tag) => tag.label.toLowerCase() === "draft"),
+          ).length,
+        ),
+        badge: "Pending",
+        badgeTone: "draft" as const,
+      },
+    ];
+  }, [activeFilter, events]);
 
   const filteredEvents = useMemo(() => {
     return events.filter((event) => {
@@ -131,12 +171,12 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
   async function handleSave(values: Record<string, string>) {
     if (editingEvent) {
       await runAction("Update event", async () => {
-        await eventsApi.patch(editingEvent.id, values);
+        await superAdminApi.events.patch(editingEvent.id, values);
         refetch();
       });
     } else {
       await runAction("Create event", async () => {
-        await eventsApi.create(values);
+        await superAdminApi.events.create(values);
         refetch();
       });
     }
@@ -144,7 +184,7 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
 
   async function sendEvent(event: EventItem) {
     await runAction("Send event", async () => {
-      await eventsApi.action(event.id, "send");
+      await superAdminApi.events.action(event.id, "send");
       refetch();
     });
   }
@@ -190,7 +230,7 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
           {loading ? <p className={styles.dateLabel}>Loading events…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached events — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>

@@ -10,7 +10,6 @@ import {
   Search,
 } from "lucide-react";
 import {
-  employees as fallbackEmployees,
   type DepartmentFilter,
   type EmployeeStatus,
 } from "@/data/employees";
@@ -18,7 +17,7 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { employeesApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapEmployee } from "@/lib/api/mappers";
 import styles from "./EmployeesPage.module.css";
 
@@ -46,16 +45,14 @@ export function EmployeesPage() {
 
   const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
-    () => employeesApi.list(),
+    () => superAdminApi.employees.list(),
     [],
   );
 
-  const employees = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapEmployee(record))
-      : fallbackEmployees;
-  }, [data]);
+  const employees = useMemo(
+    () => listFrom(data ?? undefined).map((record) => mapEmployee(record)),
+    [data],
+  );
 
   const departmentFilters = useMemo((): DepartmentFilter[] => {
     const departments = new Set(employees.map((e) => e.department).filter(Boolean));
@@ -89,7 +86,7 @@ export function EmployeesPage() {
 
   async function handleAddEmployee(values: Record<string, string>) {
     await runAction("Add person", async () => {
-      await employeesApi.create(values);
+      await superAdminApi.employees.create(values);
       refetch();
     });
   }
@@ -98,7 +95,7 @@ export function EmployeesPage() {
       <div className={styles.page}>
         <div className={styles.topBar}>
           {loading ? <span>Loading employees…</span> : null}
-          {error ? <span role="alert">Using cached employees — {error}</span> : null}
+          {error ? <span role="alert">{error}</span> : null}
           <button
             type="button"
             className={styles.globalSearch}

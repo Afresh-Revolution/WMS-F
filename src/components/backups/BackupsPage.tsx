@@ -8,46 +8,50 @@ import {
   RotateCcw,
   Search,
 } from "lucide-react";
-import {
-  backupPolicySettings as fallbackPolicy,
-  backupSnapshots as fallbackSnapshots,
-  backupStats as fallbackStats,
-} from "@/data/backups";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { backupsApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapBackupSnapshot, str } from "@/lib/api/mappers";
 import styles from "./BackupsPage.module.css";
 
+type PolicyRow = {
+  id: string;
+  label: string;
+  description: string;
+  value: string;
+};
+
 export function BackupsPage() {
   const { runAction } = usePageActions();
-  const [editSetting, setEditSetting] = useState<(typeof fallbackPolicy)[0] | null>(
-    null,
-  );
+  const [editSetting, setEditSetting] = useState<PolicyRow | null>(null);
 
   const { data: backupsData, loading, error, refetch } = useAsyncData(
-    () => backupsApi.list(),
+    () => superAdminApi.backups.list(),
     [],
   );
 
   const { data: settingsData, refetch: refetchSettings } = useAsyncData(
-    () => backupsApi.settings.get(),
+    () => superAdminApi.backups.settings.get(),
     [],
   );
 
-  const { data: healthData } = useAsyncData(() => backupsApi.health(), []);
+  const { data: healthData } = useAsyncData(
+    () => superAdminApi.backups.health(),
+    [],
+  );
 
-  const snapshots = useMemo(() => {
-    const records = listFrom(backupsData ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapBackupSnapshot(record))
-      : fallbackSnapshots;
-  }, [backupsData]);
+  const snapshots = useMemo(
+    () =>
+      listFrom(backupsData ?? undefined).map((record) =>
+        mapBackupSnapshot(record),
+      ),
+    [backupsData],
+  );
 
   const stats = useMemo(() => {
-    const health = (healthData ?? {}) as Record<string, unknown>;
+    const health = unwrapRecord(healthData);
     return [
       {
         id: "last",
@@ -58,46 +62,45 @@ export function BackupsPage() {
       {
         id: "total",
         label: "Total snapshots",
-        value: str(health.total ?? snapshots.length, fallbackStats[2].value),
-        badge: str(health.totalBadge ?? fallbackStats[2].badge),
+        value: str(health.total ?? snapshots.length, String(snapshots.length)),
+        badge: str(health.totalBadge, "Live"),
       },
       {
         id: "storage",
         label: "Storage used",
         value: str(health.storageUsed ?? health.storage, "—"),
-        badge: str(health.storageBadge ?? "Live"),
+        badge: str(health.storageBadge, "Live"),
       },
     ];
   }, [healthData, snapshots.length]);
 
-  const policySettings = useMemo(() => {
-    if (!settingsData) return fallbackPolicy;
-    const settings = settingsData as Record<string, unknown>;
+  const policySettings = useMemo((): PolicyRow[] => {
+    const settings = unwrapRecord(settingsData);
     return [
       {
         id: "frequency",
         label: "Backup frequency",
         description: "How often automatic snapshots run.",
-        value: str(settings.frequency ?? settings.schedule, fallbackPolicy[0].value),
+        value: str(settings.frequency ?? settings.schedule, "—"),
       },
       {
         id: "retention",
         label: "Retention period",
         description: "How long snapshots are kept before deletion.",
-        value: str(settings.retention ?? settings.retentionDays, fallbackPolicy[1].value),
+        value: str(settings.retention ?? settings.retentionDays, "—"),
       },
       {
         id: "storage-location",
         label: "Storage location",
         description: "",
-        value: str(settings.location ?? settings.storageLocation, fallbackPolicy[2].value),
+        value: str(settings.location ?? settings.storageLocation, "—"),
       },
     ];
   }, [settingsData]);
 
   const runBackup = useCallback(async () => {
     await runAction("Run backup", async () => {
-      await backupsApi.create();
+      await superAdminApi.backups.create();
       refetch();
     });
   }, [refetch, runAction]);
@@ -105,7 +108,7 @@ export function BackupsPage() {
   const restoreBackup = useCallback(
     async (id: string, title: string) => {
       await runAction(`Restore ${title}`, async () => {
-        await backupsApi.restore(id);
+        await superAdminApi.backups.restore(id);
         refetch();
       });
     },
@@ -132,7 +135,7 @@ export function BackupsPage() {
           ? "retention"
           : "location";
     await runAction(`Update ${editSetting.label}`, async () => {
-      await backupsApi.settings.update({ [key]: values.value });
+      await superAdminApi.backups.settings.update({ [key]: values.value });
       await refetchSettings();
       refetch();
     });
@@ -169,7 +172,7 @@ export function BackupsPage() {
           {loading ? <p className={styles.subtitle}>Loading backups…</p> : null}
           {error ? (
             <p className={styles.subtitle} role="alert">
-              Showing cached backups — {error}
+            {error}
             </p>
           ) : null}
         </div>

@@ -65,30 +65,13 @@
 .brandLogo {
   position: relative;
   z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-
-.brandMark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.96);
-  color: #1c1917;
-  font-family: var(--font-display);
-  font-size: 1.125rem;
-  line-height: 1;
-}
-
-.brandWordmark {
-  font-family: var(--font-display);
-  font-size: 1.65rem;
-  line-height: 1;
-  letter-spacing: -0.02em;
+  display: block;
+  height: 56px;
+  width: auto;
+  max-width: min(100%, 300px);
+  object-fit: contain;
+  object-position: left center;
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.18));
 }
 
 .brandCopy {
@@ -244,6 +227,11 @@
   font-weight: 500;
   color: var(--afresh-orange);
   text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .textLink:hover {
@@ -281,66 +269,6 @@
 .primaryButton:disabled {
   opacity: 0.72;
   cursor: not-allowed;
-}
-
-.divider {
-  position: relative;
-  margin: 1.35rem 0 1.1rem;
-  text-align: center;
-}
-
-.divider::before {
-  content: "";
-  position: absolute;
-  inset: 50% 0 auto;
-  height: 1px;
-  background: #ebe6e1;
-}
-
-.divider span {
-  position: relative;
-  padding: 0 0.75rem;
-  background: #fff;
-  font-size: 0.8125rem;
-  color: #a8a29e;
-}
-
-.ssoButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
-  width: 100%;
-  padding: 0.82rem 1rem;
-  border: 1px solid #ebe6e1;
-  border-radius: 999px;
-  background: #fff;
-  color: #44403c;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background 0.15s ease;
-}
-
-.ssoButton:hover {
-  border-color: #d6d3d1;
-  background: #fafaf9;
-}
-
-.ssoMark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  background: var(--afresh-logo-mark);
-  color: #111;
-  font-family: var(--font-display);
-  font-size: 0.75rem;
-  line-height: 1;
 }
 
 .support {

@@ -1,7 +1,8 @@
-import { unwrapList } from "@/lib/api";
-import type { ApiListResponse } from "@/lib/api";
+import { unwrapList, unwrapRecord, type ApiListResponse } from "./types";
 
 import type { Department } from "@/data/departments";
+
+export { unwrapRecord };
 
 export function str(value: unknown, fallback = ""): string {
   if (value === null || value === undefined) return fallback;
@@ -66,9 +67,7 @@ export function avatarColor(seed: string): string {
 export function listFrom<T extends Record<string, unknown>>(
   response: ApiListResponse<T> | T[] | null | undefined,
 ): T[] {
-  if (!response) return [];
-  if (Array.isArray(response)) return response;
-  return unwrapList(response) as T[];
+  return unwrapList<T>(response);
 }
 
 export function pick<T extends Record<string, unknown>>(

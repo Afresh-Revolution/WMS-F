@@ -12,24 +12,59 @@ import {
   Search,
 } from "lucide-react";
 import {
-  profileExpenseClaims as fallbackExpenseClaims,
-  profileLeaveHistory as fallbackLeaveHistory,
-  profileLeaveBalances as fallbackLeaveBalances,
-  profileRecord as fallbackProfile,
+  type ProfileExpenseClaim,
+  type ProfileLeaveBalance,
+  type ProfileLeaveHistoryItem,
 } from "@/data/profile";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { SimpleModal } from "@/components/ui/SimpleModal";
+import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { profileApi, secretaryApi } from "@/lib/api";
-import { initials, nestedStr, num, str } from "@/lib/api/mappers";
+import { secretaryApi, superAdminApi, unwrapRecord } from "@/lib/api";
+import {
+  cacheCurrentUser,
+  initialsFromIdentity,
+  readCachedOrJwtUser,
+} from "@/lib/currentUser";
+import { initials, listFrom, nestedStr, num, str } from "@/lib/api/mappers";
 import styles from "./ProfilePage.module.css";
 
-const editProfileFields = [
-  { name: "phone", label: "Phone", type: "text" as const },
-  { name: "personalEmail", label: "Personal email", type: "email" as const },
-  { name: "location", label: "Location", type: "text" as const },
+const contactOnlyFields: ModalField[] = [
+  { name: "phone", label: "Phone", type: "text" },
+  { name: "personalEmail", label: "Personal email", type: "email" },
+  { name: "location", label: "Location", type: "text" },
 ];
+
+const employmentTypeOptions = [
+  { label: "Full-time", value: "Full-time" },
+  { label: "Part-time", value: "Part-time" },
+  { label: "Contract", value: "Contract" },
+];
+
+const statusOptions = [
+  { label: "Active", value: "Active" },
+  { label: "On leave", value: "On leave" },
+];
+
+function toDateInputValue(value: string) {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+  const parsed = Date.parse(trimmed);
+  if (!Number.isFinite(parsed)) return "";
+  const date = new Date(parsed);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function splitName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? "",
+    lastName: parts.slice(1).join(" "),
+  };
+}
 
 type ProfileSection = "Overview" | "Leave" | "Expenses";
 
@@ -47,131 +82,102 @@ export function ProfilePage({
     () =>
       secretary
         ? secretaryApi.getEmploymentRecord()
-        : profileApi.get(),
+        : superAdminApi.profile.get(),
     [secretary],
   );
 
   const profile = useMemo(() => {
-    if (!data) return fallbackProfile;
-    const record = data as Record<string, unknown>;
-    const employee = (record.employee ?? record.user ?? record) as Record<
-      string,
-      unknown
-    >;
-    const personal = (record.personal ?? employee.personal ?? employee) as Record<
-      string,
-      unknown
-    >;
-    const employment = (record.employment ??
-      record.employmentRecord ??
-      employee) as Record<string, unknown>;
+    const record = unwrapRecord(data);
+    const employee = unwrapRecord(record.employee ?? record.user ?? record);
+    const personal = unwrapRecord(record.personal ?? employee.personal ?? employee);
+    const employment = unwrapRecord(
+      record.employment ?? record.employmentRecord ?? employee,
+    );
     const name = str(
       record.name ?? record.fullName ?? employee.name ?? employee.fullName,
-      fallbackProfile.name,
+      "—",
     );
     return {
-      initials: str(record.initials, initials(name)),
+      initials: str(record.initials, initials(name === "—" ? "?" : name)),
       name,
       jobTitle: str(
         record.jobTitle ?? employee.jobTitle ?? employment.role,
-        fallbackProfile.jobTitle,
+        "—",
       ),
       department: nestedStr(
         record.department ?? employee.department ?? employment.department,
         ["name", "title", "label"],
-        fallbackProfile.department,
+        "—",
       ),
-      status: str(record.status, fallbackProfile.status) as "Active",
+      status: str(record.status, "Active") as "Active",
       employeeId: str(
         record.employeeId ?? employee.employeeId ?? employee.id ?? record.id,
-        fallbackProfile.employeeId,
+        "—",
       ),
-      annualLeaveDays: num(
-        record.annualLeaveDays ?? record.leaveBalance,
-        fallbackProfile.annualLeaveDays,
-      ),
+      annualLeaveDays: num(record.annualLeaveDays ?? record.leaveBalance),
       personal: {
         companyEmail: str(
           personal.companyEmail ?? record.companyEmail ?? employee.email,
-          fallbackProfile.personal.companyEmail,
         ),
-        personalEmail: str(
-          personal.personalEmail ?? personal.email,
-          fallbackProfile.personal.personalEmail,
-        ),
-        phone: str(personal.phone ?? record.phone, fallbackProfile.personal.phone),
-        location: str(
-          personal.location ?? record.location,
-          fallbackProfile.personal.location,
-        ),
+        personalEmail: str(personal.personalEmail ?? personal.email),
+        phone: str(personal.phone ?? record.phone),
+        location: str(personal.location ?? record.location),
       },
       employment: {
-        role: str(
-          employment.role ?? employment.jobTitle ?? employee.jobTitle,
-          fallbackProfile.employment.role,
-        ),
+        role: str(employment.role ?? employment.jobTitle ?? employee.jobTitle),
         department: nestedStr(
           employment.department ?? employee.department,
           ["name", "title", "label"],
-          fallbackProfile.employment.department,
         ),
-        startDate: str(
-          employment.startDate ?? record.startDate,
-          fallbackProfile.employment.startDate,
-        ),
-        type: str(employment.type ?? record.employmentType, fallbackProfile.employment.type),
-        reportsTo: str(employment.reportsTo ?? record.reportsTo, ""),
+        startDate: str(employment.startDate ?? record.startDate),
+        type: str(employment.type ?? record.employmentType, "Full-time"),
+        reportsTo: str(employment.reportsTo ?? record.reportsTo),
       },
     };
   }, [data]);
 
-  const leaveBalances = useMemo(() => {
-    const record = (data ?? {}) as Record<string, unknown>;
-    const balances = record.leaveBalances ?? record.leave;
-    if (!Array.isArray(balances)) return fallbackLeaveBalances;
-    return balances.map((item, index) => {
-      const balance = item as Record<string, unknown>;
-      return {
-        id: str(balance.id, String(index)),
-        label: str(balance.label ?? balance.type),
-        remaining: num(balance.remaining ?? balance.balance),
-        total: num(balance.total ?? balance.allocated, 1),
-      };
-    });
+  const leaveBalances = useMemo((): ProfileLeaveBalance[] => {
+    const record = unwrapRecord(data);
+    return listFrom(
+      (record.leaveBalances ?? record.leave) as never,
+    ).map((balance, index) => ({
+      id: str(balance.id, String(index)),
+      label: str(balance.label ?? balance.type),
+      remaining: num(balance.remaining ?? balance.balance),
+      total: num(balance.total ?? balance.allocated, 1),
+    }));
   }, [data]);
 
-  const leaveHistory = useMemo(() => {
-    const record = (data ?? {}) as Record<string, unknown>;
-    const history = record.leaveHistory ?? record.leaveRequests;
-    if (!Array.isArray(history)) return fallbackLeaveHistory;
-    return history.map((item, index) => {
-      const leave = item as Record<string, unknown>;
+  const leaveHistory = useMemo((): ProfileLeaveHistoryItem[] => {
+    const record = unwrapRecord(data);
+    return listFrom(
+      (record.leaveHistory ?? record.leaveRequests) as never,
+    ).map((leave, index) => {
       const status = str(leave.status, "Pending");
       return {
         id: str(leave.id, String(index)),
         type: str(leave.type ?? leave.leaveType),
         dates: str(leave.dates ?? leave.dateRange ?? leave.startDate),
         duration: str(leave.duration ?? leave.days),
-        status: (status === "Approved" ? "Approved" : "Pending") as
+        status: (status.toLowerCase().includes("approv") ? "Approved" : "Pending") as
           | "Approved"
           | "Pending",
       };
     });
   }, [data]);
 
-  const expenseClaims = useMemo(() => {
-    const record = (data ?? {}) as Record<string, unknown>;
-    const claims = record.expenseClaims ?? record.expenses;
-    if (!Array.isArray(claims)) return fallbackExpenseClaims;
-    return claims.map((item, index) => {
-      const claim = item as Record<string, unknown>;
+  const expenseClaims = useMemo((): ProfileExpenseClaim[] => {
+    const record = unwrapRecord(data);
+    return listFrom(
+      (record.expenseClaims ?? record.expenses) as never,
+    ).map((claim, index) => {
       const status = str(claim.status, "Pending");
       return {
         id: str(claim.id, String(index)),
         title: str(claim.title ?? claim.description),
         date: str(claim.date ?? claim.submittedAt),
         amount: num(claim.amount),
-        status: (status === "Approved" ? "Approved" : "Pending") as
+        status: (status.toLowerCase().includes("approv") ? "Approved" : "Pending") as
           | "Approved"
           | "Pending",
       };
@@ -180,21 +186,163 @@ export function ProfilePage({
 
   const { personal, employment } = profile;
 
+  const adminEditFields: ModalField[] = [
+    {
+      name: "name",
+      label: "Full name",
+      required: true,
+      defaultValue: profile.name,
+      group: "Identity",
+    },
+    {
+      name: "employeeId",
+      label: "Employee ID",
+      defaultValue: profile.employeeId,
+      group: "Identity",
+    },
+    {
+      name: "status",
+      label: "Status",
+      type: "select",
+      defaultValue: profile.status,
+      options: statusOptions,
+      group: "Identity",
+    },
+    {
+      name: "companyEmail",
+      label: "Company email",
+      type: "email",
+      required: true,
+      defaultValue: personal.companyEmail,
+      group: "Personal details",
+    },
+    {
+      name: "personalEmail",
+      label: "Personal email",
+      type: "email",
+      defaultValue: personal.personalEmail,
+      group: "Personal details",
+    },
+    {
+      name: "phone",
+      label: "Phone",
+      defaultValue: personal.phone,
+      group: "Personal details",
+    },
+    {
+      name: "location",
+      label: "Location",
+      defaultValue: personal.location,
+      group: "Personal details",
+      fullWidth: true,
+    },
+    {
+      name: "jobTitle",
+      label: "Role",
+      required: true,
+      defaultValue: employment.role,
+      group: "Employment details",
+    },
+    {
+      name: "department",
+      label: "Department",
+      required: true,
+      defaultValue: employment.department,
+      group: "Employment details",
+    },
+    {
+      name: "startDate",
+      label: "Start date",
+      type: toDateInputValue(employment.startDate) ? "date" : "text",
+      defaultValue:
+        toDateInputValue(employment.startDate) || employment.startDate,
+      group: "Employment details",
+    },
+    {
+      name: "type",
+      label: "Employment type",
+      type: "select",
+      defaultValue: employment.type,
+      options: employmentTypeOptions.some((option) => option.value === employment.type)
+        ? employmentTypeOptions
+        : [
+            { label: employment.type, value: employment.type },
+            ...employmentTypeOptions,
+          ],
+      group: "Employment details",
+    },
+    {
+      name: "reportsTo",
+      label: "Reports to",
+      defaultValue: employment.reportsTo,
+      group: "Employment details",
+    },
+  ];
+
   async function handleProfileUpdate(values: Record<string, string>) {
     await runAction("Update profile", async () => {
-      const body = {
-        phone: values.phone,
-        personalEmail: values.personalEmail,
-        address: values.location,
-        location: values.location,
-        personal: {
+      if (secretary) {
+        await secretaryApi.updateEmploymentRecord({
           phone: values.phone,
           personalEmail: values.personalEmail,
+          address: values.location,
+          location: values.location,
+          personal: {
+            phone: values.phone,
+            personalEmail: values.personalEmail,
+            location: values.location,
+          },
+        });
+        refetch();
+        return;
+      }
+
+      const name = values.name.trim();
+      const { firstName, lastName } = splitName(name);
+      const body = {
+        name,
+        fullName: name,
+        firstName,
+        lastName,
+        employeeId: values.employeeId,
+        status: values.status,
+        email: values.companyEmail,
+        companyEmail: values.companyEmail,
+        personalEmail: values.personalEmail,
+        phone: values.phone,
+        location: values.location,
+        address: values.location,
+        jobTitle: values.jobTitle,
+        role: values.jobTitle,
+        department: values.department,
+        startDate: values.startDate,
+        employmentType: values.type,
+        type: values.type,
+        reportsTo: values.reportsTo,
+        personal: {
+          companyEmail: values.companyEmail,
+          personalEmail: values.personalEmail,
+          phone: values.phone,
           location: values.location,
         },
+        employment: {
+          role: values.jobTitle,
+          jobTitle: values.jobTitle,
+          department: values.department,
+          startDate: values.startDate,
+          type: values.type,
+          reportsTo: values.reportsTo,
+        },
       };
-      if (secretary) await secretaryApi.updateEmploymentRecord(body);
-      else await profileApi.update(body);
+      await superAdminApi.profile.update(body);
+      const current = readCachedOrJwtUser();
+      cacheCurrentUser({
+        id: current?.id ?? profile.employeeId,
+        email: values.companyEmail || current?.email || "",
+        name,
+        role: current?.role || values.jobTitle,
+        initials: initialsFromIdentity(name, values.companyEmail),
+      });
       refetch();
     });
   }
@@ -230,7 +378,7 @@ export function ProfilePage({
           {loading ? <p className={styles.subtitle}>Loading profile…</p> : null}
           {error ? (
             <p className={styles.subtitle} role="alert">
-              Showing cached profile — {error}
+              {error}
             </p>
           ) : null}
         </div>
@@ -240,7 +388,7 @@ export function ProfilePage({
           onClick={() => setEditOpen(true)}
         >
           <Pencil size={14} strokeWidth={2.25} />
-          Edit details
+          {secretary ? "Edit details" : "Edit profile"}
         </button>
       </div>
 
@@ -485,18 +633,28 @@ export function ProfilePage({
       ) : null}
 
       <SimpleModal
+        key={editOpen ? `${secretary ? "contact" : "admin"}-${profile.employeeId}` : "closed"}
         open={editOpen}
-        title="Edit personal details"
-        description="Update contact information on your profile."
-        fields={editProfileFields.map((field) => ({
-          ...field,
-          defaultValue:
-            field.name === "phone"
-              ? personal.phone
-              : field.name === "personalEmail"
-                ? personal.personalEmail
-                : personal.location,
-        }))}
+        title={secretary ? "Edit personal details" : "Edit profile"}
+        description={
+          secretary
+            ? "Update contact information on your profile."
+            : "Update your identity, contact, and employment details."
+        }
+        wide={!secretary}
+        fields={
+          secretary
+            ? contactOnlyFields.map((field) => ({
+                ...field,
+                defaultValue:
+                  field.name === "phone"
+                    ? personal.phone
+                    : field.name === "personalEmail"
+                      ? personal.personalEmail
+                      : personal.location,
+              }))
+            : adminEditFields
+        }
         submitLabel="Save changes"
         onClose={() => setEditOpen(false)}
         onSubmit={handleProfileUpdate}
