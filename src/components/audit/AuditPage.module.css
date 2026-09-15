@@ -152,10 +152,14 @@
 }
 
 .filters {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: 14px;
+  padding: 4px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
 }
 
 .filterChip {
@@ -163,7 +167,8 @@
   border-radius: 999px;
   font-size: 14px;
   font-weight: 500;
-  color: #44403c;
+  color: #78716c;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .filterChipActive {

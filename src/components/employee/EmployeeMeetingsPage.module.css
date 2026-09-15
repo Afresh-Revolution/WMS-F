@@ -1,0 +1,170 @@
+.page {
+  max-width: 1020px;
+  margin: 0 auto;
+  padding: 24px 34px 60px;
+}
+
+.topBar,
+.topActions,
+.search,
+.cardHeading,
+.meetingCard li {
+  display: flex;
+  align-items: center;
+}
+
+.topBar {
+  justify-content: space-between;
+  margin-bottom: 48px;
+}
+
+.topBar > p,
+.heading > p {
+  margin: 0;
+  color: #a8a29e;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.topActions {
+  gap: 8px;
+}
+
+.search {
+  gap: 7px;
+  width: 190px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #a8a29e;
+}
+
+.search input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  font-size: 12px;
+}
+
+.search kbd {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: #f5f5f4;
+  font-size: 9px;
+}
+
+.iconButton,
+.profileButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--afresh-orange);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.heading {
+  margin-bottom: 26px;
+}
+
+.heading h1 {
+  margin: 9px 0 8px;
+  color: var(--afresh-orange);
+  font-family: var(--font-display);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.05;
+}
+
+.heading > span {
+  color: #78716c;
+  font-size: 13px;
+}
+
+.meetingGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.meetingCard {
+  min-height: 158px;
+  padding: 18px 19px 14px;
+  border: 1px solid #ebe6e1;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 2px 7px rgba(28, 25, 23, 0.04);
+}
+
+.cardHeading {
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.cardHeading h2 {
+  margin: 0;
+  color: var(--afresh-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.cardHeading > span {
+  flex-shrink: 0;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #fff0e9;
+  color: #d35728;
+  font-size: 8px;
+  font-weight: 600;
+}
+
+.meetingCard ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.meetingCard li {
+  gap: 6px;
+  color: #78716c;
+  font-size: 10px;
+}
+
+.meetingCard li svg {
+  flex-shrink: 0;
+  color: var(--afresh-orange);
+}
+
+@media (max-width: 720px) {
+  .page {
+    padding: 18px 16px 44px;
+  }
+
+  .search {
+    display: none;
+  }
+
+  .topBar {
+    margin-bottom: 28px;
+  }
+
+  .heading h1 {
+    font-size: 32px;
+  }
+
+  .meetingGrid {
+    grid-template-columns: 1fr;
+  }
+}

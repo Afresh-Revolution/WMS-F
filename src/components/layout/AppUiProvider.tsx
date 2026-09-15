@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import { useToast } from "@/hooks/useToast";
 import { ToastStack } from "@/components/ui/ToastStack";
+import { CurrentUserProvider } from "./CurrentUserProvider";
 
 type AppUiContextValue = {
   showToast: (text: string, tone?: "success" | "error" | "info") => void;
@@ -29,8 +30,10 @@ export function AppUiProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppUiContext.Provider value={value}>
-      {children}
-      <ToastStack toasts={toasts} onDismiss={dismiss} />
+      <CurrentUserProvider>
+        {children}
+        <ToastStack toasts={toasts} onDismiss={dismiss} />
+      </CurrentUserProvider>
     </AppUiContext.Provider>
   );
 }

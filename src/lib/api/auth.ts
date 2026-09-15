@@ -7,6 +7,7 @@ import {
   setTokens,
   ApiError,
 } from "./client";
+import { cacheCurrentUserFromPayload } from "@/lib/currentUser";
 
 export type AuthUser = {
   id: string;
@@ -119,6 +120,8 @@ function storeAuthTokens(response: LoginResponse) {
   if (access) {
     setTokens(access, refresh || undefined);
   }
+
+  cacheCurrentUserFromPayload(response);
 }
 
 function assertLoginSucceeded(

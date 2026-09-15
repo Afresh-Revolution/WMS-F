@@ -12,6 +12,12 @@ export {
 export type { ApiListResponse, PaginatedResponse, Id } from "./types";
 export { unwrapList } from "./types";
 
+export { managerApi } from "./manager";
+export type { ManagerApi, ManagerListParams } from "./manager";
+
+export { secretaryApi } from "./secretary";
+export type { SecretaryListParams } from "./secretary";
+
 export { authApi, dashboardApi, healthApi, searchApi } from "./auth";
 export type { AuthUser, LoginPayload, LoginResponse, BootstrapPayload, BootstrapStatus } from "./auth";
 

@@ -4,7 +4,8 @@ export type EmployeeDepartment =
   | "Hardware"
   | "Fashion"
   | "Model"
-  | "HR";
+  | "HR"
+  | (string & {});
 
 export type EmployeeStatus = "Active" | "On leave";
 
@@ -14,13 +15,13 @@ export type Employee = {
   name: string;
   title: string;
   location: string;
-  department: EmployeeDepartment;
+  department: string;
   email: string;
   status: EmployeeStatus;
   avatarColor: string;
 };
 
-export type DepartmentFilter = "All" | EmployeeDepartment;
+export type DepartmentFilter = "All" | string;
 
 export const departmentFilters: DepartmentFilter[] = [
   "All",

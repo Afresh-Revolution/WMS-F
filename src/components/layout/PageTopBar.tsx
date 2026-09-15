@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Bell, Search } from "lucide-react";
+import { useCurrentUser } from "./CurrentUserProvider";
 import styles from "./PageTopBar.module.css";
 
 type PageTopBarProps = {
@@ -20,9 +21,11 @@ export function PageTopBar({
   searchValue,
   onSearchChange,
   showSearch = true,
-  profileInitials = "MC",
+  profileInitials,
   status,
 }: PageTopBarProps) {
+  const { user, ready } = useCurrentUser();
+  const initials = user?.initials || (ready ? profileInitials : "") || "";
   const controlled = onSearchChange !== undefined;
 
   return (
@@ -65,7 +68,7 @@ export function PageTopBar({
           <Bell size={16} />
         </Link>
         <Link href="/profile" className={styles.avatarChip} aria-label="Profile">
-          {profileInitials}
+          {initials}
         </Link>
       </div>
     </div>

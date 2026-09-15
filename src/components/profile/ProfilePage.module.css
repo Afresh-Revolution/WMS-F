@@ -171,11 +171,7 @@
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 16px;
-  padding: 22px 24px;
-  border: 1px solid #ebe6e1;
-  border-radius: 20px;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.03);
+  padding: 0;
 }
 
 .heroMain {
@@ -192,7 +188,7 @@
   width: 72px;
   height: 72px;
   flex-shrink: 0;
-  border-radius: 999px;
+  border-radius: 14px;
   background: var(--afresh-orange-soft);
   color: var(--afresh-orange);
   font-size: 22px;
@@ -207,7 +203,7 @@
   margin: 0;
   font-size: 22px;
   font-weight: 700;
-  color: var(--afresh-ink);
+  color: var(--afresh-orange);
 }
 
 .heroRole {
@@ -243,9 +239,13 @@
 }
 
 .employeeId {
+  display: inline-flex;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--afresh-orange-soft);
   font-size: 13px;
   font-weight: 600;
-  color: #a8a29e;
+  color: var(--afresh-orange);
 }
 
 .leaveSummary {
@@ -257,6 +257,43 @@
   padding: 14px 16px;
   border-radius: 16px;
   background: var(--afresh-orange-soft);
+}
+
+.tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 4px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: #78716c;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.tab:hover {
+  color: var(--afresh-ink);
+}
+
+.tabActive {
+  background: var(--afresh-orange);
+  color: #fff;
+}
+
+.tabActive:hover {
+  color: #fff;
 }
 
 .leaveSummaryLabel {
@@ -291,10 +328,6 @@
   box-shadow: 0 1px 2px rgba(28, 25, 23, 0.03);
 }
 
-.wideCard {
-  grid-column: 1 / -1;
-}
-
 .cardTitle {
   margin: 0 0 8px;
   font-family: var(--font-display);
@@ -312,22 +345,19 @@
 
 .detailRow {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 14px 0;
-  border-top: 1px solid #f5f5f4;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
 }
 
 .detailIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
-  border-radius: 10px;
-  background: var(--afresh-orange-soft);
-  color: var(--afresh-orange);
+  color: #78716c;
 }
 
 .detailCopy {
@@ -335,26 +365,18 @@
   flex: 1;
 }
 
-.detailLabel {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: #a8a29e;
-}
-
 .detailValueRow {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 3px;
 }
 
 .detailValue {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--afresh-ink);
+  font-size: 13px;
+  font-weight: 500;
+  color: #78716c;
 }
 
 .companyBadge {
@@ -373,22 +395,24 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 0;
-  border-top: 1px solid #f5f5f4;
+  padding: 8px 0;
 }
 
 .employmentLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--afresh-ink);
+  font-size: 13px;
+  font-weight: 500;
+  color: #78716c;
 }
 
 .employmentValue {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #57534e;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--afresh-ink);
   text-align: right;
 }
 
@@ -441,6 +465,102 @@
   background: var(--afresh-orange);
 }
 
+.historyCard {
+  overflow: hidden;
+  border: 1px solid #ebe6e1;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.03);
+}
+
+.historyTitle {
+  margin: 0;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid #ebe6e1;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 400;
+  color: var(--afresh-orange);
+}
+
+.historyList {
+  display: flex;
+  flex-direction: column;
+}
+
+.historyRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 62px;
+  padding: 12px 22px;
+  border-bottom: 1px solid #ebe6e1;
+}
+
+.historyRow:last-child {
+  border-bottom: 0;
+}
+
+.historyType {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--afresh-ink);
+}
+
+.historyDates {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #a8a29e;
+}
+
+.historyActions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+}
+
+.historyStatus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.historyApproved {
+  background: #eaf7ec;
+  color: #3f7c4b;
+}
+
+.historyPending {
+  background: #fff3d7;
+  color: #a66b12;
+}
+
+.expenseAmount {
+  color: var(--afresh-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.downloadButton {
+  color: var(--afresh-orange);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.downloadButton:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 860px) {
   .grid {
     grid-template-columns: 1fr;
@@ -454,6 +574,10 @@
   .leaveSummary {
     align-items: flex-start;
     width: 100%;
+  }
+
+  .historyRow {
+    align-items: flex-start;
   }
 }
 
@@ -472,5 +596,12 @@
 
   .title {
     font-size: 40px;
+  }
+
+  .historyRow,
+  .historyActions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
   }
 }
