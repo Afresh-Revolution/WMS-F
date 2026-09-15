@@ -592,24 +592,83 @@ export function mapDisciplineCase(record: Record<string, unknown>) {
   };
 }
 
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 export function mapPlacement(record: Record<string, unknown>) {
-  const name = str(record.name ?? record.fullName);
-  const typeRaw = str(record.type ?? record.placementType).toUpperCase();
-  const statusRaw = str(record.status).toLowerCase();
+  const profile = asObject(record.profile);
+  const placement = asObject(record.placement);
+  const department = asObject(record.department ?? profile.department);
+  const supervisor = asObject(record.supervisor ?? profile.supervisor);
+  const progressObj = asObject(placement.progress ?? record.progress);
+
+  const name = str(profile.fullName ?? record.name ?? record.fullName);
+  const typeRaw = str(profile.type ?? record.type ?? record.placementType).toUpperCase();
+  const statusRaw = str(
+    placement.placementStatus ?? record.placementStatus ?? record.status,
+  ).toUpperCase();
   let status: "Active" | "Exiting soon" | "Exited" = "Active";
-  if (statusRaw.includes("exit") && !statusRaw.includes("soon")) status = "Exited";
-  else if (statusRaw.includes("soon") || statusRaw.includes("exiting")) status = "Exiting soon";
+  if (statusRaw.includes("ENDING") || statusRaw.includes("SOON")) {
+    status = "Exiting soon";
+  } else if (
+    statusRaw.includes("COMPLETE") ||
+    statusRaw.includes("EXIT") ||
+    statusRaw.includes("TERMINAT") ||
+    statusRaw.includes("CANCEL")
+  ) {
+    status = "Exited";
+  }
+
+  const institution = str(
+    profile.institution ?? record.institution ?? record.school,
+  );
+  const course = str(profile.courseOfStudy ?? record.courseOfStudy);
+  const school = course ? `${institution} · ${course}` : institution;
+  const endRaw = str(
+    placement.expectedEndDate ??
+      record.expectedEndDate ??
+      record.endDate ??
+      record.completionDate,
+  );
+  const parsedEnd = endRaw ? new Date(endRaw) : null;
+  const endDate =
+    parsedEnd && !Number.isNaN(parsedEnd.getTime())
+      ? parsedEnd.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
+      : endRaw;
+
+  const supervisorName = str(
+    supervisor.fullName ??
+      supervisor.name ??
+      (typeof record.supervisor === "string" ? record.supervisor : "") ??
+      record.supervisorName,
+  );
 
   return {
-    id: str(record.id ?? record._id),
-    initials: str(record.initials, initials(name)),
+    id: str(profile.id ?? record.id ?? record._id),
+    initials: str(record.initials ?? profile.initials, initials(name)),
     name,
     type: (typeRaw.includes("NYSC") ? "NYSC" : "Intern") as "NYSC" | "Intern",
-    school: str(record.school ?? record.institution),
-    department: str(record.department ?? record.departmentName),
-    supervisor: str(record.supervisor ?? record.supervisorName),
-    endDate: str(record.endDate ?? record.completionDate),
-    progress: num(record.progress ?? record.completionPercent),
+    school,
+    department: str(
+      department.name ??
+        (typeof record.department === "string" ? record.department : "") ??
+        record.departmentName,
+    ),
+    supervisor: supervisorName,
+    endDate,
+    progress: num(
+      progressObj.progressPercentage ??
+        progressObj.completionProgress ??
+        record.progress ??
+        record.completionPercent,
+    ),
     status,
   };
 }

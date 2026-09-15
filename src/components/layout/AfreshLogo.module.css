@@ -1,38 +1,8 @@
 .logo {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.markWrap {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  overflow: hidden;
-  border-radius: 9px;
-  background-color: var(--afresh-logo-mark);
-  background-image: url("/afresh-logo-source.png");
-  background-repeat: no-repeat;
-  background-size: auto 100%;
-  background-position: left center;
-}
-
-.wordmark {
-  font-family: var(--font-sans), "Segoe UI", sans-serif;
-  font-size: 21px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.01em;
-  color: #fff;
-}
-
-.wordmarkLower {
-  font-size: 0.88em;
-  font-weight: 600;
-}
-
-.wordmarkUpper {
-  font-size: 0.88em;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  display: block;
+  height: 38px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: left center;
 }

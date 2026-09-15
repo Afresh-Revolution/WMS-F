@@ -145,6 +145,43 @@ export async function apiRequest<T>(
   return payload as T;
 }
 
+const ERROR_CODE_MESSAGES: Record<string, string> = {
+  OUTSIDE_ATTENDANCE_LOCATION:
+    "You are outside the approved attendance location.",
+  STALE_LOCATION_READING: "Your GPS reading is too old. Try check-in again.",
+  LOW_LOCATION_ACCURACY:
+    "GPS accuracy is too low. Move to an open area and try again.",
+  ATTENDANCE_NOT_OPEN: "Attendance is not open yet.",
+  ATTENDANCE_CLOSED: "Attendance is closed for this schedule.",
+  ALREADY_CHECKED_IN: "You have already checked in for this schedule today.",
+  NO_ASSIGNED_ATTENDANCE_SCHEDULE:
+    "No active attendance schedule is assigned to you.",
+  NO_ASSIGNED_ATTENDANCE_LOCATION:
+    "No active attendance location is assigned to you.",
+  LOCATION_TIMESTAMP_REQUIRED: "A GPS timestamp is required.",
+  INVALID_LATITUDE: "Latitude is out of range.",
+  INVALID_LONGITUDE: "Longitude is out of range.",
+  INVALID_LOCATION_ACCURACY: "GPS accuracy is missing or invalid.",
+  INVALID_ATTENDANCE_RADIUS: "Location radius is outside the allowed range.",
+  INVALID_SCHEDULE_TIME: "Schedule time must be in HH:mm format.",
+  INVALID_TIMEZONE: "Timezone must be a valid IANA name.",
+  ATTENDANCE_LOCATION_NAME_REQUIRED: "Location name is required.",
+  ATTENDANCE_SCHEDULE_NAME_REQUIRED: "Schedule name is required.",
+  EMPLOYEE_CHECK_IN_ROLE_REQUIRED: "This account cannot GPS check in.",
+  ATTENDANCE_CHECK_IN_FORBIDDEN: "You do not have permission to check in.",
+  EMPLOYEE_PROFILE_REQUIRED: "No employee or intern profile is linked.",
+  CHECK_IN_ACCOUNT_INACTIVE: "This account is not eligible to check in.",
+  ATTENDANCE_MONITOR_FORBIDDEN: "You cannot monitor attendance records.",
+  ATTENDANCE_MANAGE_FORBIDDEN:
+    "You cannot manage attendance locations or schedules.",
+  ATTENDANCE_SCOPE_REQUIRED:
+    "Assign a branch, department, or employee before saving.",
+  ATTENDANCE_SCOPE_FORBIDDEN: "That scope is outside your team.",
+  ATTENDANCE_LOCATION_NOT_FOUND: "Attendance location was not found.",
+  ATTENDANCE_SCHEDULE_NOT_FOUND: "Attendance schedule was not found.",
+  ATTENDANCE_RECORD_NOT_FOUND: "Attendance record was not found.",
+};
+
 const GENERIC_ERROR_MESSAGES = new Set([
   "operation failed",
   "request failed",
@@ -214,6 +251,9 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
       }
       if (isUsefulErrorMessage(errObj.message)) {
         return errObj.message;
+      }
+      if (code && ERROR_CODE_MESSAGES[code]) {
+        return ERROR_CODE_MESSAGES[code];
       }
     }
 

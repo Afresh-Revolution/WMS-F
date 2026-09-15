@@ -25,6 +25,10 @@ export { emailConfigApi, notificationConfigApi, notificationsApi } from "./notif
 export { usersApi, rolesApi, permissionsApi } from "./users";
 export { departmentsApi, hrApi } from "./departments";
 export { reportsApi, auditLogsApi } from "./reports";
+export { accountantApi, accountantSettled } from "./accountant";
+export { internApi, internSettled, nyscInternsManageApi } from "./intern";
+export { attendanceApi, attendanceSettled } from "./attendance";
+export type { GpsCheckInBody } from "./attendance";
 
 export {
   createResourceApi,

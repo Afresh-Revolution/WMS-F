@@ -1,0 +1,258 @@
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px 36px 64px;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dateLabel {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a8a29e;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 220px;
+  height: 38px;
+  padding: 0 12px 0 14px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #a8a29e;
+}
+
+.searchIcon {
+  flex-shrink: 0;
+  color: #a8a29e;
+}
+
+.searchInput {
+  width: 100%;
+  min-width: 0;
+  background: transparent;
+  color: #44403c;
+}
+
+.searchInput::placeholder {
+  color: #a8a29e;
+}
+
+.searchKbd {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid #ebe6e1;
+  border-radius: 6px;
+  background: #fafaf9;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: #a8a29e;
+}
+
+.iconButton {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #78716c;
+}
+
+.notifDot {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--afresh-orange);
+}
+
+.avatarChip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff8a65, var(--afresh-orange));
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 0 0 1px #ebe6e1;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #a8a29e;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--afresh-orange);
+}
+
+.subtitle {
+  margin: 12px 0 20px;
+  max-width: 62ch;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #78716c;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card {
+  padding: 20px 22px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #f0ece8;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--afresh-ink);
+}
+
+.cardBody {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #78716c;
+}
+
+.cardMeta {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #a8a29e;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 520px;
+  padding: 22px 24px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #f0ece8;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: #44403c;
+}
+
+.fieldInput,
+.fieldSelect {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid #ebe6e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #44403c;
+}
+
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #44403c;
+}
+
+.saveButton {
+  align-self: flex-start;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--afresh-orange);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.empty {
+  margin: 0;
+  font-size: 14px;
+  color: #a8a29e;
+}
+
+.rowAside {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.amount {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--afresh-ink);
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--afresh-orange);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cardRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}

@@ -1,0 +1,231 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { Bell, FileText, Paperclip, Search, Wallet } from "lucide-react";
+import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { accountantApi } from "@/lib/api";
+import {
+  mapAccountantPaymentRecord,
+  unwrapAccountantList,
+  withFallback,
+} from "@/lib/api/accountantMappers";
+import {
+  accountantPaymentFilters,
+  accountantPaymentRecords as fallbackPayments,
+  formatPaymentNaira,
+  matchesPaymentFilter,
+  type AccountantPaymentCategory,
+  type AccountantPaymentFilter,
+  type AccountantPaymentRecord,
+  type AccountantPaymentStatus,
+} from "@/data/accountantPayments";
+import styles from "./AccountantPaymentsPage.module.css";
+
+const categoryClass: Record<AccountantPaymentCategory, string> = {
+  Payroll: styles.categoryPayroll,
+  Bill: styles.categoryBill,
+  Purchase: styles.categoryPurchase,
+  Reimbursement: styles.categoryReimbursement,
+  Expense: styles.categoryExpense,
+};
+
+const statusClass: Record<AccountantPaymentStatus, string> = {
+  Paid: styles.statusPaid,
+  Scheduled: styles.statusScheduled,
+};
+
+export function AccountantPaymentsPage() {
+  const [filter, setFilter] = useState<AccountantPaymentFilter>("All");
+  const { runAction, showToast } = usePageActions();
+  const { data, loading, error, refetch } = useAsyncData(
+    () => accountantApi.payments.list(),
+    [],
+  );
+
+  const payments = useMemo(
+    () =>
+      withFallback(
+        unwrapAccountantList(data).map(mapAccountantPaymentRecord),
+        fallbackPayments,
+      ),
+    [data],
+  );
+
+  const filtered = useMemo(
+    () => payments.filter((item) => matchesPaymentFilter(item, filter)),
+    [filter, payments],
+  );
+
+  const totalPaid = useMemo(
+    () => payments.reduce((sum, item) => sum + item.amountValue, 0),
+    [payments],
+  );
+
+  async function handleUpload(payment: AccountantPaymentRecord) {
+    await runAction(
+      "Upload evidence",
+      async () => {
+        await accountantApi.payments.reconcile(payment.id, {
+          evidence: `transfer-${payment.ref.toLowerCase()}.pdf`,
+        });
+        refetch();
+      },
+      `Evidence attached to ${payment.ref}`,
+    );
+  }
+
+  return (
+    <div className={styles.page}>
+      <AccountantStatusLine loading={loading} error={error} resource="payments" />
+      <div className={styles.topBar}>
+        <p className={styles.dateLabel}>Tuesday, August 11</p>
+        <div className={styles.topActions}>
+          <label className={styles.search}>
+            <Search size={15} className={styles.searchIcon} />
+            <input
+              type="search"
+              placeholder="Search"
+              className={styles.searchInput}
+              aria-label="Search"
+            />
+            <kbd className={styles.searchKbd}>⌘ K</kbd>
+          </label>
+          <Link
+            href="/accountant/notifications"
+            className={styles.iconButton}
+            aria-label="Notifications"
+          >
+            <span className={styles.notifDot} aria-hidden />
+            <Bell size={16} />
+          </Link>
+          <Link
+            href="/accountant/profile"
+            className={styles.avatarChip}
+            aria-label="Profile"
+          >
+            RK
+          </Link>
+        </div>
+      </div>
+
+      <div className={styles.header}>
+        <p className={styles.eyebrow}>Accountant · Payments</p>
+        <h1 className={styles.title}>Payments register</h1>
+        <p className={styles.subtitle}>
+          Every outgoing payment recorded across payroll, bills, purchases,
+          expenses and reimbursements. Attach payment evidence for the audit
+          trail.
+        </p>
+      </div>
+
+      <section className={styles.summaryCard}>
+        <div className={styles.summaryLead}>
+          <span className={styles.summaryIcon} aria-hidden>
+            <Wallet size={18} />
+          </span>
+          <p className={styles.summaryLabel}>
+            {payments.length} payments on record
+          </p>
+        </div>
+        <p className={styles.summaryValue}>
+          {formatPaymentNaira(totalPaid)} paid to date
+        </p>
+      </section>
+
+      <div className={styles.tabs} role="tablist" aria-label="Payment category">
+        {accountantPaymentFilters.map((item) => (
+          <button
+            key={item}
+            type="button"
+            role="tab"
+            aria-selected={filter === item}
+            className={`${styles.tab} ${filter === item ? styles.tabActive : ""}`}
+            onClick={() => setFilter(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+
+      <div className={styles.tableCard}>
+        {filtered.length === 0 ? (
+          <div className={styles.emptyState}>
+            <span className={styles.emptyIcon} aria-hidden>
+              <Wallet size={36} strokeWidth={1.5} />
+            </span>
+            <h2 className={styles.emptyTitle}>No payments</h2>
+            <p className={styles.emptySubtitle}>
+              Nothing matches this filter right now.
+            </p>
+          </div>
+        ) : (
+          <div className={styles.tableWrap}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Ref</th>
+                  <th>Payee</th>
+                  <th>Category</th>
+                  <th>Date</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Evidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((payment) => (
+                  <tr key={payment.id}>
+                    <td className={styles.ref}>{payment.ref}</td>
+                    <td className={styles.payee}>{payment.payee}</td>
+                    <td>
+                      <span
+                        className={`${styles.category} ${categoryClass[payment.category]}`}
+                      >
+                        {payment.category}
+                      </span>
+                    </td>
+                    <td>{payment.date}</td>
+                    <td className={styles.amount}>{payment.amount}</td>
+                    <td>
+                      <span
+                        className={`${styles.status} ${statusClass[payment.status]}`}
+                      >
+                        {payment.status}
+                      </span>
+                    </td>
+                    <td>
+                      {payment.evidence ? (
+                        <button
+                          type="button"
+                          className={styles.evidenceLink}
+                          onClick={() =>
+                            showToast(`Opening ${payment.evidence}`, "info")
+                          }
+                        >
+                          <FileText size={14} />
+                          {payment.evidence}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.uploadButton}
+                          onClick={() => void handleUpload(payment)}
+                        >
+                          <Paperclip size={14} />
+                          Upload
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

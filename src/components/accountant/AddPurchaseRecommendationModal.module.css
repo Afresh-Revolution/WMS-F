@@ -1,0 +1,149 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(28, 25, 23, 0.45);
+}
+
+.modal {
+  position: relative;
+  width: min(100%, 560px);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  padding: 28px 28px 24px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(28, 25, 23, 0.18);
+}
+
+.close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: #a8a29e;
+}
+
+.close:hover {
+  background: #f5f5f4;
+  color: #57534e;
+}
+
+.head {
+  padding-right: 36px;
+  margin-bottom: 22px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--afresh-orange);
+}
+
+.description {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #78716c;
+}
+
+.form {
+  display: grid;
+  gap: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #44403c;
+}
+
+.field em {
+  font-style: normal;
+  color: var(--afresh-orange);
+}
+
+.field textarea {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #ebe6e1;
+  border-radius: 12px;
+  background: #faf7f4;
+  color: var(--afresh-ink);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.field textarea:focus {
+  outline: 2px solid var(--afresh-orange-muted);
+  border-color: var(--afresh-orange);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cancel,
+.submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cancel {
+  border: 1px solid #e7e5e4;
+  background: #fff;
+  color: var(--afresh-ink);
+}
+
+.cancel:hover {
+  background: #fafaf9;
+}
+
+.submit {
+  background: var(--afresh-orange);
+  color: #fff;
+}
+
+.submit:hover {
+  background: var(--afresh-orange-dark);
+}
+
+@media (max-width: 480px) {
+  .modal {
+    padding: 22px 18px 18px;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .cancel,
+  .submit {
+    width: 100%;
+  }
+}

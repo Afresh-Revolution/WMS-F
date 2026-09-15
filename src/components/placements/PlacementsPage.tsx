@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Plus, Search } from "lucide-react";
+import { ChevronRight, Download, Plus, Search } from "lucide-react";
 import {
   placementMembers as fallbackMembers,
   type PlacementFilter,
@@ -11,8 +11,18 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { nyscInternsApi } from "@/lib/api";
-import { listFrom, mapPlacement } from "@/lib/api/mappers";
+import {
+  departmentsApi,
+  internSettled,
+  nyscInternsApi,
+  nyscInternsManageApi,
+} from "@/lib/api";
+import { mapDepartment, mapPlacement, str } from "@/lib/api/mappers";
+import {
+  asInternRecord,
+  unwrapInternData,
+  unwrapInternList,
+} from "@/lib/api/internMappers";
 import styles from "./PlacementsPage.module.css";
 
 const filters: PlacementFilter[] = ["Active", "Exiting soon", "Exited", "All"];
@@ -24,24 +34,12 @@ const filterRoutes: Record<PlacementFilter, string> = {
   All: "/nysc-interns/all",
 };
 
-const addMemberFields = [
-  { name: "name", label: "Full name", required: true },
-  {
-    name: "type",
-    label: "Type",
-    type: "select" as const,
-    required: true,
-    defaultValue: "NYSC",
-    options: [
-      { label: "NYSC", value: "NYSC" },
-      { label: "Intern", value: "Intern" },
-    ],
-  },
-  { name: "school", label: "School / institution", required: true },
-  { name: "department", label: "Department", required: true },
-  { name: "supervisor", label: "Supervisor", required: true },
-  { name: "endDate", label: "End date", type: "date" as const, required: true },
-];
+const statusQuery: Record<PlacementFilter, string | undefined> = {
+  Active: "ACTIVE",
+  "Exiting soon": "ENDING_SOON",
+  Exited: "EXITED",
+  All: undefined,
+};
 
 type PlacementsPageProps = {
   initialFilter?: PlacementFilter;
@@ -59,12 +57,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     setActiveFilter(initialFilter);
   }, [initialFilter]);
 
-  const statusParam =
-    activeFilter === "All"
-      ? undefined
-      : activeFilter === "Exiting soon"
-        ? "exiting"
-        : activeFilter.toLowerCase();
+  const statusParam = statusQuery[activeFilter];
 
   const { data, loading, error, refetch } = useAsyncData(
     () =>
@@ -74,14 +67,107 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     [statusParam],
   );
 
+  const { data: dashboardPayload } = useAsyncData(
+    () => internSettled(nyscInternsManageApi.dashboard()),
+    [],
+  );
+  const { data: departmentsPayload } = useAsyncData(
+    () => internSettled(departmentsApi.list()),
+    [],
+  );
+
+  const departmentOptions = useMemo(() => {
+    return unwrapInternList(departmentsPayload)
+      .map(mapDepartment)
+      .filter((item) => item.id && item.name)
+      .map((item) => ({ label: item.name, value: item.id }));
+  }, [departmentsPayload]);
+
+  const addMemberFields = useMemo(
+    () => [
+      { name: "name", label: "Full name", required: true },
+      {
+        name: "type",
+        label: "Type",
+        type: "select" as const,
+        required: true,
+        defaultValue: "NYSC",
+        options: [
+          { label: "NYSC", value: "NYSC" },
+          { label: "Intern", value: "INTERN" },
+        ],
+      },
+      { name: "school", label: "School / institution", required: true },
+      { name: "courseOfStudy", label: "Course of study", required: true },
+      departmentOptions.length > 0
+        ? {
+            name: "departmentId",
+            label: "Department",
+            type: "select" as const,
+            required: true,
+            options: departmentOptions,
+          }
+        : {
+            name: "departmentId",
+            label: "Department ID",
+            required: true,
+          },
+      {
+        name: "startDate",
+        label: "Start date",
+        type: "date" as const,
+        required: true,
+      },
+      {
+        name: "endDate",
+        label: "End date",
+        type: "date" as const,
+        required: true,
+      },
+      { name: "email", label: "Email" },
+      { name: "phone", label: "Phone" },
+      { name: "employeeId", label: "Supervisor employee ID" },
+    ],
+    [departmentOptions],
+  );
+
   const placementMembers = useMemo(() => {
-    const records = listFrom(data ?? undefined);
+    const records = unwrapInternList(data);
     return records.length > 0
       ? records.map((record) => mapPlacement(record))
       : fallbackMembers;
   }, [data]);
 
   const placementStats = useMemo(() => {
+    const dash = asInternRecord(unwrapInternData(dashboardPayload));
+    if (dash.activeMembers != null || dash.activeNYSC != null) {
+      return [
+        {
+          id: "active",
+          label: "Active Members",
+          value: str(dash.activeMembers, "0"),
+          badge: "Current",
+        },
+        {
+          id: "exiting",
+          label: "Exiting in 60 Days",
+          value: str(dash.endingSoon, "0"),
+          badge: "Alert",
+        },
+        {
+          id: "nysc",
+          label: "NYSC Members",
+          value: str(dash.activeNYSC, "0"),
+          badge: "Active",
+        },
+        {
+          id: "interns",
+          label: "Interns",
+          value: str(dash.activeInterns, "0"),
+          badge: "Active",
+        },
+      ];
+    }
     const active = placementMembers.filter((m) => m.status === "Active").length;
     const exiting = placementMembers.filter((m) => m.status === "Exiting soon").length;
     const nysc = placementMembers.filter((m) => m.type === "NYSC").length;
@@ -92,7 +178,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       { id: "nysc", label: "NYSC Members", value: String(nysc), badge: "Active" },
       { id: "interns", label: "Interns", value: String(interns), badge: "Active" },
     ];
-  }, [placementMembers]);
+  }, [dashboardPayload, placementMembers]);
 
   const filteredMembers = useMemo(() => {
     return placementMembers.filter((member) => {
@@ -116,9 +202,40 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     );
   }
 
+  async function handleExport() {
+    await runAction(
+      "Export placements",
+      async () => {
+        await nyscInternsManageApi.export(
+          statusParam ? { status: statusParam } : undefined,
+        );
+      },
+      "CSV downloaded",
+    );
+  }
+
   async function handleAddMember(values: Record<string, string>) {
     await runAction("Add member", async () => {
-      await nyscInternsApi.create(values);
+      const created = await nyscInternsApi.create({
+        fullName: values.name,
+        type: values.type === "INTERN" ? "INTERN" : "NYSC",
+        institution: values.school,
+        courseOfStudy: values.courseOfStudy,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        departmentId: values.departmentId,
+        ...(values.email ? { email: values.email } : {}),
+        ...(values.phone ? { phone: values.phone } : {}),
+      });
+      const envelope = asInternRecord(created);
+      const payload = asInternRecord(envelope.data ?? envelope);
+      const profile = asInternRecord(payload.profile ?? payload);
+      const id = str(profile.id ?? payload.id ?? envelope.id);
+      if (id && values.employeeId.trim()) {
+        await nyscInternsApi.action(id, "supervisor", {
+          employeeId: values.employeeId.trim(),
+        });
+      }
       refetch();
     });
   }
@@ -158,14 +275,24 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
               and process conversions.
             </p>
           </div>
-          <button
-            type="button"
-            className={styles.addButton}
-            onClick={() => setAddOpen(true)}
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            Add member
-          </button>
+          <div className={styles.headerActions}>
+            <button
+              type="button"
+              className={styles.exportButton}
+              onClick={() => void handleExport()}
+            >
+              <Download size={16} strokeWidth={2.5} />
+              Export CSV
+            </button>
+            <button
+              type="button"
+              className={styles.addButton}
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              Add member
+            </button>
+          </div>
         </div>
 
         <div className={styles.stats}>
@@ -270,7 +397,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
         <SimpleModal
           open={addOpen}
           title="Add member"
-          description="Register a new NYSC member or intern."
+          description="Register a new NYSC member or intern. End date must be after start date."
           fields={addMemberFields}
           submitLabel="Add member"
           onClose={() => setAddOpen(false)}
