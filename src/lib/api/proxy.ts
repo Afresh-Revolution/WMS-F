@@ -9,6 +9,9 @@ const FORWARD_REQUEST_HEADERS = [
 
 const FORWARD_RESPONSE_HEADERS = ["content-type", "content-disposition"];
 
+/** The Response constructor rejects a non-null body for these statuses. */
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
+
 /** Server-side backend URL (route handlers). Prefer API_ROOT_URL over NEXT_PUBLIC_*. */
 export function resolveApiRoot(): string {
   const candidates = [
@@ -70,7 +73,11 @@ export async function proxyToBackend(
     if (value) responseHeaders.set(name, value);
   }
 
-  return new Response(await response.arrayBuffer(), {
+  const body = NULL_BODY_STATUSES.has(response.status)
+    ? null
+    : await response.arrayBuffer();
+
+  return new Response(body, {
     status: response.status,
     headers: responseHeaders,
   });

@@ -63,12 +63,32 @@ export function avatarColor(seed: string): string {
   return avatarColors[Math.abs(hash) % avatarColors.length];
 }
 
+function asRecordList<T extends Record<string, unknown>>(
+  value: unknown,
+): T[] | null {
+  if (Array.isArray(value)) return value as T[];
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  for (const key of [
+    "items",
+    "employees",
+    "results",
+    "records",
+    "rows",
+    "hods",
+    "options",
+  ]) {
+    if (Array.isArray(record[key])) return record[key] as T[];
+  }
+  return null;
+}
+
 export function listFrom<T extends Record<string, unknown>>(
   response: ApiListResponse<T> | T[] | null | undefined,
 ): T[] {
   if (!response) return [];
   if (Array.isArray(response)) return response;
-  return unwrapList(response) as T[];
+  return asRecordList<T>(unwrapList(response)) ?? [];
 }
 
 export function pick<T extends Record<string, unknown>>(
@@ -286,20 +306,114 @@ export type MappedEmployee = {
 };
 
 export function mapEmployee(record: Record<string, unknown>): MappedEmployee {
-  const name = str(record.name ?? record.fullName);
-  const id = str(record.id ?? record._id);
-  const statusRaw = str(record.status).toLowerCase();
+  const nested = asRecord(record.data) ?? record;
+  const name = str(nested.name ?? nested.fullName);
+  const id = str(nested.id ?? nested._id ?? record.id ?? record._id);
+  const statusRaw = str(nested.status).toLowerCase();
   return {
     id,
     name,
-    initials: str(record.initials, initials(name)),
-    title: str(record.title ?? record.jobTitle ?? record.position),
-    department: str(record.department ?? record.departmentName),
-    location: str(record.location ?? record.office),
-    email: str(record.email),
+    initials: str(nested.initials, initials(name)),
+    title: str(nested.title ?? nested.jobTitle ?? nested.position),
+    department: nestedStr(nested.department, ["name", "title", "label"], str(nested.departmentName)),
+    location: str(nested.location ?? nested.office),
+    email: str(nested.email),
     status: statusRaw.includes("leave") ? "On leave" : "Active",
-    avatarColor: str(record.avatarColor, avatarColor(id || name)),
+    avatarColor: str(nested.avatarColor ?? record.avatarColor, avatarColor(id || name)),
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+export function readTemporaryPassword(payload: unknown): string {
+  const keyPattern = /temp|plain|generated|initial|login|temporary/i;
+
+  const walk = (value: unknown, depth: number): string => {
+    if (depth > 8 || value == null) return "";
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = walk(item, depth + 1);
+        if (found) return found;
+      }
+      return "";
+    }
+    if (typeof value !== "object") return "";
+    const record = value as Record<string, unknown>;
+    for (const [key, nested] of Object.entries(record)) {
+      if (
+        typeof nested === "string" &&
+        nested.trim() &&
+        /password/i.test(key) &&
+        keyPattern.test(key)
+      ) {
+        return nested.trim();
+      }
+    }
+    for (const nested of Object.values(record)) {
+      const found = walk(nested, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  };
+
+  return walk(payload, 0);
+}
+
+export type HodOption = {
+  id: string;
+  userId: string;
+  fullName: string;
+  name: string;
+  email: string;
+};
+
+function hodOptionFrom(record: Record<string, unknown>): HodOption | null {
+  const nested = asRecord(record.user) ?? asRecord(record.employee) ?? record;
+  const id = str(record.id ?? record.hodId ?? nested.id ?? nested.userId);
+  const userId = str(record.userId ?? nested.userId ?? id);
+  const fullName = str(
+    record.fullName ?? nested.fullName ?? record.name ?? nested.name,
+  );
+  const name = str(record.name ?? nested.name ?? fullName);
+  const email = str(record.email ?? nested.email);
+  if (!id && !userId) return null;
+  if (!fullName && !name && !email) return null;
+  return {
+    id: id || userId,
+    userId: userId || id,
+    fullName: fullName || name || email,
+    name: name || fullName || email,
+    email,
+  };
+}
+
+export function parseHodOptions(payload: unknown): HodOption[] {
+  const root = asRecord(payload);
+  const data = asRecord(root?.data) ?? root;
+  const meta = asRecord(root?.meta) ?? asRecord(data?.meta);
+  const named = [
+    ...listFrom(meta?.hods as never),
+    ...listFrom(data?.hods as never),
+    ...listFrom(data?.employees as never),
+    ...listFrom(data?.options as never),
+  ];
+  const pool = named.length
+    ? named
+    : [...listFrom(payload as never), ...listFrom(data as never)];
+  const seen = new Set<string>();
+  const options: HodOption[] = [];
+  for (const record of pool) {
+    const option = hodOptionFrom(record);
+    if (!option || seen.has(option.id)) continue;
+    seen.add(option.id);
+    options.push(option);
+  }
+  return options;
 }
 
 
@@ -307,7 +421,15 @@ export function mapDepartmentRecord(
   record: Record<string, unknown>,
   index: number,
 ): Department {
-  const managerName = str(record.head ?? record.hod ?? record.managerName, "—");
+  const hod = asRecord(record.hod) ?? asRecord(record.head);
+  const managerName = str(
+    hod?.fullName ??
+      hod?.name ??
+      record.hodName ??
+      record.head ??
+      record.managerName,
+    "—",
+  );
   const icons = ["software", "fashion", "media", "hardware", "hr", "model"] as const;
   return {
     id: str(record.id ?? record._id ?? index),

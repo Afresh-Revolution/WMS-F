@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import {
   LayoutGrid,
   List,
@@ -15,11 +17,11 @@ import {
   type EmployeeStatus,
 } from "@/data/employees";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { employeesApi } from "@/lib/api";
-import { listFrom, mapEmployee } from "@/lib/api/mappers";
+import { showCreatedCredentials } from "@/lib/createdCredentials";
+import { listFrom, mapEmployee, readTemporaryPassword } from "@/lib/api/mappers";
 import styles from "./EmployeesPage.module.css";
 
 type ViewMode = "grid" | "list";
@@ -30,21 +32,56 @@ const statusClass: Record<EmployeeStatus, string> = {
 };
 
 const addEmployeeFields = [
-  { name: "name", label: "Full name", required: true },
+  { name: "fullName", label: "Full name", required: true },
   { name: "email", label: "Email", type: "email" as const, required: true },
-  { name: "title", label: "Job title", required: true },
+  { name: "phone", label: "Phone", placeholder: "08030000000" },
+  { name: "jobTitle", label: "Job title", required: true },
   { name: "department", label: "Department", required: true },
-  { name: "location", label: "Location" },
+  { name: "location", label: "Location", placeholder: "Remote" },
+  {
+    name: "role",
+    label: "Role",
+    type: "select" as const,
+    required: true,
+    defaultValue: "employee",
+    options: [
+      { label: "Employee", value: "employee" },
+      { label: "NYSC", value: "nysc" },
+      { label: "Intern", value: "intern" },
+      { label: "Secretary", value: "secretary" },
+      { label: "Manager", value: "manager" },
+      { label: "Head of department", value: "hod" },
+      { label: "HR", value: "hr" },
+      { label: "Accountant", value: "accountant" },
+    ],
+  },
 ];
 
+function buildEmployeeCreateBody(values: Record<string, string>) {
+  const body: Record<string, unknown> = {
+    fullName: values.fullName.trim(),
+    email: values.email.trim(),
+    jobTitle: values.jobTitle.trim(),
+    department: values.department.trim(),
+    role: values.role.trim() || "employee",
+  };
+  const phone = values.phone.trim();
+  const location = values.location.trim();
+  if (phone) body.phone = phone;
+  if (location) body.location = location;
+  return body;
+}
+
 export function EmployeesPage() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<DepartmentFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [addOpen, setAddOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const { runAction, showToast } = usePageActions();
+  const { showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
     () => employeesApi.list(),
     [],
@@ -52,10 +89,9 @@ export function EmployeesPage() {
 
   const employees = useMemo(() => {
     const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapEmployee(record))
-      : fallbackEmployees;
-  }, [data]);
+    if (data) return records.map((record) => mapEmployee(record));
+    return error ? fallbackEmployees : [];
+  }, [data, error]);
 
   const departmentFilters = useMemo((): DepartmentFilter[] => {
     const departments = new Set(employees.map((e) => e.department).filter(Boolean));
@@ -87,11 +123,37 @@ export function EmployeesPage() {
     window.location.href = `mailto:${employee.email}`;
   }
 
-  async function handleAddEmployee(values: Record<string, string>) {
-    await runAction("Add person", async () => {
-      await employeesApi.create(values);
-      refetch();
-    });
+  function closeAddModal() {
+    if (saving) return;
+    setAddOpen(false);
+  }
+
+  async function handleAddEmployee(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const values: Record<string, string> = {};
+    for (const field of addEmployeeFields) {
+      values[field.name] = String(form.get(field.name) ?? "");
+    }
+    setSaving(true);
+    try {
+      const created = await employeesApi.create(buildEmployeeCreateBody(values));
+      const temporaryPassword =
+        readTemporaryPassword(created) || "No temporary password was returned.";
+      showCreatedCredentials({
+        name: values.fullName.trim(),
+        email: values.email.trim(),
+        password: temporaryPassword,
+      });
+      setAddOpen(false);
+      router.push("/employees/created");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Something went wrong";
+      showToast(`Add person failed — ${message}`, "error");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -269,15 +331,78 @@ export function EmployeesPage() {
           </div>
         )}
 
-        <SimpleModal
-          open={addOpen}
-          title="Add person"
-          description="Create a new staff directory entry."
-          fields={addEmployeeFields}
-          submitLabel="Add person"
-          onClose={() => setAddOpen(false)}
-          onSubmit={handleAddEmployee}
-        />
+        {addOpen && typeof document !== "undefined"
+          ? createPortal(
+              <div
+                className={styles.passwordBackdrop}
+                role="presentation"
+                onClick={closeAddModal}
+              >
+                <div
+                  className={styles.passwordModal}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="add-person-title"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <h2 id="add-person-title" className={styles.passwordTitle}>
+                    Add person
+                  </h2>
+                  <p className={styles.passwordCopy}>
+                    Create a new staff directory entry.
+                  </p>
+                  <form
+                    className={styles.addForm}
+                    onSubmit={(event) => void handleAddEmployee(event)}
+                  >
+                    {addEmployeeFields.map((field) => (
+                      <label key={field.name} className={styles.addField}>
+                        <span>{field.label}</span>
+                        {field.type === "select" ? (
+                          <select
+                            name={field.name}
+                            defaultValue={field.defaultValue}
+                            required={field.required}
+                          >
+                            {(field.options ?? []).map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            name={field.name}
+                            type={field.type ?? "text"}
+                            placeholder={field.placeholder}
+                            required={field.required}
+                          />
+                        )}
+                      </label>
+                    ))}
+                    <div className={styles.passwordActions}>
+                      <button
+                        type="button"
+                        className={styles.passwordCancel}
+                        onClick={closeAddModal}
+                        disabled={saving}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className={styles.addSubmit}
+                        disabled={saving}
+                      >
+                        {saving ? "Adding…" : "Add person"}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
       </div>
   );
 }

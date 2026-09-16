@@ -15,14 +15,13 @@ import {
 } from "lucide-react";
 import {
   departmentFilters,
-  departments as fallbackDepartments,
   departmentStats as fallbackStats,
   type DepartmentFilter,
 } from "@/data/departments";
-import { SimpleModal } from "@/components/ui/SimpleModal";
+import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { departmentsApi } from "@/lib/api";
+import { departmentsApi, loadHodOptions } from "@/lib/api";
 import { listFrom, mapDepartmentRecord } from "@/lib/api/mappers";
 import styles from "./DepartmentsPage.module.css";
 
@@ -35,11 +34,20 @@ const deptIcons = {
   model: Layers,
 } as const;
 
-const addDepartmentFields = [
-  { name: "name", label: "Department name", required: true },
-  { name: "managerName", label: "Head of department", required: true },
-  { name: "description", label: "Description", type: "textarea" as const },
-];
+function buildAddDepartmentFields(
+  hodOptions: { value: string; label: string }[],
+): ModalField[] {
+  return [
+    { name: "name", label: "Department name", required: true },
+    {
+      name: "hodId",
+      label: "Head of department",
+      type: "select",
+      options: [{ value: "", label: "No HOD" }, ...hodOptions],
+    },
+    { name: "description", label: "Description", type: "textarea" },
+  ];
+}
 
 export function DepartmentsPage() {
   const [query, setQuery] = useState("");
@@ -52,12 +60,27 @@ export function DepartmentsPage() {
     () => departmentsApi.list(),
     [],
   );
+  const { data: hods } = useAsyncData(() => loadHodOptions(), []);
+
+  const hodSelectOptions = useMemo(
+    () =>
+      (hods ?? []).map((hod) => ({
+        value: hod.id,
+        label: hod.email
+          ? `${hod.fullName || hod.name} (${hod.email})`
+          : hod.fullName || hod.name,
+      })),
+    [hods],
+  );
+
+  const addDepartmentFields = useMemo(
+    () => buildAddDepartmentFields(hodSelectOptions),
+    [hodSelectOptions],
+  );
 
   const departments = useMemo(() => {
     const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record, index) => mapDepartmentRecord(record, index))
-      : fallbackDepartments;
+    return data ? records.map((record, index) => mapDepartmentRecord(record, index)) : [];
   }, [data]);
 
   const departmentStats = useMemo(() => {
@@ -116,7 +139,14 @@ export function DepartmentsPage() {
 
   async function handleAddDepartment(values: Record<string, string>) {
     await runAction("Add department", async () => {
-      await departmentsApi.create(values);
+      const body: Record<string, unknown> = {
+        name: values.name.trim(),
+      };
+      const description = values.description.trim();
+      const hodId = values.hodId.trim();
+      if (description) body.description = description;
+      if (hodId) body.hodId = hodId;
+      await departmentsApi.create(body);
       refetch();
     });
   }

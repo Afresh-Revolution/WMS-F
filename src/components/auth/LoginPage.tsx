@@ -4,7 +4,18 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Shield } from "lucide-react";
-import { authApi, ApiError, getSessionToken } from "@/lib/api";
+import {
+  authApi,
+  ApiError,
+  getSessionToken,
+  DEFAULT_LOGIN_OPTIONS,
+  type LoginOptions,
+} from "@/lib/api";
+import {
+  parseWorkspace,
+  readCachedWorkspace,
+  resolveHomePath,
+} from "@/lib/workspace";
 import styles from "./LoginPage.module.css";
 
 function LoginBrandMark() {
@@ -29,19 +40,34 @@ export function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [options, setOptions] = useState<LoginOptions>(DEFAULT_LOGIN_OPTIONS);
 
   useEffect(() => {
     if (getSessionToken()) {
-      router.replace("/dashboard");
+      router.replace(resolveHomePath(readCachedWorkspace()));
     }
   }, [router]);
+
+  useEffect(() => {
+    let active = true;
+    void authApi.loginOptions().then((next) => {
+      if (active) setOptions(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      await authApi.login({ email, password });
+      const response = await authApi.login({
+        email,
+        password,
+        keepMeSignedIn: remember,
+      });
 
       if (remember) {
         localStorage.setItem("wms_remember_me", "1");
@@ -49,7 +75,7 @@ export function LoginPage() {
         localStorage.removeItem("wms_remember_me");
       }
 
-      router.replace("/dashboard");
+      router.replace(resolveHomePath(parseWorkspace(response)));
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 0) {
@@ -129,17 +155,21 @@ export function LoginPage() {
               </label>
 
               <div className={styles.formRow}>
-                <label className={styles.checkbox}>
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(event) => setRemember(event.target.checked)}
-                  />
-                  <span>Keep me signed in</span>
-                </label>
-                <Link href="/help" className={styles.textLink}>
-                  Forgot password?
-                </Link>
+                {options.keepMeSignedInEnabled ? (
+                  <label className={styles.checkbox}>
+                    <input
+                      type="checkbox"
+                      checked={remember}
+                      onChange={(event) => setRemember(event.target.checked)}
+                    />
+                    <span>Keep me signed in</span>
+                  </label>
+                ) : null}
+                {options.forgotPasswordEnabled ? (
+                  <Link href="/help" className={styles.textLink}>
+                    Forgot password?
+                  </Link>
+                ) : null}
               </div>
 
               {error ? (
@@ -156,20 +186,24 @@ export function LoginPage() {
               </button>
             </form>
 
-            <div className={styles.divider}>
-              <span>or</span>
-            </div>
+            {options.ssoEnabled ? (
+              <>
+                <div className={styles.divider}>
+                  <span>or</span>
+                </div>
 
-            <button
-              type="button"
-              className={styles.ssoButton}
-              onClick={() => {
-                setError("SSO is not configured for this environment yet.");
-              }}
-            >
-              <SsoMark />
-              Continue with SSO
-            </button>
+                <button
+                  type="button"
+                  className={styles.ssoButton}
+                  onClick={() => {
+                    setError("SSO is not configured for this environment yet.");
+                  }}
+                >
+                  <SsoMark />
+                  Continue with SSO
+                </button>
+              </>
+            ) : null}
 
             <p className={styles.support}>
               Need help?{" "}

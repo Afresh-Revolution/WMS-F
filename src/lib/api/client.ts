@@ -7,6 +7,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/api/v1";
 const ACCESS_TOKEN_KEY = "wms_access_token";
 const REFRESH_TOKEN_KEY = "wms_refresh_token";
 export const CURRENT_USER_KEY = "wms_current_user";
+export const WORKSPACE_KEY = "wms_workspace";
 
 function envAccessToken(): string | null {
   const token = process.env.NEXT_PUBLIC_JWT_TOKEN?.trim();
@@ -63,6 +64,7 @@ export function clearTokens() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);
   localStorage.removeItem(CURRENT_USER_KEY);
+  localStorage.removeItem(WORKSPACE_KEY);
 }
 
 type RequestOptions = Omit<RequestInit, "body"> & {
@@ -182,6 +184,9 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   ATTENDANCE_LOCATION_NOT_FOUND: "Attendance location was not found.",
   ATTENDANCE_SCHEDULE_NOT_FOUND: "Attendance schedule was not found.",
   ATTENDANCE_RECORD_NOT_FOUND: "Attendance record was not found.",
+  HOD_NOT_FOUND: "That person is not a current user. Choose a live HOD.",
+  MEETING_TYPE_NOT_FOUND:
+    "Meeting type was not found. Create the meeting without a meeting type.",
 };
 
 const GENERIC_ERROR_MESSAGES = new Set([

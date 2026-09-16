@@ -33,10 +33,22 @@ const tagClass: Record<MeetingTag, string> = {
 const createMeetingFields = [
   { name: "title", label: "Meeting title", required: true },
   { name: "date", label: "Date", type: "date" as const, required: true },
-  { name: "time", label: "Time", placeholder: "10:00 AM", required: true },
-  { name: "duration", label: "Duration", placeholder: "1 hour" },
+  { name: "time", label: "Time", placeholder: "10:00AM", required: true },
+  { name: "duration", label: "Duration", placeholder: "1 HOUR" },
   { name: "location", label: "Location", required: true },
 ];
+
+function meetingWriteBody(values: Record<string, string>) {
+  const body: Record<string, unknown> = {
+    title: values.title.trim(),
+    date: values.date.trim(),
+    time: values.time.replace(/\s+/g, "").toUpperCase(),
+    location: values.location.trim(),
+  };
+  const duration = values.duration.trim().toUpperCase();
+  if (duration) body.duration = duration;
+  return body;
+}
 
 export function MeetingsPage() {
   const [activeFilter, setActiveFilter] = useState<MeetingFilter>("Upcoming");
@@ -105,7 +117,7 @@ export function MeetingsPage() {
 
   async function handleCreateMeeting(values: Record<string, string>) {
     await runAction("Create meeting", async () => {
-      await meetingsApi.create(values);
+      await meetingsApi.create(meetingWriteBody(values));
       refetch();
     });
   }
@@ -113,7 +125,7 @@ export function MeetingsPage() {
   async function handleEditMeeting(values: Record<string, string>) {
     if (!editMeeting) return;
     await runAction("Update meeting", async () => {
-      await meetingsApi.patch(editMeeting.id, values);
+      await meetingsApi.patch(editMeeting.id, meetingWriteBody(values));
       refetch();
     });
     setEditMeeting(null);

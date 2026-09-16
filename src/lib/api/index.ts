@@ -18,8 +18,8 @@ export type { ManagerApi, ManagerListParams } from "./manager";
 export { secretaryApi } from "./secretary";
 export type { SecretaryListParams } from "./secretary";
 
-export { authApi, dashboardApi, healthApi, searchApi } from "./auth";
-export type { AuthUser, LoginPayload, LoginResponse, BootstrapPayload, BootstrapStatus } from "./auth";
+export { authApi, dashboardApi, healthApi, searchApi, DEFAULT_LOGIN_OPTIONS } from "./auth";
+export type { AuthUser, LoginPayload, LoginOptions, LoginResponse, BootstrapPayload, BootstrapStatus } from "./auth";
 
 export { profileApi } from "./profile";
 export type { ProfileRecord } from "./profile";
@@ -30,6 +30,7 @@ export { securityApi } from "./security";
 export { emailConfigApi, notificationConfigApi, notificationsApi } from "./notifications";
 export { usersApi, rolesApi, permissionsApi } from "./users";
 export { departmentsApi, hrApi } from "./departments";
+export { lookupsApi, loadHodOptions } from "./lookups";
 export { reportsApi, auditLogsApi } from "./reports";
 export { accountantApi, accountantSettled } from "./accountant";
 export { internApi, internSettled, nyscInternsManageApi } from "./intern";
