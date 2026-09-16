@@ -1,4 +1,5 @@
 import { CURRENT_USER_KEY, getSessionToken } from "@/lib/api/client";
+import { preferredRoleLabel } from "@/lib/auth/portals";
 
 export type CurrentUser = {
   id: string;
@@ -68,6 +69,47 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
+function collectRoleStrings(record: Record<string, unknown>): string[] {
+  const roles: string[] = [];
+
+  const push = (value: unknown) => {
+    if (typeof value === "string" && value.trim()) {
+      roles.push(value.trim());
+      return;
+    }
+    const nested = asRecord(value);
+    if (nested) {
+      const named = readString(nested, [
+        "name",
+        "title",
+        "label",
+        "slug",
+        "code",
+        "key",
+      ]);
+      if (named) roles.push(named);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) push(item);
+    }
+  };
+
+  push(record.role);
+  push(record.roles);
+  push(record.userRole);
+  push(record.user_role);
+  push(record.roleName);
+  push(record.role_name);
+  push(record.accountType);
+  push(record.account_type);
+  push(record.userType);
+  push(record.user_type);
+  push(record.profileType);
+  push(record.portal);
+  return roles;
+}
+
 export function parseAuthUser(payload: unknown): CurrentUser | null {
   const root = asRecord(payload);
   if (!root) return null;
@@ -89,18 +131,11 @@ export function parseAuthUser(payload: unknown): CurrentUser | null {
     readString(user, ["name", "fullName", "full_name", "displayName", "username"]) ||
     combined ||
     (email ? nameFromEmail(email) : "");
-  const roleValue = user.role ?? user.roles;
-  const roleRecord = asRecord(roleValue);
-  const roleFromArray = Array.isArray(roleValue)
-    ? readString(asRecord(roleValue[0]) ?? {}, ["name", "title", "label", "slug"]) ||
-      (typeof roleValue[0] === "string" ? roleValue[0] : "")
-    : "";
-  const role =
-    typeof roleValue === "string"
-      ? roleValue
-      : roleRecord
-        ? readString(roleRecord, ["name", "title", "label", "slug"])
-        : roleFromArray || readString(user, ["roleName", "title", "jobTitle"]);
+  const role = preferredRoleLabel([
+    ...collectRoleStrings(user),
+    ...collectRoleStrings(data),
+    ...collectRoleStrings(root),
+  ]);
   const id = readString(user, ["id", "userId", "sub"]) || email;
   const initials =
     readString(user, ["initials"]) || initialsFromIdentity(name, email);

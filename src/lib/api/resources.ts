@@ -37,8 +37,8 @@ export type ResourceModule =
   | "purchases"
   | "departments";
 
-export function createResourceApi(module: ResourceModule) {
-  const base = `/${module}`;
+export function createResourceApi(module: ResourceModule, prefix = "") {
+  const base = `${prefix}/${module}`.replace(/\/{2,}/g, "/");
 
   return {
     list: (params?: Record<string, unknown>) =>

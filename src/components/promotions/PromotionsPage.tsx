@@ -9,8 +9,6 @@ import {
 } from "lucide-react";
 import {
   promotionFilters,
-  promotions as fallbackPromotions,
-  promotionStats as fallbackStats,
   type PromotionFilter,
   type PromotionStatus,
 } from "@/data/promotions";
@@ -18,7 +16,7 @@ import { NotificationsLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { hrApi, promotionsApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapPromotion } from "@/lib/api/mappers";
 import styles from "./PromotionsPage.module.css";
 
@@ -50,19 +48,16 @@ export function PromotionsPage() {
 
   const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
-    () => promotionsApi.list(),
+    () =>
+      superAdminApi.hr.promotions.list().catch(() => superAdminApi.promotions.list()),
     [],
   );
 
   const promotions = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapPromotion(record))
-      : fallbackPromotions;
+    return listFrom(data ?? undefined).map((record) => mapPromotion(record));
   }, [data]);
 
   const promotionStats = useMemo(() => {
-    if (!data && promotions === fallbackPromotions) return fallbackStats;
     const review = promotions.filter((p) => p.status === "Under admin review").length;
     const approved = promotions.filter((p) => p.status === "Approved").length;
     const draft = promotions.filter((p) => p.status === "Draft").length;
@@ -72,7 +67,7 @@ export function PromotionsPage() {
       { id: "approved", label: "Approved", value: String(approved) },
       { id: "draft", label: "Draft", value: String(draft) },
     ];
-  }, [data, promotions]);
+  }, [promotions]);
 
   const filteredPromotions = useMemo(() => {
     return promotions.filter((promotion) => {
@@ -90,7 +85,9 @@ export function PromotionsPage() {
 
   async function handleCreatePromotion(values: Record<string, string>) {
     await runAction("New recommendation", async () => {
-      await hrApi.promotions.create(values);
+      await superAdminApi.hr.promotions
+        .create(values)
+        .catch(() => superAdminApi.promotions.create(values));
       refetch();
     });
   }
@@ -102,7 +99,7 @@ export function PromotionsPage() {
           {loading ? <p className={styles.dateLabel}>Loading promotions…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached promotions — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>

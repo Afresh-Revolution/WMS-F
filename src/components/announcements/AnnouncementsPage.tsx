@@ -17,15 +17,13 @@ import {
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
-  announcements as fallbackAnnouncements,
-  announcementStats as fallbackStats,
   type AnnouncementCategory,
   type AnnouncementFilter,
   type AnnouncementTagTone,
 } from "@/data/announcements";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { announcementsApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapAnnouncement } from "@/lib/api/mappers";
 import styles from "./AnnouncementsPage.module.css";
 
@@ -87,15 +85,12 @@ export function AnnouncementsPage() {
   const { runAction, exportRows } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => announcementsApi.list(),
+    () => superAdminApi.announcements.list(),
     [],
   );
 
   const announcements = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapAnnouncement(record))
-      : fallbackAnnouncements;
+    return listFrom(data ?? undefined).map((record) => mapAnnouncement(record));
   }, [data]);
 
   const announcementStats = useMemo(() => {
@@ -107,10 +102,10 @@ export function AnnouncementsPage() {
       {
         id: "month",
         label: "Total This Month",
-        value: String(announcements.length || fallbackStats[2].value),
-        badge: fallbackStats[2].badge,
+        value: String(announcements.length),
+        badge: "Current",
       },
-      { id: "recipients", label: "Recipients", value: fallbackStats[3].value, badge: fallbackStats[3].badge },
+      { id: "recipients", label: "Recipients", value: "—", badge: "All staff" },
     ];
   }, [announcements]);
 
@@ -130,14 +125,14 @@ export function AnnouncementsPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Create announcement", async () => {
-      await announcementsApi.create(values);
+      await superAdminApi.announcements.create(values);
       refetch();
     });
   }
 
   async function unpinAnnouncement(id: string) {
     await runAction("Unpin announcement", async () => {
-      await announcementsApi.action(id, "unpin");
+      await superAdminApi.announcements.action(id, "unpin");
       refetch();
     });
   }
@@ -170,7 +165,7 @@ export function AnnouncementsPage() {
           {loading ? <p className={styles.dateLabel}>Loading announcements…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached announcements — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>

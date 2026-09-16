@@ -2,16 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { Bell, Pencil, Search } from "lucide-react";
-import {
-  notificationChannels as fallbackChannels,
-  notificationPreferences as fallbackPreferences,
-  notificationServiceStatus as fallbackStatus,
-} from "@/data/notificationConfiguration";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { notificationConfigApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import { formatEnabled, str } from "@/lib/api/mappers";
 import styles from "./NotificationConfigurationPage.module.css";
 
@@ -37,29 +32,25 @@ export function NotificationConfigurationPage() {
   const [editPreference, setEditPreference] = useState<PreferenceRow | null>(null);
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => notificationConfigApi.get(),
+    () => superAdminApi.notificationConfig.get(),
     [],
   );
 
+  const config = useMemo(() => unwrapRecord(data), [data]);
+
   const serviceStatus = useMemo(() => {
-    if (!data) return fallbackStatus;
-    const config = data as Record<string, unknown>;
     return {
-      label: str(config.label, fallbackStatus.label),
-      description: str(config.description, fallbackStatus.description),
-      status: str(config.status, fallbackStatus.status) as "Operational",
+      label: str(config.label, "Notification service"),
+      description: str(
+        config.description,
+        "Delivery channels for in-app, email and SMS alerts.",
+      ),
+      status: str(config.status, "Unknown") as "Operational",
     };
-  }, [data]);
+  }, [config]);
 
   const channels = useMemo((): ChannelRow[] => {
-    const config = (data ?? {}) as Record<string, unknown>;
-    const channelData = (config.channels ?? config) as Record<string, unknown>;
-    if (!data) {
-      return fallbackChannels.map((channel) => ({
-        ...channel,
-        fieldKey: channel.id.replace(/-/g, ""),
-      }));
-    }
+    const channelData = unwrapRecord(config.channels ?? config);
     return [
       {
         id: "in-app",
@@ -80,19 +71,12 @@ export function NotificationConfigurationPage() {
         fieldKey: "sms",
       },
     ];
-  }, [data]);
+  }, [config]);
 
   const preferences = useMemo((): PreferenceRow[] => {
-    const config = (data ?? {}) as Record<string, unknown>;
-    const prefs = (config.deliveryPreferences ??
-      config.preferences ??
-      {}) as Record<string, unknown>;
-    if (!data) {
-      return fallbackPreferences.map((pref) => ({
-        ...pref,
-        fieldKey: pref.id.replace(/-/g, ""),
-      }));
-    }
+    const prefs = unwrapRecord(
+      config.deliveryPreferences ?? config.preferences,
+    );
     return [
       {
         id: "daily-digest",
@@ -107,14 +91,11 @@ export function NotificationConfigurationPage() {
         id: "quiet-hours",
         label: "Quiet hours",
         description: "Non-urgent notifications are held during this window.",
-        value: str(
-          prefs.quietHours ?? prefs.quiet_hours,
-          fallbackPreferences[1].value,
-        ),
+        value: str(prefs.quietHours ?? prefs.quiet_hours, "—"),
         fieldKey: "quietHours",
       },
     ];
-  }, [data]);
+  }, [config]);
 
   const channelFields: ModalField[] = editChannel
     ? [
@@ -156,7 +137,7 @@ export function NotificationConfigurationPage() {
   async function saveChannel(values: Record<string, string>) {
     if (!editChannel) return;
     await runAction(`Update ${editChannel.label}`, async () => {
-      await notificationConfigApi.patchChannels({
+      await superAdminApi.notificationConfig.patchChannels({
         [editChannel.fieldKey]: values.value === "true",
       });
       refetch();
@@ -169,7 +150,7 @@ export function NotificationConfigurationPage() {
       editPreference.type === "select" ? values.value === "true" : values.value;
 
     await runAction(`Update ${editPreference.label}`, async () => {
-      await notificationConfigApi.patchDeliveryPreferences({
+      await superAdminApi.notificationConfig.patchDeliveryPreferences({
         [editPreference.fieldKey]: payloadValue,
       });
       refetch();
@@ -205,7 +186,7 @@ export function NotificationConfigurationPage() {
         {loading ? <p className={styles.subtitle}>Loading notification config…</p> : null}
         {error ? (
           <p className={styles.subtitle} role="alert">
-            Showing cached config — {error}
+            {error}
           </p>
         ) : null}
       </div>

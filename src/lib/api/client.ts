@@ -247,7 +247,7 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
             return detailMessage;
           }
         }
-        return "Access denied. This account may not have Super Admin permissions.";
+        return "Access denied. You do not have permission to do that.";
       }
 
       if (typeof details === "object" && details !== null) {
@@ -285,7 +285,7 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
   }
 
   if (fallback.toLowerCase() === "forbidden") {
-    return "Access denied. Check your Super Admin credentials and try again.";
+    return "Access denied. Check your credentials and try again.";
   }
 
   if (

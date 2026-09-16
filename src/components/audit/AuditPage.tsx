@@ -10,14 +10,13 @@ import {
   X,
 } from "lucide-react";
 import {
-  auditEvents as fallbackEvents,
   type AuditFilter,
   type AuditModule,
 } from "@/data/audit";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { auditLogsApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { downloadApiBlob } from "@/lib/export/downloadBlob";
 import { listFrom, mapAuditEvent } from "@/lib/api/mappers";
 import styles from "./AuditPage.module.css";
@@ -57,7 +56,7 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
 
   const { data: auditData, loading, error } = useAsyncData(
     () =>
-      auditLogsApi.list(
+      superAdminApi.auditLogs.list(
         activeFilter === "Security"
           ? { category: "security" }
           : activeFilter === "Failed"
@@ -68,10 +67,7 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
   );
 
   const events = useMemo(() => {
-    const records = listFrom(auditData ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapAuditEvent(record))
-      : fallbackEvents;
+    return listFrom(auditData ?? undefined).map((record) => mapAuditEvent(record));
   }, [auditData]);
 
   const filtered = useMemo(() => {
@@ -95,7 +91,13 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
     void runAction("Export audit logs", async () => {
       try {
         await downloadApiBlob(
-          `/audit-logs/export${activeFilter === "Security" ? "?category=security" : activeFilter === "Failed" ? "?outcome=failed" : ""}`,
+          superAdminApi.auditLogs.exportPath(
+            activeFilter === "Security"
+              ? { category: "security" }
+              : activeFilter === "Failed"
+                ? { outcome: "failed" }
+                : undefined,
+          ),
           "audit-logs.csv",
         );
       } catch {

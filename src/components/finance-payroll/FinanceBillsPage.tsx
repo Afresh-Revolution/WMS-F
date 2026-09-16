@@ -7,8 +7,6 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   billFilters,
-  billStats as fallbackStats,
-  bills as fallbackBills,
   matchesBillFilter,
   type Bill,
   type BillFilter,
@@ -16,7 +14,7 @@ import {
 } from "@/data/financeBills";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { billsApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapBill } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceBillsPage.module.css";
@@ -46,16 +44,53 @@ export function FinanceBillsPage() {
   const [query, setQuery] = useState("");
   const { runAction, exportRows } = usePageActions();
 
-  const { data, loading, error, refetch } = useAsyncData(() => billsApi.list(), []);
+  const { data, loading, error, refetch } = useAsyncData(
+    () => superAdminApi.bills.list(),
+    [],
+  );
 
   const bills = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapBill(record))
-      : fallbackBills;
+    return listFrom(data ?? undefined).map((record) => mapBill(record));
   }, [data]);
 
-  const billStats = fallbackStats;
+  const billStats = useMemo(() => {
+    const overdue = bills.filter((bill) => bill.status === "Overdue").length;
+    const dueSoon = bills.filter((bill) => bill.status === "Scheduled for Payment").length;
+    const paid = bills.filter((bill) => bill.status === "Paid").length;
+    const outstanding = bills.filter(
+      (bill) => bill.status !== "Paid",
+    ).length;
+    return [
+      {
+        id: "overdue",
+        label: "Overdue bills",
+        value: String(overdue),
+        badge: "Urgent",
+        badgeTone: "urgent" as const,
+      },
+      {
+        id: "due-soon",
+        label: "Due within 7 days",
+        value: String(dueSoon),
+        badge: "This week",
+        badgeTone: "neutral" as const,
+      },
+      {
+        id: "outstanding",
+        label: "Total outstanding",
+        value: String(outstanding),
+        badge: "Payable",
+        badgeTone: "success" as const,
+      },
+      {
+        id: "paid",
+        label: "Paid this month",
+        value: String(paid),
+        badge: "Current",
+        badgeTone: "neutral" as const,
+      },
+    ];
+  }, [bills]);
 
   const filteredBills = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -69,35 +104,35 @@ export function FinanceBillsPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Add bill", async () => {
-      await billsApi.create(values);
+      await superAdminApi.bills.create(values);
       refetch();
     });
   }
 
   async function approveBill(bill: Bill) {
     await runAction(`Approve ${bill.ref}`, async () => {
-      await billsApi.action(bill.id, "approve");
+      await superAdminApi.bills.action(bill.id, "approve");
       refetch();
     });
   }
 
   async function rejectBill(bill: Bill) {
     await runAction(`Reject ${bill.ref}`, async () => {
-      await billsApi.action(bill.id, "reject");
+      await superAdminApi.bills.action(bill.id, "reject");
       refetch();
     });
   }
 
   async function uploadBill(bill: Bill) {
     await runAction(`Upload ${bill.ref}`, async () => {
-      await billsApi.action(bill.id, "upload");
+      await superAdminApi.bills.action(bill.id, "upload");
       refetch();
     });
   }
 
   async function payBill(bill: Bill) {
     await runAction(`Pay ${bill.ref}`, async () => {
-      await billsApi.action(bill.id, "pay");
+      await superAdminApi.bills.action(bill.id, "pay");
       refetch();
     });
   }
@@ -127,7 +162,7 @@ export function FinanceBillsPage() {
       <div className={payrollStyles.page}>
         <FinanceModuleTabs />
         {loading ? <p>Loading bills…</p> : null}
-        {error ? <p role="alert">Using cached bills — {error}</p> : null}
+        {error ? <p role="alert">{error}</p> : null}
 
         <div className={payrollStyles.topBar}>
           <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>

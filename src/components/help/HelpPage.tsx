@@ -2,12 +2,12 @@
 
 import { useMemo } from "react";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { helpApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, str } from "@/lib/api/mappers";
 import styles from "./HelpPage.module.css";
 
 export function HelpPage() {
-  const { data, loading, error } = useAsyncData(() => helpApi.list(), []);
+  const { data, loading, error } = useAsyncData(() => superAdminApi.help.list(), []);
 
   const articles = useMemo(() => {
     return listFrom(data ?? undefined);
@@ -21,7 +21,7 @@ export function HelpPage() {
         Find guides, FAQs, and support for using Afresh WMS.
       </p>
       {loading ? <p>Loading help articles…</p> : null}
-      {error ? <p role="alert">Using cached help — {error}</p> : null}
+      {error ? <p role="alert">{error}</p> : null}
 
       <div className={styles.list}>
         {articles.length === 0 ? (

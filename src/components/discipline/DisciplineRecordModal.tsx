@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { X } from "lucide-react";
 import type { DisciplineCase } from "@/data/discipline";
 import { usePageActions } from "@/hooks/usePageActions";
-import { disciplineApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import styles from "./DisciplineRecordModal.module.css";
 
 const tagClass = {
@@ -32,7 +32,7 @@ export function DisciplineRecordModal({
 
   function acknowledgeRecord() {
     void runAction(`Acknowledge case ${record.ref}`, async () => {
-      await disciplineApi.action(record.id, "acknowledge");
+      await superAdminApi.discipline.action(record.id, "acknowledge");
       onUpdated?.();
       onClose();
     });
@@ -40,7 +40,7 @@ export function DisciplineRecordModal({
 
   function closeCase() {
     void runAction(`Close case ${record.ref}`, async () => {
-      await disciplineApi.action(record.id, "close");
+      await superAdminApi.discipline.action(record.id, "close");
       onUpdated?.();
       onClose();
     });

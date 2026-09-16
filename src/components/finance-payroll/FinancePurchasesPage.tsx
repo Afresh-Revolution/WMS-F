@@ -8,15 +8,13 @@ import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   matchesPurchaseFilter,
   purchaseFilters,
-  purchaseRequests as fallbackRequests,
-  purchaseStats,
   type PurchaseFilter,
   type PurchaseRequest,
   type PurchaseStatus,
 } from "@/data/financePurchases";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { purchaseRequestsApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapPurchaseRequest } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinancePurchasesPage.module.css";
@@ -48,16 +46,28 @@ export function FinancePurchasesPage() {
   const { runAction, exportRows } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => purchaseRequestsApi.list(),
+    () => superAdminApi.purchaseRequests.list(),
     [],
   );
 
   const purchaseRequests = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapPurchaseRequest(record))
-      : fallbackRequests;
+    return listFrom(data ?? undefined).map((record) => mapPurchaseRequest(record));
   }, [data]);
+
+  const purchaseStats = useMemo(() => {
+    const pending = purchaseRequests.filter((request) =>
+      request.status === "Under Procurement Review" ||
+      request.status === "Awaiting Admin Approval",
+    ).length;
+    const approved = purchaseRequests.filter((request) => request.status === "Approved").length;
+    const delivered = purchaseRequests.filter((request) => request.status === "Delivered").length;
+    return [
+      { id: "total", label: "Total requests", value: String(purchaseRequests.length) },
+      { id: "pending", label: "Pending review", value: String(pending) },
+      { id: "approved", label: "Approved", value: String(approved) },
+      { id: "delivered", label: "Delivered", value: String(delivered) },
+    ];
+  }, [purchaseRequests]);
 
   const filteredRequests = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -71,28 +81,28 @@ export function FinancePurchasesPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Create request", async () => {
-      await purchaseRequestsApi.create(values);
+      await superAdminApi.purchaseRequests.create(values);
       refetch();
     });
   }
 
   async function approveRequest(request: PurchaseRequest) {
     await runAction(`Approve ${request.ref}`, async () => {
-      await purchaseRequestsApi.action(request.id, "approve");
+      await superAdminApi.purchaseRequests.action(request.id, "approve");
       refetch();
     });
   }
 
   async function rejectRequest(request: PurchaseRequest) {
     await runAction(`Reject ${request.ref}`, async () => {
-      await purchaseRequestsApi.action(request.id, "reject");
+      await superAdminApi.purchaseRequests.action(request.id, "reject");
       refetch();
     });
   }
 
   async function orderRequest(request: PurchaseRequest) {
     await runAction(`Order ${request.ref}`, async () => {
-      await purchaseRequestsApi.action(request.id, "order");
+      await superAdminApi.purchaseRequests.action(request.id, "order");
       refetch();
     });
   }
@@ -123,7 +133,7 @@ export function FinancePurchasesPage() {
       <div className={payrollStyles.page}>
         <FinanceModuleTabs />
         {loading ? <p>Loading purchases…</p> : null}
-        {error ? <p role="alert">Using cached purchases — {error}</p> : null}
+        {error ? <p role="alert">{error}</p> : null}
 
         <div className={payrollStyles.topBar}>
           <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>

@@ -9,8 +9,6 @@ import {
 } from "lucide-react";
 import {
   incrementFilters,
-  incrementStats as fallbackStats,
-  salaryIncrements as fallbackIncrements,
   type IncrementFilter,
   type IncrementStatus,
 } from "@/data/salaryIncrements";
@@ -18,7 +16,7 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { hrApi, salaryIncrementsApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapSalaryIncrement } from "@/lib/api/mappers";
 import styles from "./SalaryIncrementsPage.module.css";
 
@@ -48,15 +46,15 @@ export function SalaryIncrementsPage() {
 
   const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
-    () => salaryIncrementsApi.list(),
+    () =>
+      superAdminApi.salaryIncrements
+        .list()
+        .catch(() => superAdminApi.hr.salaryAdjustments.list()),
     [],
   );
 
   const salaryIncrements = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapSalaryIncrement(record))
-      : fallbackIncrements;
+    return listFrom(data ?? undefined).map((record) => mapSalaryIncrement(record));
   }, [data]);
 
   const incrementStats = useMemo(() => {
@@ -64,11 +62,18 @@ export function SalaryIncrementsPage() {
       (item) => item.status === "Under admin review",
     ).length;
     const approved = salaryIncrements.filter((item) => item.status === "Approved").length;
+    const percents = salaryIncrements
+      .map((item) => parseFloat(item.incrementPercent.replace(/[^\d.-]/g, "")))
+      .filter((value) => !Number.isNaN(value));
+    const avgIncrement =
+      percents.length > 0
+        ? `${(percents.reduce((sum, value) => sum + value, 0) / percents.length).toFixed(1)}%`
+        : "—";
     return [
       { id: "total", label: "Total", value: String(salaryIncrements.length), highlight: false },
       { id: "review", label: "Under review", value: String(review), highlight: true },
       { id: "approved", label: "Approved", value: String(approved), highlight: false },
-      { id: "avg", label: "Avg. increment", value: fallbackStats[3].value, highlight: false },
+      { id: "avg", label: "Avg. increment", value: avgIncrement, highlight: false },
     ];
   }, [salaryIncrements]);
 
@@ -88,7 +93,9 @@ export function SalaryIncrementsPage() {
 
   async function handleCreateIncrement(values: Record<string, string>) {
     await runAction("New recommendation", async () => {
-      await hrApi.salaryAdjustments.create(values);
+      await superAdminApi.hr.salaryAdjustments
+        .create(values)
+        .catch(() => superAdminApi.salaryIncrements.create(values));
       refetch();
     });
   }
@@ -100,7 +107,7 @@ export function SalaryIncrementsPage() {
           {loading ? <p className={styles.dateLabel}>Loading increments…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached increments — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>

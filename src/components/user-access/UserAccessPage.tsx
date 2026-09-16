@@ -11,8 +11,6 @@ import {
 } from "lucide-react";
 import {
   accessFilters,
-  accessStats as fallbackStats,
-  accessUsers as fallbackUsers,
   type AccessFilter,
   type AccessRole,
   type AccessStatus,
@@ -21,7 +19,7 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { usersApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapAccessUser, str } from "@/lib/api/mappers";
 import styles from "./UserAccessPage.module.css";
 
@@ -84,56 +82,60 @@ export function UserAccessPage() {
   } | null>(null);
 
   const { data: statsData, loading: statsLoading } = useAsyncData(
-    () => usersApi.statistics(),
+    () => superAdminApi.users.statistics(),
     [],
   );
 
   const { data: usersData, loading: usersLoading, error, refetch } = useAsyncData(
-    () => usersApi.list(),
+    () => superAdminApi.users.list(),
     [],
   );
 
-  const users = useMemo(() => {
-    const records = listFrom(usersData ?? undefined);
-    if (records.length === 0 && !usersData) return fallbackUsers;
-    return records.length > 0
-      ? records.map((record) => mapAccessUser(record))
-      : fallbackUsers;
-  }, [usersData]);
+  const users = useMemo(
+    () => listFrom(usersData ?? undefined).map((record) => mapAccessUser(record)),
+    [usersData],
+  );
 
   const stats = useMemo(() => {
-    if (!statsData) return fallbackStats;
+    const payload = unwrapRecord(statsData);
+    const active = users.filter((user) => user.status === "Active").length;
+    const locked = users.filter((user) => user.status === "Locked").length;
+    const admins = users.filter((user) =>
+      user.role.toLowerCase().includes("admin"),
+    ).length;
     return [
       {
         id: "total",
         label: "Total users",
-        value: str(statsData.total ?? statsData.totalUsers, fallbackStats[0].value),
+        value: str(payload.total ?? payload.totalUsers, String(users.length)),
         detail: "All roles",
         detailTone: "muted" as const,
       },
       {
         id: "active",
         label: "Active",
-        value: str(statsData.active ?? statsData.activeUsers, fallbackStats[1].value),
+        value: str(payload.active ?? payload.activeUsers, String(active)),
         detail: "Signed in",
         detailTone: "orange" as const,
       },
       {
         id: "locked",
         label: "Locked",
-        value: str(statsData.locked ?? statsData.lockedUsers, fallbackStats[2].value),
+        value: str(payload.locked ?? payload.lockedUsers, String(locked)),
         detail: "Blocked",
         detailTone: "red" as const,
       },
       {
         id: "admins",
         label: "Admins",
-        value: str(statsData.admins ?? statsData.adminUsers, fallbackStats[3].value),
-        detail: str(statsData.superAdmins ? `${statsData.superAdmins} super` : "1 super"),
+        value: str(payload.admins ?? payload.adminUsers, String(admins)),
+        detail: str(
+          payload.superAdmins ? `${payload.superAdmins} super` : "Super Admin included",
+        ),
         detailTone: "amber" as const,
       },
     ];
-  }, [statsData]);
+  }, [statsData, users]);
 
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
@@ -149,9 +151,9 @@ export function UserAccessPage() {
     async (userId: string, locked: boolean, name: string) => {
       await runAction(locked ? `Unlock ${name}` : `Lock ${name}`, async () => {
         if (locked) {
-          await usersApi.unlock(userId);
+          await superAdminApi.users.unlock(userId);
         } else {
-          await usersApi.lock(userId);
+          await superAdminApi.users.lock(userId);
         }
         refetch();
       });
@@ -165,9 +167,9 @@ export function UserAccessPage() {
         inactive ? `Activate ${name}` : `Deactivate ${name}`,
         async () => {
           if (inactive) {
-            await usersApi.reactivate(userId);
+            await superAdminApi.users.reactivate(userId);
           } else {
-            await usersApi.deactivate(userId);
+            await superAdminApi.users.deactivate(userId);
           }
           refetch();
         },
@@ -178,7 +180,7 @@ export function UserAccessPage() {
 
   async function handleCreateAccount(values: Record<string, string>) {
     await runAction("Create account", async () => {
-      await usersApi.create(values);
+      await superAdminApi.users.create(values);
       refetch();
     });
   }
@@ -186,7 +188,7 @@ export function UserAccessPage() {
   async function handleRoleUpdate(values: Record<string, string>) {
     if (!roleEditUser) return;
     await runAction(`Update role for ${roleEditUser.name}`, async () => {
-      await usersApi.patch(roleEditUser.id, { role: values.role });
+      await superAdminApi.users.patch(roleEditUser.id, { role: values.role });
       refetch();
     });
   }
@@ -223,7 +225,7 @@ export function UserAccessPage() {
           )}
           {error ? (
             <p className={styles.subtitle} role="alert">
-              Showing cached users — {error}
+            {error}
             </p>
           ) : null}
         </div>

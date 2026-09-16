@@ -18,17 +18,11 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { usePageActions } from "@/hooks/usePageActions";
 import {
   companyResources,
-  departmentPerformance as fallbackDeptPerformance,
-  employeesByDepartment as fallbackEmployeesByDept,
-  leaveRequests as fallbackLeaveRequests,
-  overviewItems as fallbackOverviewItems,
-  recentActivity as fallbackRecentActivity,
-  stats as fallbackStats,
   type LeaveRequest,
   type LeaveStatus,
 } from "@/data/dashboard";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { dashboardApi, hrApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import { avatarColor, initials, listFrom, num, str } from "@/lib/api/mappers";
 import styles from "./DashboardPage.module.css";
 
@@ -56,14 +50,17 @@ export function DashboardPage() {
   const { runAction } = usePageActions();
   const [leaveMenuId, setLeaveMenuId] = useState<string | null>(null);
 
-  const { data, loading, error, refetch } = useAsyncData(
-    () => dashboardApi.overview(),
-    [],
-  );
+  const { data, loading, error, refetch } = useAsyncData(async () => {
+    try {
+      return await superAdminApi.dashboard.overview();
+    } catch {
+      return await superAdminApi.dashboard.platformOverview();
+    }
+  }, []);
 
   function approveLeave(id: string, name: string) {
     void runAction(`Approve ${name}'s leave`, async () => {
-      await hrApi.leave.approve(id);
+      await superAdminApi.hr.leave.approve(id);
       setLeaveMenuId(null);
       refetch();
     });
@@ -71,20 +68,23 @@ export function DashboardPage() {
 
   function rejectLeave(id: string, name: string) {
     void runAction(`Decline ${name}'s leave`, async () => {
-      await hrApi.leave.reject(id);
+      await superAdminApi.hr.leave.reject(id);
       setLeaveMenuId(null);
       refetch();
     });
   }
 
+  const overview = useMemo(() => unwrapRecord(data), [data]);
+  const metrics = useMemo(
+    () => unwrapRecord(overview.metrics ?? overview.summary ?? overview.counts),
+    [overview],
+  );
+
   const dashboardStats = useMemo(() => {
-    if (!data) return fallbackStats;
-    const overview = data as Record<string, unknown>;
-    const cards = (overview.stats ?? overview.cards ?? overview.summary) as
-      | Record<string, unknown>[]
-      | Record<string, unknown>
-      | undefined;
-    if (Array.isArray(cards) && cards.length > 0) {
+    const cards = listFrom(
+      (overview.stats ?? overview.cards ?? overview.kpis ?? metrics.cards) as never,
+    );
+    if (cards.length > 0) {
       return cards.map((card) => ({
         label: str(card.label ?? card.title),
         value: str(card.value ?? card.count),
@@ -93,96 +93,116 @@ export function DashboardPage() {
     return [
       {
         label: "Total Employees",
-        value: str(overview.totalEmployees ?? overview.employees, fallbackStats[0].value),
+        value: str(
+          overview.totalEmployees ??
+            overview.employees ??
+            metrics.totalEmployees ??
+            metrics.employees,
+          "—",
+        ),
       },
       {
         label: "Total Departments",
-        value: str(overview.totalDepartments ?? overview.departments, fallbackStats[1].value),
+        value: str(
+          overview.totalDepartments ??
+            overview.departments ??
+            metrics.totalDepartments ??
+            metrics.departments,
+          "—",
+        ),
       },
       {
         label: "Total Monthly Payroll",
-        value: str(overview.monthlyPayroll ?? overview.payroll, fallbackStats[2].value),
+        value: str(
+          overview.monthlyPayroll ?? overview.payroll ?? metrics.monthlyPayroll,
+          "—",
+        ),
       },
       {
         label: "Pending Approvals",
-        value: str(overview.pendingApprovals ?? overview.pending, fallbackStats[3].value),
+        value: str(
+          overview.pendingApprovals ?? overview.pending ?? metrics.pendingApprovals,
+          "—",
+        ),
       },
     ];
-  }, [data]);
+  }, [metrics, overview]);
 
   const leaveRequests = useMemo((): LeaveRequest[] => {
-    const overview = (data ?? {}) as Record<string, unknown>;
-    const records = listFrom(
+    return listFrom(
       (overview.leaveRequests ?? overview.leave ?? overview.pendingLeave) as never,
-    );
-    if (records.length === 0) return fallbackLeaveRequests;
-    return records.map((record) => {
+    ).map((record) => {
       const name = str(record.name ?? record.employeeName);
+      const statusRaw = str(record.status, "Pending");
+      const status: LeaveStatus = statusRaw.toLowerCase().includes("approv")
+        ? "Approved"
+        : statusRaw.toLowerCase().includes("reject")
+          ? "Rejected"
+          : "Pending";
       return {
-        id: str(record.id),
+        id: str(record.id ?? record._id),
         name,
         initials: str(record.initials, initials(name)),
         avatarColor: str(record.avatarColor, avatarColor(name)),
         type: str(record.type ?? record.leaveType),
         duration: str(record.duration ?? record.days),
-        status: str(record.status, "Pending") as LeaveStatus,
+        status,
       };
     });
-  }, [data]);
+  }, [overview]);
 
   const overviewItems = useMemo(() => {
-    const overview = (data ?? {}) as Record<string, unknown>;
-    const records = listFrom(
+    return listFrom(
       (overview.upcoming ?? overview.overview ?? overview.events) as never,
-    );
-    if (records.length === 0) return fallbackOverviewItems;
-    return records.map((record, index) => ({
+    ).map((record, index) => ({
       id: str(record.id, String(index)),
       date: str(record.date ?? record.startsAt),
       title: str(record.title ?? record.name),
     }));
-  }, [data]);
+  }, [overview]);
 
   const employeesByDepartment = useMemo(() => {
-    const overview = (data ?? {}) as Record<string, unknown>;
     const records = listFrom(
       (overview.employeesByDepartment ?? overview.departments) as never,
     );
-    if (records.length === 0) return fallbackEmployeesByDept;
     const max = Math.max(...records.map((r) => num(r.value ?? r.count)), 1);
     return records.map((record) => ({
       name: str(record.name ?? record.department),
       value: num(record.value ?? record.count ?? record.employees),
       max,
     }));
-  }, [data]);
+  }, [overview]);
 
   const departmentPerformance = useMemo(() => {
-    const overview = (data ?? {}) as Record<string, unknown>;
-    const records = listFrom(
+    return listFrom(
       (overview.departmentPerformance ?? overview.performance) as never,
-    );
-    if (records.length === 0) return fallbackDeptPerformance;
-    return records.map((record) => ({
+    ).map((record) => ({
       name: str(record.name ?? record.department),
       value: num(record.value ?? record.score),
       max: num(record.max, 100),
     }));
-  }, [data]);
+  }, [overview]);
 
   const recentActivity = useMemo(() => {
-    const overview = (data ?? {}) as Record<string, unknown>;
-    const records = listFrom(
+    return listFrom(
       (overview.recentActivity ?? overview.activity) as never,
-    );
-    if (records.length === 0) return fallbackRecentActivity;
-    return records.map((record, index) => ({
+    ).map((record, index) => ({
       id: str(record.id, String(index)),
       title: str(record.title ?? record.action),
       description: str(record.description ?? record.summary),
       time: str(record.time ?? record.createdAt),
     }));
-  }, [data]);
+  }, [overview]);
+
+  const roleChanges = useMemo(() => {
+    return listFrom(
+      (overview.roleChanges ?? overview.permissionChanges) as never,
+    ).map((record, index) => ({
+      id: str(record.id, String(index)),
+      title: str(record.title ?? record.summary ?? record.action),
+      time: str(record.time ?? record.createdAt),
+    }));
+  }, [overview]);
 
   return (
       <div className={styles.page}>
@@ -191,7 +211,7 @@ export function DashboardPage() {
           {loading ? <p className={styles.dateLabel}>Loading dashboard…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached dashboard — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>
@@ -392,7 +412,16 @@ export function DashboardPage() {
                 Manage →
               </Link>
             </div>
-            <div className={styles.emptyPanel}>No recent changes.</div>
+            <div className={styles.emptyPanel}>
+              {roleChanges.length === 0
+                ? "No recent changes."
+                : roleChanges.map((change) => (
+                    <div key={change.id} className={styles.roleChange}>
+                      <h3>{change.title}</h3>
+                      <span>{change.time}</span>
+                    </div>
+                  ))}
+            </div>
           </section>
 
           <section className={styles.card}>
@@ -405,10 +434,16 @@ export function DashboardPage() {
                 User access →
               </Link>
             </div>
-            <div className={styles.roleChange}>
-              <h3>Ravi Kapoor: Accountant → HR (reverted)</h3>
-              <span>4h ago</span>
-            </div>
+            {roleChanges.length === 0 ? (
+              <div className={styles.emptyPanel}>No role changes yet.</div>
+            ) : (
+              roleChanges.map((change) => (
+                <div key={change.id} className={styles.roleChange}>
+                  <h3>{change.title}</h3>
+                  <span>{change.time}</span>
+                </div>
+              ))
+            )}
           </section>
         </div>
 

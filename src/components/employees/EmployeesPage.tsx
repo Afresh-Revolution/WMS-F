@@ -12,14 +12,13 @@ import {
   Search,
 } from "lucide-react";
 import {
-  employees as fallbackEmployees,
   type DepartmentFilter,
   type EmployeeStatus,
 } from "@/data/employees";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { employeesApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
 import { listFrom, mapEmployee, readTemporaryPassword } from "@/lib/api/mappers";
 import styles from "./EmployeesPage.module.css";
@@ -83,15 +82,14 @@ export function EmployeesPage() {
 
   const { showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
-    () => employeesApi.list(),
+    () => superAdminApi.employees.list(),
     [],
   );
 
-  const employees = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    if (data) return records.map((record) => mapEmployee(record));
-    return error ? fallbackEmployees : [];
-  }, [data, error]);
+  const employees = useMemo(
+    () => listFrom(data ?? undefined).map((record) => mapEmployee(record)),
+    [data],
+  );
 
   const departmentFilters = useMemo((): DepartmentFilter[] => {
     const departments = new Set(employees.map((e) => e.department).filter(Boolean));
@@ -137,7 +135,9 @@ export function EmployeesPage() {
     }
     setSaving(true);
     try {
-      const created = await employeesApi.create(buildEmployeeCreateBody(values));
+      const created = await superAdminApi.employees.create(
+        buildEmployeeCreateBody(values),
+      );
       const temporaryPassword =
         readTemporaryPassword(created) || "No temporary password was returned.";
       showCreatedCredentials({
@@ -145,6 +145,7 @@ export function EmployeesPage() {
         email: values.email.trim(),
         password: temporaryPassword,
       });
+      refetch();
       setAddOpen(false);
       router.push("/employees/created");
     } catch (error) {
@@ -160,7 +161,7 @@ export function EmployeesPage() {
       <div className={styles.page}>
         <div className={styles.topBar}>
           {loading ? <span>Loading employees…</span> : null}
-          {error ? <span role="alert">Using cached employees — {error}</span> : null}
+          {error ? <span role="alert">{error}</span> : null}
           <button
             type="button"
             className={styles.globalSearch}

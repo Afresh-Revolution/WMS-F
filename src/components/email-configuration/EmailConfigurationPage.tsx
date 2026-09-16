@@ -2,15 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { Mail, Pencil, Search } from "lucide-react";
-import {
-  emailDeliverySettings as fallbackSettings,
-  emailServiceStatus as fallbackStatus,
-} from "@/data/emailConfiguration";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { emailConfigApi } from "@/lib/api";
+import { superAdminApi, unwrapRecord } from "@/lib/api";
 import { formatEnabled, str } from "@/lib/api/mappers";
 import styles from "./EmailConfigurationPage.module.css";
 
@@ -26,60 +22,56 @@ export function EmailConfigurationPage() {
   const { runAction } = usePageActions();
   const [editSetting, setEditSetting] = useState<SettingRow | null>(null);
 
-  const { data, loading, error, refetch } = useAsyncData(() => emailConfigApi.get(), []);
+  const { data, loading, error, refetch } = useAsyncData(
+    () => superAdminApi.emailConfig.get(),
+    [],
+  );
+
+  const config = useMemo(() => unwrapRecord(data), [data]);
 
   const serviceStatus = useMemo(() => {
-    if (!data) return fallbackStatus;
-    const config = data as Record<string, unknown>;
     return {
-      provider: str(config.provider ?? config.emailProvider, fallbackStatus.provider),
+      provider: str(config.provider ?? config.emailProvider, "—"),
       fromAddress: str(
         config.fromAddress ?? config.from_email ?? config.from,
-        fallbackStatus.fromAddress,
+        "—",
       ),
-      status: str(config.status ?? config.health, fallbackStatus.status) as
+      status: str(config.status ?? config.health, "Unknown") as
         | "Operational"
         | "Degraded",
     };
-  }, [data]);
+  }, [config]);
 
   const deliverySettings = useMemo((): SettingRow[] => {
-    if (!data) {
-      return fallbackSettings.map((setting) => ({
-        ...setting,
-        fieldKey: setting.id.replace(/-/g, ""),
-      }));
-    }
-    const config = data as Record<string, unknown>;
     return [
       {
         id: "provider",
         label: "Email provider",
-        value: str(config.provider, fallbackSettings[0].value),
+        value: str(config.provider, "—"),
         fieldKey: "provider",
       },
       {
         id: "from-name",
         label: "From name",
-        value: str(config.fromName ?? config.from_name, fallbackSettings[1].value),
+        value: str(config.fromName ?? config.from_name, "—"),
         fieldKey: "fromName",
       },
       {
         id: "from-address",
         label: "From address",
-        value: str(config.fromAddress ?? config.from_email, fallbackSettings[2].value),
+        value: str(config.fromAddress ?? config.from_email, "—"),
         fieldKey: "fromAddress",
       },
       {
         id: "smtp-host",
         label: "SMTP host",
-        value: str(config.smtpHost ?? config.host, fallbackSettings[3].value),
+        value: str(config.smtpHost ?? config.host, "—"),
         fieldKey: "smtpHost",
       },
       {
         id: "smtp-port",
         label: "SMTP port",
-        value: str(config.smtpPort ?? config.port, fallbackSettings[4].value),
+        value: str(config.smtpPort ?? config.port, "—"),
         fieldKey: "smtpPort",
       },
       {
@@ -90,7 +82,7 @@ export function EmailConfigurationPage() {
         type: "select",
       },
     ];
-  }, [data]);
+  }, [config]);
 
   const editFields: ModalField[] = editSetting
     ? [
@@ -120,8 +112,14 @@ export function EmailConfigurationPage() {
       editSetting.type === "select" ? values.value === "true" : values.value;
 
     await runAction(`Update ${editSetting.label}`, async () => {
-      await emailConfigApi.patch({ [editSetting.fieldKey]: payloadValue });
+      await superAdminApi.emailConfig.patch({ [editSetting.fieldKey]: payloadValue });
       refetch();
+    });
+  }
+
+  async function testEmail() {
+    await runAction("Send test email", async () => {
+      await superAdminApi.emailConfig.test();
     });
   }
 
@@ -155,7 +153,7 @@ export function EmailConfigurationPage() {
         {loading ? <p className={styles.subtitle}>Loading email config…</p> : null}
         {error ? (
           <p className={styles.subtitle} role="alert">
-            Showing cached config — {error}
+            {error}
           </p>
         ) : null}
       </div>
@@ -172,10 +170,15 @@ export function EmailConfigurationPage() {
             </p>
           </div>
         </div>
-        <span className={styles.statusBadge}>
-          <span className={styles.statusDot} aria-hidden />
-          {serviceStatus.status}
-        </span>
+        <div className={styles.settingMeta}>
+          <span className={styles.statusBadge}>
+            <span className={styles.statusDot} aria-hidden />
+            {serviceStatus.status}
+          </span>
+          <button type="button" className={styles.editButton} onClick={() => void testEmail()}>
+            Send test
+          </button>
+        </div>
       </article>
 
       <section className={styles.card}>

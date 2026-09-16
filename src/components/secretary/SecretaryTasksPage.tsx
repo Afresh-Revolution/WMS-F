@@ -16,7 +16,7 @@ import { usePageActions } from "@/hooks/usePageActions";
 import { secretaryApi } from "@/lib/api";
 import { listFrom, nestedStr, str } from "@/lib/api/mappers";
 import {
-  boardTaskColumns,
+  boardColumns,
   boardTasks as fallbackTasks,
   type BoardTask,
   type TaskColumn,
@@ -271,7 +271,7 @@ export function SecretaryTasksPage() {
       </div>
 
       <div className={styles.board}>
-        {boardTaskColumns.map((column) => {
+        {boardColumns.map((column) => {
           const items = grouped[column];
           return (
             <section key={column} className={styles.column}>

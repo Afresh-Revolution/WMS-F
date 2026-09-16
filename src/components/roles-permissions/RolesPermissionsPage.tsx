@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Info, Search } from "lucide-react";
 import {
-  permissionMatrix as fallbackMatrix,
-  permissionRoles as fallbackRoles,
   type PermissionKey,
   type PermissionRole,
   type PermissionRow,
@@ -12,38 +10,29 @@ import {
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { permissionsApi, rolesApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapAccessRole, str } from "@/lib/api/mappers";
 import styles from "./RolesPermissionsPage.module.css";
-
-function cloneMatrix(rows: PermissionRow[]) {
-  return rows.map((row) => ({
-    ...row,
-    grants: { ...row.grants },
-  }));
-}
 
 export function RolesPermissionsPage() {
   const { runAction } = usePageActions();
   const { data: rolesData, loading, error } = useAsyncData(
-    () => rolesApi.list(),
+    () => superAdminApi.roles.list(),
     [],
   );
 
   const { data: permissionsData } = useAsyncData(
-    () => permissionsApi.catalog(),
+    () => superAdminApi.permissions.catalog(),
     [],
   );
 
   const roles = useMemo((): PermissionRole[] => {
-    const records = listFrom(rolesData ?? undefined);
-    if (records.length === 0) return fallbackRoles;
-    return records.map(
+    return listFrom(rolesData ?? undefined).map(
       (record) => mapAccessRole(record.name ?? record.slug) as PermissionRole,
     );
   }, [rolesData]);
 
-  const [matrix, setMatrix] = useState(() => cloneMatrix(fallbackMatrix));
+  const [matrix, setMatrix] = useState<PermissionRow[]>([]);
 
   useEffect(() => {
     const catalog = permissionsData as Record<string, unknown> | null;
@@ -109,8 +98,12 @@ export function RolesPermissionsPage() {
 
       if (roleId) {
         await runAction(`Update ${key} for ${role}`, async () => {
-          await rolesApi.permissions.update(roleId, {
-            [key]: nextValue,
+          await superAdminApi.roles.permissions.update(roleId, {
+            permissions: matrix
+              .filter((rowItem) =>
+                rowItem.key === key ? nextValue : Boolean(rowItem.grants[role]),
+              )
+              .map((rowItem) => rowItem.key),
           });
         }).catch(() => {
           setMatrix((current) =>
@@ -162,7 +155,7 @@ export function RolesPermissionsPage() {
         {loading ? <p className={styles.subtitle}>Loading roles…</p> : null}
         {error ? (
           <p className={styles.subtitle} role="alert">
-            Showing cached matrix — {error}
+            {error}
           </p>
         ) : null}
       </div>

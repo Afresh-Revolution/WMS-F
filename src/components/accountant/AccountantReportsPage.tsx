@@ -69,15 +69,19 @@ function SpendMixDonut({
   const total = items.reduce((sum, item) => sum + item.value, 0) || 1;
   const radius = 58;
   const circumference = 2 * Math.PI * radius;
-  let offset = 0;
+  const slices = items.map((item, index) => {
+    const length = (item.value / total) * circumference;
+    const offset = items
+      .slice(0, index)
+      .reduce((sum, prev) => sum + (prev.value / total) * circumference, 0);
+    return { ...item, length, offset };
+  });
 
   return (
     <div className={styles.donutWrap}>
       <svg width="180" height="180" viewBox="0 0 180 180" aria-hidden>
         <g transform="rotate(-90 90 90)">
-          {items.map((item) => {
-            const length = (item.value / total) * circumference;
-            const circle = (
+          {slices.map((item) => (
               <circle
                 key={item.label}
                 cx="90"
@@ -86,13 +90,10 @@ function SpendMixDonut({
                 fill="transparent"
                 stroke={item.color}
                 strokeWidth="26"
-                strokeDasharray={`${length} ${circumference - length}`}
-                strokeDashoffset={-offset}
+                strokeDasharray={`${item.length} ${circumference - item.length}`}
+                strokeDashoffset={-item.offset}
               />
-            );
-            offset += length;
-            return circle;
-          })}
+            ))}
         </g>
         <circle cx="90" cy="90" r="40" fill="#fff" />
       </svg>

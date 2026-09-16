@@ -14,14 +14,12 @@ import {
 } from "lucide-react";
 import {
   actionTypeOptions,
-  disciplineCases as fallbackCases,
-  disciplineStats as fallbackStats,
   employeeOptions,
   type DisciplineCase,
   type DisciplineFilter,
 } from "@/data/discipline";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { disciplineApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapDisciplineCase } from "@/lib/api/mappers";
 import { DisciplineRecordModal } from "./DisciplineRecordModal";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
@@ -76,26 +74,28 @@ export function DisciplinePage({
 
   const { data, loading, error, refetch } = useAsyncData(
     () =>
-      disciplineApi.list(
+      superAdminApi.discipline.list(
         statusParam ? { status: statusParam } : undefined,
       ),
     [statusParam],
   );
 
   const disciplineCases = useMemo((): DisciplineCase[] => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapDisciplineCase(record) as DisciplineCase)
-      : fallbackCases;
+    return listFrom(data ?? undefined).map(
+      (record) => mapDisciplineCase(record) as DisciplineCase,
+    );
   }, [data]);
 
   const disciplineStats = useMemo(() => {
     const open = disciplineCases.filter((item) => item.status === "Active").length;
     const closed = disciplineCases.filter((item) => item.status === "Closed").length;
+    const pending = disciplineCases.filter((item) =>
+      item.tags.some((tag) => tag.tone === "unacknowledged"),
+    ).length;
     return [
-      { id: "open", label: "Open Cases", value: String(open || fallbackStats[0].value) },
-      { id: "pending", label: "Pending Acknowledgement", value: fallbackStats[1].value },
-      { id: "closed", label: "Closed This Year", value: String(closed || fallbackStats[2].value) },
+      { id: "open", label: "Open Cases", value: String(open) },
+      { id: "pending", label: "Pending Acknowledgement", value: String(pending) },
+      { id: "closed", label: "Closed This Year", value: String(closed) },
     ];
   }, [disciplineCases]);
 
@@ -178,7 +178,7 @@ export function DisciplinePage({
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     void runAction("Create disciplinary record", async () => {
-      await disciplineApi.create({
+      await superAdminApi.discipline.create({
         employee,
         actionType,
         description,
@@ -199,7 +199,7 @@ export function DisciplinePage({
           {loading ? <p className={styles.dateLabel}>Loading cases…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
-              Using cached cases — {error}
+              {error}
             </p>
           ) : null}
           <div className={styles.topActions}>

@@ -7,16 +7,14 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   categoryIcons,
-  expenseClaims as fallbackClaims,
   expenseSectionTabs,
-  expenseStats,
   type ExpenseClaim,
   type ExpenseSectionTab,
   type ExpenseStatus,
 } from "@/data/financeExpenses";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { expensesApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { listFrom, mapExpense } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceExpensesPage.module.css";
@@ -52,14 +50,47 @@ export function FinanceExpensesPage() {
   const [query, setQuery] = useState("");
   const { runAction, exportRows } = usePageActions();
 
-  const { data, loading, error, refetch } = useAsyncData(() => expensesApi.list(), []);
+  const { data, loading, error, refetch } = useAsyncData(
+    () => superAdminApi.expenses.list(),
+    [],
+  );
 
   const expenseClaims = useMemo(() => {
-    const records = listFrom(data ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapExpense(record))
-      : fallbackClaims;
+    return listFrom(data ?? undefined).map((record) => mapExpense(record));
   }, [data]);
+
+  const expenseStats = useMemo(() => {
+    const pending = expenseClaims.filter((claim) => claim.status === "Pending").length;
+    const approved = expenseClaims.filter((claim) => claim.status === "Approved").length;
+    const rejected = expenseClaims.filter((claim) => claim.status === "Rejected").length;
+    return [
+      {
+        id: "submitted",
+        label: "Submitted this month",
+        value: String(expenseClaims.length),
+        badge: "Jul 2026",
+      },
+      {
+        id: "pending",
+        label: "Pending approval",
+        value: String(pending),
+        badge: "Awaiting",
+        tone: pending > 0 ? ("alert" as const) : undefined,
+      },
+      {
+        id: "approved",
+        label: "Approved",
+        value: String(approved),
+        badge: "Cleared",
+      },
+      {
+        id: "rejected",
+        label: "Rejected",
+        value: String(rejected),
+        badge: "Declined",
+      },
+    ];
+  }, [expenseClaims]);
 
   const filteredClaims = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -71,14 +102,14 @@ export function FinanceExpensesPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Submit claim", async () => {
-      await expensesApi.create(values);
+      await superAdminApi.expenses.create(values);
       refetch();
     });
   }
 
   async function deleteClaim(claim: ExpenseClaim) {
     await runAction(`Delete ${claim.ref}`, async () => {
-      await expensesApi.delete(claim.id);
+      await superAdminApi.expenses.delete(claim.id);
       refetch();
     });
   }
@@ -108,7 +139,7 @@ export function FinanceExpensesPage() {
       <div className={payrollStyles.page}>
         <FinanceModuleTabs />
         {loading ? <p>Loading expenses…</p> : null}
-        {error ? <p role="alert">Using cached expenses — {error}</p> : null}
+        {error ? <p role="alert">{error}</p> : null}
 
         <div className={payrollStyles.topBar}>
           <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>
@@ -177,9 +208,6 @@ export function FinanceExpensesPage() {
               >
                 {stat.value}
               </p>
-              {"sublabel" in stat && stat.sublabel && (
-                <p className={styles.statSublabel}>{stat.sublabel}</p>
-              )}
             </article>
           ))}
         </div>

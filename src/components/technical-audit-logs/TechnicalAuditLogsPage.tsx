@@ -11,7 +11,6 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import {
-  technicalAuditEvents as fallbackEvents,
   technicalAuditFilters,
   type TechnicalAuditFilter,
   type TechnicalAuditSeverity,
@@ -19,7 +18,7 @@ import {
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { technicalAuditLogsApi } from "@/lib/api";
+import { superAdminApi } from "@/lib/api";
 import { downloadApiBlob } from "@/lib/export/downloadBlob";
 import { listFrom, mapTechnicalAuditEvent } from "@/lib/api/mappers";
 import styles from "./TechnicalAuditLogsPage.module.css";
@@ -75,20 +74,16 @@ export function TechnicalAuditLogsPage({
 
   const { data: eventsData, loading, error } = useAsyncData(
     () =>
-      technicalAuditLogsApi.list(
+      superAdminApi.technicalAuditLogs.list(
         severityParam ? { severity: severityParam } : undefined,
       ),
     [severityParam],
   );
 
   const events = useMemo(() => {
-    const records = listFrom(eventsData ?? undefined);
-    return records.length > 0
-      ? records.map((record) => mapTechnicalAuditEvent(record))
-      : fallbackEvents.map((event) => ({
-          ...event,
-          timestamp: event.occurredAt,
-        }));
+    return listFrom(eventsData ?? undefined).map((record) =>
+      mapTechnicalAuditEvent(record),
+    );
   }, [eventsData]);
 
   const filteredEvents = useMemo(() => {
@@ -110,7 +105,9 @@ export function TechnicalAuditLogsPage({
     void runAction("Export technical audit logs", async () => {
       try {
         await downloadApiBlob(
-          `/technical-audit-logs/export${severityParam ? `?severity=${severityParam}` : ""}`,
+          superAdminApi.technicalAuditLogs.exportPath(
+            severityParam ? { severity: severityParam } : undefined,
+          ),
           "technical-audit-logs.csv",
         );
       } catch {
@@ -163,7 +160,7 @@ export function TechnicalAuditLogsPage({
           {loading ? <p className={styles.subtitle}>Loading audit logs…</p> : null}
           {error ? (
             <p className={styles.subtitle} role="alert">
-              Showing cached logs — {error}
+              {error}
             </p>
           ) : null}
         </div>

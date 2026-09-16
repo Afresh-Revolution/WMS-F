@@ -11,26 +11,24 @@ import {
   DEFAULT_LOGIN_OPTIONS,
   type LoginOptions,
 } from "@/lib/api";
+import { homePathForRole } from "@/lib/auth/portals";
 import {
-  parseWorkspace,
-  readCachedWorkspace,
-  resolveHomePath,
-} from "@/lib/workspace";
+  cacheCurrentUser,
+  parseAuthUser,
+  readCachedOrJwtUser,
+} from "@/lib/currentUser";
 import styles from "./LoginPage.module.css";
 
 function LoginBrandMark() {
   return (
-    <div className={styles.brandLogo} aria-label="Afresh">
-      <span className={styles.brandMark} aria-hidden>
-        A
-      </span>
-      <span className={styles.brandWordmark}>afresh</span>
-    </div>
+    <img
+      className={styles.brandLogo}
+      src="/afresh-logo.png"
+      alt="AfrESH"
+      width={1024}
+      height={279}
+    />
   );
-}
-
-function SsoMark() {
-  return <span className={styles.ssoMark} aria-hidden>A</span>;
 }
 
 export function LoginPage() {
@@ -41,11 +39,31 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [options, setOptions] = useState<LoginOptions>(DEFAULT_LOGIN_OPTIONS);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+
+  async function goToWorkspace() {
+    let user = readCachedOrJwtUser();
+    try {
+      const me = await authApi.me();
+      const parsed = parseAuthUser(me);
+      if (parsed) {
+        cacheCurrentUser(parsed);
+        user = parsed;
+      }
+    } catch {
+      /* Use the cached/JWT identity if /auth/me is unavailable. */
+    }
+    router.replace(homePathForRole(user?.role ?? ""));
+  }
 
   useEffect(() => {
-    if (getSessionToken()) {
-      router.replace(resolveHomePath(readCachedWorkspace()));
-    }
+    if (!getSessionToken()) return;
+    void goToWorkspace();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   useEffect(() => {
@@ -63,11 +81,21 @@ export function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await authApi.login({
-        email,
-        password,
-        keepMeSignedIn: remember,
-      });
+      if (mfaRequired) {
+        await authApi.verifyMfa({ code: mfaCode, challengeToken });
+      } else {
+        const response = await authApi.login({
+          email,
+          password,
+          keepMeSignedIn: remember,
+        });
+        if (response.mfaRequired) {
+          setMfaRequired(true);
+          setChallengeToken(response.challengeToken ?? "");
+          setLoading(false);
+          return;
+        }
+      }
 
       if (remember) {
         localStorage.setItem("wms_remember_me", "1");
@@ -75,7 +103,7 @@ export function LoginPage() {
         localStorage.removeItem("wms_remember_me");
       }
 
-      router.replace(resolveHomePath(parseWorkspace(response)));
+      await goToWorkspace();
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 0) {
@@ -128,31 +156,49 @@ export function LoginPage() {
             </header>
 
             <form className={styles.form} onSubmit={(event) => void handleSubmit(event)}>
-              <label className={styles.field}>
-                <span className={styles.label}>Work email</span>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="maya.chen@afresh.co"
-                  className={styles.input}
-                  autoComplete="email"
-                />
-              </label>
+              {mfaRequired ? (
+                <label className={styles.field}>
+                  <span className={styles.label}>Authentication code</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    required
+                    value={mfaCode}
+                    onChange={(event) => setMfaCode(event.target.value)}
+                    placeholder="123456"
+                    className={styles.input}
+                    autoComplete="one-time-code"
+                  />
+                </label>
+              ) : (
+                <>
+                  <label className={styles.field}>
+                    <span className={styles.label}>Work email</span>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="maya.chen@afresh.co"
+                      className={styles.input}
+                      autoComplete="email"
+                    />
+                  </label>
 
-              <label className={styles.field}>
-                <span className={styles.label}>Password</span>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="••••••••••••"
-                  className={styles.input}
-                  autoComplete="current-password"
-                />
-              </label>
+                  <label className={styles.field}>
+                    <span className={styles.label}>Password</span>
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder="••••••••••••"
+                      className={styles.input}
+                      autoComplete="current-password"
+                    />
+                  </label>
+                </>
+              )}
 
               <div className={styles.formRow}>
                 {options.keepMeSignedInEnabled ? (
@@ -166,9 +212,17 @@ export function LoginPage() {
                   </label>
                 ) : null}
                 {options.forgotPasswordEnabled ? (
-                  <Link href="/help" className={styles.textLink}>
+                  <button
+                    type="button"
+                    className={styles.textLink}
+                    onClick={() => {
+                      setForgotOpen(true);
+                      setForgotSent(false);
+                      setError(null);
+                    }}
+                  >
                     Forgot password?
-                  </Link>
+                  </button>
                 ) : null}
               </div>
 
@@ -179,30 +233,60 @@ export function LoginPage() {
               ) : null}
 
               <button type="submit" className={styles.primaryButton} disabled={loading}>
-                {loading ? "Please wait…" : "Sign in to Afresh"}
+                {loading
+                  ? "Please wait…"
+                  : mfaRequired
+                    ? "Verify code"
+                    : "Sign in to Afresh"}
                 {!loading ? (
                   <ChevronRight size={18} strokeWidth={2.25} aria-hidden />
                 ) : null}
               </button>
             </form>
 
-            {options.ssoEnabled ? (
-              <>
-                <div className={styles.divider}>
-                  <span>or</span>
-                </div>
-
-                <button
-                  type="button"
-                  className={styles.ssoButton}
-                  onClick={() => {
-                    setError("SSO is not configured for this environment yet.");
-                  }}
-                >
-                  <SsoMark />
-                  Continue with SSO
+            {forgotOpen ? (
+              <form
+                className={styles.form}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void (async () => {
+                    setLoading(true);
+                    setError(null);
+                    try {
+                      await authApi.forgotPassword({ email });
+                      setForgotSent(true);
+                    } catch (err) {
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : "Could not send reset email",
+                      );
+                    } finally {
+                      setLoading(false);
+                    }
+                  })();
+                }}
+              >
+                <label className={styles.field}>
+                  <span className={styles.label}>Reset email</span>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="maya.chen@afresh.co"
+                    className={styles.input}
+                  />
+                </label>
+                {forgotSent ? (
+                  <p className={styles.formSubtitle}>
+                    If that account exists, a reset link is on its way.
+                  </p>
+                ) : null}
+                <button type="submit" className={styles.primaryButton} disabled={loading}>
+                  {loading ? "Sending…" : "Send reset link"}
                 </button>
-              </>
+              </form>
             ) : null}
 
             <p className={styles.support}>
