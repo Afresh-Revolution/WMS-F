@@ -317,15 +317,13 @@ export function EmployeesPage() {
                     </p>
                   </div>
                 </div>
-                <div className={styles.cardFooter}>
-                  <button
-                    type="button"
-                    className={styles.profileLink}
-                    onClick={() => viewProfile(employee)}
-                  >
-                    View profile
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className={styles.cardFooter}
+                  onClick={() => viewProfile(employee)}
+                >
+                  View profile
+                </button>
               </article>
             ))}
 

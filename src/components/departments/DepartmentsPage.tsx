@@ -290,15 +290,13 @@ export function DepartmentsPage() {
                     </p>
                   </div>
                 </div>
-                <div className={styles.cardFooter}>
-                  <button
-                    type="button"
-                    className={styles.viewLink}
-                    onClick={() => viewDepartment(department)}
-                  >
-                    View department &gt;
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className={styles.cardFooter}
+                  onClick={() => viewDepartment(department)}
+                >
+                  View department
+                </button>
               </article>
             );
           })}

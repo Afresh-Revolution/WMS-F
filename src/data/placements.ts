@@ -7,9 +7,17 @@ export type PlacementMember = {
   name: string;
   type: PlacementType;
   school: string;
+  institution: string;
+  course: string;
   department: string;
   supervisor: string;
+  startDate: string;
   endDate: string;
+  email: string;
+  phone: string;
+  address: string;
+  emergencyName: string;
+  emergencyPhone: string;
   progress: number;
   status: "Active" | "Exiting soon" | "Exited";
 };
@@ -28,9 +36,17 @@ export const placementMembers: PlacementMember[] = [
     name: "Chidi Eze",
     type: "NYSC",
     school: "Covenant University · Software Engineering",
+    institution: "Covenant University",
+    course: "Software Engineering",
     department: "Software Engineers",
     supervisor: "Omar Reyes",
+    startDate: "Oct 1, 2025",
     endDate: "Sep 30, 2026",
+    email: "",
+    phone: "",
+    address: "",
+    emergencyName: "",
+    emergencyPhone: "",
     progress: 82,
     status: "Active",
   },
@@ -40,9 +56,17 @@ export const placementMembers: PlacementMember[] = [
     name: "Funmi Lawal",
     type: "NYSC",
     school: "OAU Ife · Public Administration",
+    institution: "OAU Ife",
+    course: "Public Administration",
     department: "HR",
     supervisor: "Maya Chen",
+    startDate: "Oct 1, 2023",
     endDate: "Sep 20, 2024",
+    email: "",
+    phone: "",
+    address: "",
+    emergencyName: "",
+    emergencyPhone: "",
     progress: 92,
     status: "Active",
   },
@@ -52,9 +76,17 @@ export const placementMembers: PlacementMember[] = [
     name: "Seun Adeyemi",
     type: "Intern",
     school: "UniLag · Computer Science",
+    institution: "UniLag",
+    course: "Computer Science",
     department: "Software Engineers",
     supervisor: "Omar Reyes",
+    startDate: "Mar 20, 2025",
     endDate: "Sep 20, 2025",
+    email: "",
+    phone: "",
+    address: "",
+    emergencyName: "",
+    emergencyPhone: "",
     progress: 55,
     status: "Active",
   },
@@ -64,9 +96,17 @@ export const placementMembers: PlacementMember[] = [
     name: "Kemi Obi",
     type: "Intern",
     school: "Babcock University · Mass Communication",
+    institution: "Babcock University",
+    course: "Mass Communication",
     department: "Media/Photography",
     supervisor: "Musi Paul",
+    startDate: "Apr 14, 2024",
     endDate: "Oct 14, 2024",
+    email: "",
+    phone: "",
+    address: "",
+    emergencyName: "",
+    emergencyPhone: "",
     progress: 22,
     status: "Active",
   },
@@ -76,9 +116,17 @@ export const placementMembers: PlacementMember[] = [
     name: "Tolu Benson",
     type: "NYSC",
     school: "University of Ibadan · Accounting",
+    institution: "University of Ibadan",
+    course: "Accounting",
     department: "Admin",
     supervisor: "Ken Salami",
+    startDate: "Oct 1, 2024",
     endDate: "Sep 30, 2025",
+    email: "",
+    phone: "",
+    address: "",
+    emergencyName: "",
+    emergencyPhone: "",
     progress: 85,
     status: "Exited",
   },

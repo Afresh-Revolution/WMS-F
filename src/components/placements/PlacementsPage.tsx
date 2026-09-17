@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Download, Plus, Search } from "lucide-react";
 import { type PlacementFilter } from "@/data/placements";
@@ -57,7 +58,6 @@ function isActivePlacementConflict(error: unknown) {
 }
 
 function memberWriteBody(values: Record<string, string>) {
-  const supervisorId = values.employeeId.trim();
   return {
     fullName: values.name.trim(),
     name: values.name.trim(),
@@ -70,13 +70,6 @@ function memberWriteBody(values: Record<string, string>) {
     departmentId: values.departmentId,
     ...(values.email.trim() ? { email: values.email.trim() } : {}),
     ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
-    ...(supervisorId
-      ? {
-          employeeId: supervisorId,
-          supervisorId: supervisorId,
-          supervisorEmployeeId: supervisorId,
-        }
-      : {}),
   };
 }
 
@@ -158,7 +151,6 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       },
       { name: "email", label: "Email" },
       { name: "phone", label: "Phone" },
-      { name: "employeeId", label: "Supervisor employee ID" },
     ],
     [departmentOptions],
   );
@@ -193,13 +185,6 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   function handleFilterChange(filter: PlacementFilter) {
     setActiveFilter(filter);
     router.push(filterRoutes[filter]);
-  }
-
-  function viewProfile(member: (typeof placementMembers)[number]) {
-    showToast(
-      `${member.name} (${member.type}) — ${member.department}, ends ${member.endDate}`,
-      "info",
-    );
   }
 
   async function handleExport() {
@@ -243,24 +228,10 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     return fallback ? internId(fallback) : "";
   }
 
-  async function assignSupervisor(created: unknown, employeeId: string) {
-    const supervisorId = employeeId.trim();
-    if (!supervisorId) return;
-    const envelope = asInternRecord(created);
-    const payload = asInternRecord(envelope.data ?? envelope);
-    const profile = asInternRecord(payload.profile ?? payload);
-    const id = internId(profile) || internId(payload) || internId(envelope);
-    if (!id) return;
-    await superAdminApi.nyscInterns.action(id, "supervisor", {
-      employeeId: supervisorId,
-    });
-  }
-
   async function handleAddMember(values: Record<string, string>) {
     const body = memberWriteBody(values);
     try {
-      const created = await superAdminApi.nyscInterns.create(body);
-      await assignSupervisor(created, values.employeeId);
+      await superAdminApi.nyscInterns.create(body);
       refetch();
       showToast("Member added", "success");
     } catch (error) {
@@ -287,11 +258,6 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       }
 
       await superAdminApi.nyscInterns.patch(existingId, body);
-      try {
-        await assignSupervisor({ id: existingId }, values.employeeId);
-      } catch {
-        /* placement was updated even if supervisor assignment is unavailable */
-      }
       refetch();
       showToast(
         "This person already had an active placement. Their details were updated.",
@@ -436,16 +402,13 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
                 </div>
               </div>
 
-              <div className={styles.cardFooter}>
-                <button
-                  type="button"
-                  className={styles.profileLink}
-                  onClick={() => viewProfile(member)}
-                >
-                  View profile
-                  <ChevronRight size={14} strokeWidth={2.5} />
-                </button>
-              </div>
+              <Link
+                href={`/nysc-interns/${member.id}`}
+                className={styles.cardFooter}
+              >
+                View profile
+                <ChevronRight size={14} strokeWidth={2.5} />
+              </Link>
             </article>
           ))}
 

@@ -354,15 +354,17 @@ export function DashboardPage() {
             <h2 className={styles.cardTitle}>Overview 2024</h2>
             <div className={styles.overviewList}>
               {overviewItems.map((item) => (
-                <article key={item.id} className={styles.overviewItem}>
+                <Link
+                  key={item.id}
+                  href="/events"
+                  className={styles.overviewItem}
+                >
                   <span className={styles.overviewDate}>{item.date}</span>
                   <div className={styles.overviewBody}>
                     <p className={styles.overviewTitle}>{item.title}</p>
-                    <Link href="/events" className={styles.overviewLink}>
-                      View details
-                    </Link>
+                    <span className={styles.overviewLink}>View details</span>
                   </div>
-                </article>
+                </Link>
               ))}
             </div>
           </section>

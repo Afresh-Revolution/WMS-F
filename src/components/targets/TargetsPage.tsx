@@ -22,6 +22,29 @@ const statusClass: Record<ReviewStatus, string> = {
   Overdue: styles.statusOverdue,
 };
 
+function ymd(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function toTargetDate(value: string): string {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  throw new Error("Target start date and end date must use YYYY-MM-DD.");
+}
+
+function defaultReviewDates() {
+  const start = new Date();
+  const end = new Date();
+  end.setDate(end.getDate() + 90);
+  return { startDate: ymd(start), endDate: ymd(end) };
+}
+
+const { startDate: defaultStartDate, endDate: defaultEndDate } =
+  defaultReviewDates();
+
 const createFields = [
   {
     name: "title",
@@ -30,10 +53,34 @@ const createFields = [
     placeholder: "Q2 2026 performance review",
     minLength: 3,
     maxLength: 180,
+    fullWidth: true,
+  },
+  {
+    name: "startDate",
+    label: "Start date",
+    type: "date" as const,
+    required: true,
+    defaultValue: defaultStartDate,
+  },
+  {
+    name: "endDate",
+    label: "End date",
+    type: "date" as const,
+    required: true,
+    defaultValue: defaultEndDate,
   },
   { name: "name", label: "Employee name", required: true },
   { name: "role", label: "Role", required: true },
   { name: "reviewedBy", label: "Reviewed by", required: true },
+  {
+    name: "value",
+    label: "Target value",
+    type: "number" as const,
+    required: true,
+    defaultValue: "1",
+    min: 0.01,
+    step: 0.01,
+  },
   {
     name: "rating",
     label: "Rating (1–5)",
@@ -147,6 +194,15 @@ export function TargetsPage() {
         throw new Error("Review title must be between 3 and 180 characters.");
       }
       const rating = Math.min(5, Math.max(1, Number(values.rating) || 1));
+      const value = Number(values.value);
+      if (!Number.isFinite(value) || value <= 0) {
+        throw new Error("Target value must be greater than zero.");
+      }
+      const startDate = toTargetDate(values.startDate ?? "");
+      const endDate = toTargetDate(values.endDate ?? "");
+      if (endDate < startDate) {
+        throw new Error("End date must be on or after the start date.");
+      }
 
       await superAdminApi.targets.create({
         title,
@@ -158,7 +214,14 @@ export function TargetsPage() {
         reviewer: reviewedBy,
         rating,
         score: rating,
+        value,
+        targetValue: value,
+        target: value,
         status: "In review",
+        startDate,
+        endDate,
+        periodStart: startDate,
+        periodEnd: endDate,
       });
       refetch();
     });
@@ -331,9 +394,10 @@ export function TargetsPage() {
       <SimpleModal
         open={createOpen}
         title="New performance review"
-        description="Start a review cycle for an employee."
+        description="Set the review window and a target value greater than zero."
         fields={createFields}
         submitLabel="Create review"
+        wide
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />
