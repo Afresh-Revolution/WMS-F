@@ -466,7 +466,12 @@
 }
 
 .passwordModal {
+  display: flex;
+  flex-direction: column;
   width: min(100%, 440px);
+  max-height: min(90vh, 720px);
+  min-height: 0;
+  overflow: hidden;
   padding: 1.25rem;
   border-radius: 16px;
   background: #fff;
@@ -474,12 +479,14 @@
 }
 
 .passwordTitle {
+  flex-shrink: 0;
   margin: 0 0 0.35rem;
   font-size: 1.125rem;
   font-weight: 600;
 }
 
 .passwordCopy {
+  flex-shrink: 0;
   margin: 0 0 1rem;
   color: #57534e;
   font-size: 0.875rem;
@@ -507,13 +514,39 @@
   font-size: 0.875rem;
 }
 
-.addForm,
-.addField {
+.addForm {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.addFormFields {
   display: grid;
   gap: 0.85rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.35rem;
+  scrollbar-width: thin;
+  scrollbar-color: #d6d3d1 transparent;
+}
+
+.addFormFields::-webkit-scrollbar {
+  width: 8px;
+}
+
+.addFormFields::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.addFormFields::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #d6d3d1;
 }
 
 .addField {
+  display: grid;
   gap: 0.35rem;
   font-size: 0.875rem;
 }
@@ -535,8 +568,12 @@
 
 .passwordActions {
   display: flex;
+  flex-shrink: 0;
   justify-content: flex-end;
   gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #e7e5e4;
 }
 
 .passwordCancel {

@@ -20,7 +20,14 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import {
+  applyForLeave,
+  approveLeaveRequest,
+  listLeaveBalances,
+  listLeaveTypes,
+  listOrganisationLeave,
+  rejectLeaveRequest,
+} from "@/lib/api";
 import { listFrom, mapLeaveBalance, mapLeaveRequest } from "@/lib/api/mappers";
 import styles from "./LeavePage.module.css";
 
@@ -39,21 +46,15 @@ const statusClass: Record<LeaveRequestStatus, string> = {
 
 const requestLeaveFields = [
   {
-    name: "type",
+    name: "leaveTypeId",
     label: "Leave type",
     type: "select" as const,
     required: true,
-    defaultValue: "annual",
-    options: [
-      { label: "Annual", value: "annual" },
-      { label: "Sick", value: "sick" },
-      { label: "Parental", value: "parental" },
-      { label: "Personal", value: "personal" },
-    ],
+    options: [] as { label: string; value: string }[],
   },
   { name: "startDate", label: "Start date", type: "date" as const, required: true },
   { name: "endDate", label: "End date", type: "date" as const, required: true },
-  { name: "reason", label: "Reason", type: "textarea" as const },
+  { name: "reason", label: "Reason", type: "textarea" as const, required: true },
 ];
 
 export function LeavePage() {
@@ -63,48 +64,68 @@ export function LeavePage() {
   const { runAction, showToast } = usePageActions();
 
   const { data: leaveData, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.leave.list(),
+    () => listOrganisationLeave(),
     [],
   );
 
-  const { data: hrLeaveData } = useAsyncData(
-    () => superAdminApi.hr.leave.list(),
+  const { data: typeData } = useAsyncData(
+    () => listLeaveTypes().catch(() => []),
+    [],
+  );
+
+  const { data: balanceData, refetch: refetchBalances } = useAsyncData(
+    () => listLeaveBalances().catch(() => null),
     [],
   );
 
   const leaveRequests = useMemo(
     () =>
-      listFrom(leaveData ?? hrLeaveData ?? undefined).map((record) =>
-        mapLeaveRequest(record),
-      ),
-    [leaveData, hrLeaveData],
+      listFrom(leaveData ?? undefined).map((record) => mapLeaveRequest(record)),
+    [leaveData],
   );
 
   const leaveBalances = useMemo(() => {
-    const overview = (leaveData ?? hrLeaveData ?? {}) as Record<string, unknown>;
-    return listFrom(
-      (overview.balances ?? overview.leaveBalances) as never,
-    ).map((record, index) => mapLeaveBalance(record, index));
-  }, [leaveData, hrLeaveData]);
+    return listFrom(balanceData ?? undefined).map((record, index) =>
+      mapLeaveBalance(record, index),
+    );
+  }, [balanceData]);
+
+  const createFields = useMemo(() => {
+    const types = Array.isArray(typeData) ? typeData : [];
+    return requestLeaveFields.map((field) => {
+      if (field.name !== "leaveTypeId") return field;
+      return {
+        ...field,
+        defaultValue: types[0]?.id,
+        options: types.map((item) => ({ label: item.name, value: item.id })),
+      };
+    });
+  }, [typeData]);
 
   function approveLeave(id: string, name: string) {
     void runAction(`Approve ${name}'s leave`, async () => {
-      await superAdminApi.hr.leave.approve(id);
-      refetch();
-    });
+      await approveLeaveRequest(id);
+      await Promise.all([refetch(), refetchBalances()]);
+    }).catch(() => undefined);
   }
 
   function rejectLeave(id: string, name: string) {
     void runAction(`Decline ${name}'s leave`, async () => {
-      await superAdminApi.hr.leave.reject(id);
-      refetch();
-    });
+      await rejectLeaveRequest(id, "Team coverage is not available that week.");
+      await Promise.all([refetch(), refetchBalances()]);
+    }).catch(() => undefined);
   }
 
   async function handleRequestLeave(values: Record<string, string>) {
     await runAction("Request leave", async () => {
-      await superAdminApi.hr.leave.create(values);
-      refetch();
+      await applyForLeave({
+        leaveTypeId: values.leaveTypeId,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        durationType: "FULL_DAY",
+        note: values.reason,
+      });
+      await Promise.all([refetch(), refetchBalances()]);
     });
   }
 
@@ -266,7 +287,7 @@ export function LeavePage() {
           open={requestOpen}
           title="Request leave"
           description="Submit a new leave request for approval."
-          fields={requestLeaveFields}
+          fields={createFields}
           submitLabel="Submit request"
           onClose={() => setRequestOpen(false)}
           onSubmit={handleRequestLeave}

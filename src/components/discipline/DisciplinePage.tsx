@@ -14,13 +14,16 @@ import {
 } from "lucide-react";
 import {
   actionTypeOptions,
-  employeeOptions,
   type DisciplineCase,
   type DisciplineFilter,
 } from "@/data/discipline";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { superAdminApi } from "@/lib/api";
-import { listFrom, mapDisciplineCase } from "@/lib/api/mappers";
+import {
+  createDisciplinaryRecord,
+  listDisciplinaryRecords,
+  listStaffEmployees,
+} from "@/lib/api";
+import { listFrom, mapDisciplineCase, mapEmployee } from "@/lib/api/mappers";
 import { DisciplineRecordModal } from "./DisciplineRecordModal";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { usePageActions } from "@/hooks/usePageActions";
@@ -67,17 +70,24 @@ export function DisciplinePage({
   const [employee, setEmployee] = useState("");
   const [actionType, setActionType] = useState("Warning");
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState("");
-
-  const statusParam =
-    activeFilter === "All" ? undefined : activeFilter.toLowerCase();
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const { data, loading, error, refetch } = useAsyncData(
+    () => listDisciplinaryRecords(),
+    [],
+  );
+
+  const { data: employeeData, loading: employeesLoading } = useAsyncData(
+    () => listStaffEmployees(),
+    [],
+  );
+
+  const employees = useMemo(
     () =>
-      superAdminApi.discipline.list(
-        statusParam ? { status: statusParam } : undefined,
-      ),
-    [statusParam],
+      (employeeData ?? [])
+        .map((record) => mapEmployee(record))
+        .filter((person) => person.id && person.name),
+    [employeeData],
   );
 
   const disciplineCases = useMemo((): DisciplineCase[] => {
@@ -145,7 +155,7 @@ export function DisciplinePage({
     setEmployee("");
     setActionType("Warning");
     setDescription("");
-    setDate("");
+    setDate(new Date().toISOString().slice(0, 10));
   }
 
   function closeModal() {
@@ -178,15 +188,15 @@ export function DisciplinePage({
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     void runAction("Create disciplinary record", async () => {
-      await superAdminApi.discipline.create({
-        employee,
+      await createDisciplinaryRecord({
+        employeeId: employee,
         actionType,
         description,
         date,
       });
       await refetch();
       closeModal();
-    });
+    }).catch(() => undefined);
   }
 
   return (
@@ -362,11 +372,17 @@ export function DisciplinePage({
                     required
                   >
                     <option value="" disabled>
-                      Select employee
+                      {employeesLoading
+                        ? "Loading employees…"
+                        : employees.length
+                          ? "Select employee"
+                          : "No employees found"}
                     </option>
-                    {employeeOptions.map((name) => (
-                      <option key={name} value={name}>
-                        {name}
+                    {employees.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.title
+                          ? `${person.name} — ${person.title}`
+                          : person.name}
                       </option>
                     ))}
                   </select>
@@ -402,11 +418,10 @@ export function DisciplinePage({
                   <span className={styles.label}>Date</span>
                   <div className={styles.dateField}>
                     <input
-                      type="text"
+                      type="date"
                       className={styles.dateInput}
                       value={date}
                       onChange={(e) => setDate(e.target.value)}
-                      placeholder="08/07/2024"
                       required
                     />
                     <CalendarDays size={16} className={styles.dateIcon} />

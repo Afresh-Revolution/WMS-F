@@ -74,4 +74,43 @@ export {
   announcementsApi,
   purchasesApi,
 } from "./resources";
+export {
+  listCompanyAnnouncements,
+  publishCompanyAnnouncement,
+  getAdminAnnouncementDashboard,
+  publishAdminAnnouncement,
+  pinAdminAnnouncement,
+  unpinAdminAnnouncement,
+  listStaffAnnouncements,
+  getStaffUnreadCount,
+  getStaffAnnouncement,
+  markStaffAnnouncementRead,
+  staffUnreadCountFrom,
+} from "./companyAnnouncements";
+export {
+  listLeaveTypes,
+  listMyLeave,
+  listLeaveBalances,
+  listOrganisationLeave,
+  applyForLeave,
+  getEmployeeLeave,
+  approveLeaveRequest,
+  rejectLeaveRequest,
+  withdrawLeaveRequest,
+  leaveDayCount,
+  employeeBalanceCards,
+  remainingDaysForType,
+  leaveDecisionLetter,
+} from "./leave";
+export type { LeaveTypeOption, LeaveBalanceCard, LeaveApplyInput } from "./leave";
+export {
+  listDisciplinaryRecords,
+  createDisciplinaryRecord,
+} from "./discipline";
+export {
+  listStaffEmployees,
+  createStaffEmployee,
+  findStaffEmployeeByEmail,
+} from "./staffEmployees";
+export type { DisciplinaryRecordInput } from "./discipline";
 export type { ResourceModule } from "./resources";

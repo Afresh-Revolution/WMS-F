@@ -70,7 +70,7 @@ export function EmployeeHomePage() {
           <h1>Good morning, {data.employee.firstName}.</h1>
           <p>{data.employee.role}</p>
           <p>{data.employee.email}</p>
-          <Link href="/employee/profile" className={styles.heroButton}>
+          <Link href="/employee/leave" className={styles.heroButton}>
             Apply for leave <ChevronRight size={14} />
           </Link>
         </div>

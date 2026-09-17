@@ -18,9 +18,14 @@ import {
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import {
+  createStaffEmployee,
+  departmentsApi,
+  listStaffEmployees,
+  lookupsApi,
+} from "@/lib/api";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
-import { listFrom, mapEmployee, readTemporaryPassword } from "@/lib/api/mappers";
+import { listFrom, mapEmployee, readTemporaryPassword, str } from "@/lib/api/mappers";
 import styles from "./EmployeesPage.module.css";
 
 type ViewMode = "grid" | "list";
@@ -30,46 +35,16 @@ const statusClass: Record<EmployeeStatus, string> = {
   "On leave": styles.statusLeave,
 };
 
-const addEmployeeFields = [
-  { name: "fullName", label: "Full name", required: true },
-  { name: "email", label: "Email", type: "email" as const, required: true },
-  { name: "phone", label: "Phone", placeholder: "08030000000" },
-  { name: "jobTitle", label: "Job title", required: true },
-  { name: "department", label: "Department", required: true },
-  { name: "location", label: "Location", placeholder: "Remote" },
-  {
-    name: "role",
-    label: "Role",
-    type: "select" as const,
-    required: true,
-    defaultValue: "employee",
-    options: [
-      { label: "Employee", value: "employee" },
-      { label: "NYSC", value: "nysc" },
-      { label: "Intern", value: "intern" },
-      { label: "Secretary", value: "secretary" },
-      { label: "Manager", value: "manager" },
-      { label: "Head of department", value: "hod" },
-      { label: "HR", value: "hr" },
-      { label: "Accountant", value: "accountant" },
-    ],
-  },
+const roleOptions = [
+  { label: "Employee", value: "employee" },
+  { label: "NYSC", value: "nysc" },
+  { label: "Intern", value: "intern" },
+  { label: "Secretary", value: "secretary" },
+  { label: "Manager", value: "manager" },
+  { label: "Head of department", value: "hod" },
+  { label: "HR", value: "hr" },
+  { label: "Accountant", value: "accountant" },
 ];
-
-function buildEmployeeCreateBody(values: Record<string, string>) {
-  const body: Record<string, unknown> = {
-    fullName: values.fullName.trim(),
-    email: values.email.trim(),
-    jobTitle: values.jobTitle.trim(),
-    department: values.department.trim(),
-    role: values.role.trim() || "employee",
-  };
-  const phone = values.phone.trim();
-  const location = values.location.trim();
-  if (phone) body.phone = phone;
-  if (location) body.location = location;
-  return body;
-}
 
 export function EmployeesPage() {
   const router = useRouter();
@@ -82,13 +57,67 @@ export function EmployeesPage() {
 
   const { showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.employees.list(),
+    () => listStaffEmployees(),
     [],
   );
+  const { data: departmentData } = useAsyncData(async () => {
+    const settled = await Promise.allSettled([
+      lookupsApi.departments(),
+      departmentsApi.list(),
+    ]);
+    for (const result of settled) {
+      if (result.status === "fulfilled") return result.value;
+    }
+    return null;
+  }, []);
 
   const employees = useMemo(
-    () => listFrom(data ?? undefined).map((record) => mapEmployee(record)),
+    () => (data ?? []).map((record) => mapEmployee(record)),
     [data],
+  );
+
+  const departmentOptions = useMemo(
+    () =>
+      listFrom(departmentData ?? undefined)
+        .map((record) => ({
+          id: str(record.id ?? record._id),
+          name: str(record.name ?? record.title ?? record.label),
+        }))
+        .filter((item) => item.id && item.name),
+    [departmentData],
+  );
+
+  const addEmployeeFields = useMemo(
+    () => [
+      { name: "fullName", label: "Full name", required: true },
+      { name: "email", label: "Email", type: "email" as const, required: true },
+      { name: "phone", label: "Phone", placeholder: "08030000000" },
+      { name: "jobTitle", label: "Job title", required: true },
+      {
+        name: "departmentId",
+        label: "Department",
+        type: "select" as const,
+        required: true,
+        defaultValue: departmentOptions[0]?.id ?? "",
+        options:
+          departmentOptions.length > 0
+            ? departmentOptions.map((department) => ({
+                label: department.name,
+                value: department.id,
+              }))
+            : [{ label: "Loading departments…", value: "" }],
+      },
+      { name: "location", label: "Location", placeholder: "Remote" },
+      {
+        name: "role",
+        label: "Role",
+        type: "select" as const,
+        required: true,
+        defaultValue: "employee",
+        options: roleOptions,
+      },
+    ],
+    [departmentOptions],
   );
 
   const departmentFilters = useMemo((): DepartmentFilter[] => {
@@ -133,11 +162,22 @@ export function EmployeesPage() {
     for (const field of addEmployeeFields) {
       values[field.name] = String(form.get(field.name) ?? "");
     }
+    values.departmentId = String(
+      form.get("departmentId") ?? values.departmentId ?? "",
+    );
+    values.department = String(form.get("department") ?? values.department ?? "");
+    const selectedDepartment = departmentOptions.find(
+      (department) =>
+        department.id === values.departmentId ||
+        department.name === values.department,
+    );
+    if (selectedDepartment) {
+      values.departmentId = selectedDepartment.id;
+      values.department = selectedDepartment.name;
+    }
     setSaving(true);
     try {
-      const created = await superAdminApi.employees.create(
-        buildEmployeeCreateBody(values),
-      );
+      const created = await createStaffEmployee(values);
       const temporaryPassword =
         readTemporaryPassword(created) || "No temporary password was returned.";
       showCreatedCredentials({
@@ -289,7 +329,7 @@ export function EmployeesPage() {
               </article>
             ))}
 
-            {filteredEmployees.length === 0 && (
+            {filteredEmployees.length === 0 && !loading && (
               <div className={styles.empty}>No staff match this view.</div>
             )}
           </div>
@@ -326,7 +366,7 @@ export function EmployeesPage() {
               </article>
             ))}
 
-            {filteredEmployees.length === 0 && (
+            {filteredEmployees.length === 0 && !loading && (
               <div className={styles.empty}>No staff match this view.</div>
             )}
           </div>
@@ -356,31 +396,33 @@ export function EmployeesPage() {
                     className={styles.addForm}
                     onSubmit={(event) => void handleAddEmployee(event)}
                   >
-                    {addEmployeeFields.map((field) => (
-                      <label key={field.name} className={styles.addField}>
-                        <span>{field.label}</span>
-                        {field.type === "select" ? (
-                          <select
-                            name={field.name}
-                            defaultValue={field.defaultValue}
-                            required={field.required}
-                          >
-                            {(field.options ?? []).map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            name={field.name}
-                            type={field.type ?? "text"}
-                            placeholder={field.placeholder}
-                            required={field.required}
-                          />
-                        )}
-                      </label>
-                    ))}
+                    <div className={styles.addFormFields}>
+                      {addEmployeeFields.map((field) => (
+                        <label key={field.name} className={styles.addField}>
+                          <span>{field.label}</span>
+                          {field.type === "select" ? (
+                            <select
+                              name={field.name}
+                              defaultValue={field.defaultValue}
+                              required={field.required}
+                            >
+                              {(field.options ?? []).map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              name={field.name}
+                              type={field.type ?? "text"}
+                              placeholder={field.placeholder}
+                              required={field.required}
+                            />
+                          )}
+                        </label>
+                      ))}
+                    </div>
                     <div className={styles.passwordActions}>
                       <button
                         type="button"
@@ -393,7 +435,7 @@ export function EmployeesPage() {
                       <button
                         type="submit"
                         className={styles.addSubmit}
-                        disabled={saving}
+                        disabled={saving || departmentOptions.length === 0}
                       >
                         {saving ? "Adding…" : "Add person"}
                       </button>

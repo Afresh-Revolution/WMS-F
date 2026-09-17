@@ -344,6 +344,8 @@ export const authApi = {
       await v1ThenLegacy<void>("/auth/logout", "/api/superadmin/logout", {
         method: "POST",
       });
+    } catch {
+      /* Local sign-out still succeeds if the server session is already gone. */
     } finally {
       clearTokens();
     }

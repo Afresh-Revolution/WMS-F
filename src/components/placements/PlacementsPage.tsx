@@ -29,6 +29,57 @@ const statusQuery: Record<PlacementFilter, string | undefined> = {
   All: undefined,
 };
 
+function internEmail(record: Record<string, unknown>) {
+  const profile = asInternRecord(record.profile);
+  const contact = asInternRecord(record.contact ?? profile.contact);
+  return str(profile.email ?? contact.email ?? record.email)
+    .trim()
+    .toLowerCase();
+}
+
+function internPhone(record: Record<string, unknown>) {
+  const profile = asInternRecord(record.profile);
+  const contact = asInternRecord(record.contact ?? profile.contact);
+  return str(profile.phone ?? contact.phone ?? record.phone).replace(/\D/g, "");
+}
+
+function internId(record: Record<string, unknown>) {
+  const profile = asInternRecord(record.profile);
+  const placement = asInternRecord(record.placement);
+  return str(profile.id ?? placement.id ?? record.id ?? record._id);
+}
+
+function isActivePlacementConflict(error: unknown) {
+  return (
+    error instanceof Error &&
+    /already has an active placement/i.test(error.message)
+  );
+}
+
+function memberWriteBody(values: Record<string, string>) {
+  const supervisorId = values.employeeId.trim();
+  return {
+    fullName: values.name.trim(),
+    name: values.name.trim(),
+    type: values.type === "INTERN" ? "INTERN" : "NYSC",
+    institution: values.school.trim(),
+    school: values.school.trim(),
+    courseOfStudy: values.courseOfStudy.trim(),
+    startDate: values.startDate,
+    endDate: values.endDate,
+    departmentId: values.departmentId,
+    ...(values.email.trim() ? { email: values.email.trim() } : {}),
+    ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
+    ...(supervisorId
+      ? {
+          employeeId: supervisorId,
+          supervisorId: supervisorId,
+          supervisorEmployeeId: supervisorId,
+        }
+      : {}),
+  };
+}
+
 type PlacementsPageProps = {
   initialFilter?: PlacementFilter;
 };
@@ -48,11 +99,8 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   const statusParam = statusQuery[activeFilter];
 
   const { data, loading, error, refetch } = useAsyncData(
-    () =>
-      superAdminApi.nyscInterns.list(
-        statusParam ? { status: statusParam } : undefined,
-      ),
-    [statusParam],
+    () => superAdminApi.nyscInterns.list(),
+    [],
   );
 
   const { data: departmentsPayload } = useAsyncData(
@@ -137,7 +185,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       const matchesFilter =
         activeFilter === "All" || member.status === activeFilter;
       const haystack =
-        `${member.name} ${member.school} ${member.department} ${member.supervisor} ${member.type}`.toLowerCase();
+        `${member.name} ${member.school} ${member.department} ${member.supervisor} ${member.type} ${member.id}`.toLowerCase();
       return matchesFilter && haystack.includes(query.trim().toLowerCase());
     });
   }, [activeFilter, query, placementMembers]);
@@ -166,30 +214,90 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     );
   }
 
+  async function findExistingInternId(email: string, phone: string) {
+    const needle = email.trim().toLowerCase();
+    const phoneNeedle = phone.replace(/\D/g, "");
+    const payload = await superAdminApi.nyscInterns.list(
+      needle ? { email: needle } : undefined,
+    );
+    const records = listFrom(payload ?? undefined);
+    const match = records.find((record) => {
+      const recEmail = internEmail(record);
+      const recPhone = internPhone(record);
+      return (
+        (needle && recEmail === needle) ||
+        (phoneNeedle.length >= 7 && recPhone.endsWith(phoneNeedle))
+      );
+    });
+    if (match) return internId(match);
+
+    const all = listFrom((await superAdminApi.nyscInterns.list()) ?? undefined);
+    const fallback = all.find((record) => {
+      const recEmail = internEmail(record);
+      const recPhone = internPhone(record);
+      return (
+        (needle && recEmail === needle) ||
+        (phoneNeedle.length >= 7 && recPhone.endsWith(phoneNeedle))
+      );
+    });
+    return fallback ? internId(fallback) : "";
+  }
+
+  async function assignSupervisor(created: unknown, employeeId: string) {
+    const supervisorId = employeeId.trim();
+    if (!supervisorId) return;
+    const envelope = asInternRecord(created);
+    const payload = asInternRecord(envelope.data ?? envelope);
+    const profile = asInternRecord(payload.profile ?? payload);
+    const id = internId(profile) || internId(payload) || internId(envelope);
+    if (!id) return;
+    await superAdminApi.nyscInterns.action(id, "supervisor", {
+      employeeId: supervisorId,
+    });
+  }
+
   async function handleAddMember(values: Record<string, string>) {
-    await runAction("Add member", async () => {
-      const created = await superAdminApi.nyscInterns.create({
-        fullName: values.name,
-        type: values.type === "INTERN" ? "INTERN" : "NYSC",
-        institution: values.school,
-        courseOfStudy: values.courseOfStudy,
-        startDate: values.startDate,
-        endDate: values.endDate,
-        departmentId: values.departmentId,
-        ...(values.email ? { email: values.email } : {}),
-        ...(values.phone ? { phone: values.phone } : {}),
-      });
-      const envelope = asInternRecord(created);
-      const payload = asInternRecord(envelope.data ?? envelope);
-      const profile = asInternRecord(payload.profile ?? payload);
-      const id = str(profile.id ?? payload.id ?? envelope.id);
-      if (id && values.employeeId.trim()) {
-        await superAdminApi.nyscInterns.action(id, "supervisor", {
-          employeeId: values.employeeId.trim(),
-        });
+    const body = memberWriteBody(values);
+    try {
+      const created = await superAdminApi.nyscInterns.create(body);
+      await assignSupervisor(created, values.employeeId);
+      refetch();
+      showToast("Member added", "success");
+    } catch (error) {
+      if (!isActivePlacementConflict(error)) {
+        const message =
+          error instanceof Error ? error.message : "Something went wrong";
+        showToast(`Add member failed — ${message}`, "error");
+        throw error;
+      }
+
+      let existingId = "";
+      try {
+        existingId = await findExistingInternId(values.email, values.phone);
+      } catch {
+        existingId = "";
+      }
+
+      if (!existingId) {
+        showToast(
+          "This email already has an active placement. Switch to All to find the existing member.",
+          "error",
+        );
+        throw error;
+      }
+
+      await superAdminApi.nyscInterns.patch(existingId, body);
+      try {
+        await assignSupervisor({ id: existingId }, values.employeeId);
+      } catch {
+        /* placement was updated even if supervisor assignment is unavailable */
       }
       refetch();
-    });
+      showToast(
+        "This person already had an active placement. Their details were updated.",
+        "success",
+      );
+    }
   }
 
   return (

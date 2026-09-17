@@ -23,11 +23,20 @@ import {
 } from "@/data/announcements";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
-import { listFrom, mapAnnouncement } from "@/lib/api/mappers";
+import {
+  listCompanyAnnouncements,
+  publishCompanyAnnouncement,
+  getAdminAnnouncementDashboard,
+  publishAdminAnnouncement,
+  pinAdminAnnouncement,
+  unpinAdminAnnouncement,
+  departmentsApi,
+  lookupsApi,
+} from "@/lib/api";
+import { listFrom, mapAnnouncement, str, unwrapRecord } from "@/lib/api/mappers";
 import styles from "./AnnouncementsPage.module.css";
 
-const filters: AnnouncementFilter[] = ["All", "Unread", "Pinned"];
+const filters: AnnouncementFilter[] = ["All", "Drafts", "Pinned"];
 
 const categories: {
   id: AnnouncementCategory;
@@ -49,24 +58,6 @@ const tagClass: Record<AnnouncementTagTone, string> = {
   pinned: styles.tagPinned,
 };
 
-const createFields = [
-  { name: "title", label: "Title", required: true },
-  { name: "source", label: "Source", required: true },
-  { name: "body", label: "Message", type: "textarea" as const, required: true },
-  {
-    name: "category",
-    label: "Category",
-    type: "select" as const,
-    defaultValue: "General",
-    options: [
-      { label: "HR", value: "HR" },
-      { label: "Finance", value: "Finance" },
-      { label: "General", value: "General" },
-      { label: "Urgent", value: "Urgent" },
-    ],
-  },
-];
-
 function TagIcon({ tone }: { tone: AnnouncementTagTone }) {
   if (tone === "finance") return <Briefcase size={11} strokeWidth={2} />;
   if (tone === "hr") return <Heart size={11} strokeWidth={2} />;
@@ -80,41 +71,178 @@ export function AnnouncementsPage() {
   const [activeFilter, setActiveFilter] = useState<AnnouncementFilter>("All");
   const [activeCategory, setActiveCategory] = useState<AnnouncementCategory>("All");
   const [query, setQuery] = useState("");
-  const [expandedId, setExpandedId] = useState("1");
+  const [expandedId, setExpandedId] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction, exportRows } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.announcements.list(),
+    () => listCompanyAnnouncements(),
     [],
   );
+  const { data: dashboardData } = useAsyncData(
+    () => getAdminAnnouncementDashboard().catch(() => null),
+    [],
+  );
+  const { data: departmentData } = useAsyncData(async () => {
+    const settled = await Promise.allSettled([
+      lookupsApi.departments(),
+      departmentsApi.list(),
+    ]);
+    for (const result of settled) {
+      if (result.status === "fulfilled") return result.value;
+    }
+    return null;
+  }, []);
 
   const announcements = useMemo(() => {
     return listFrom(data ?? undefined).map((record) => mapAnnouncement(record));
   }, [data]);
 
+  const departments = useMemo(
+    () =>
+      listFrom(departmentData ?? undefined)
+        .map((record) => ({
+          id: str(record.id ?? record._id),
+          name: str(record.name ?? record.title ?? record.label),
+        }))
+        .filter((item) => item.id && item.name),
+    [departmentData],
+  );
+
   const announcementStats = useMemo(() => {
-    const unread = announcements.filter((item) => item.unread).length;
+    const dash = unwrapRecord(dashboardData);
     const pinned = announcements.filter((item) => item.pinned).length;
+    const drafts = announcements.filter(
+      (item) => item.status === "draft" || item.status === "scheduled",
+    ).length;
     return [
-      { id: "unread", label: "Unread", value: String(unread), badge: "New" },
-      { id: "pinned", label: "Pinned", value: String(pinned), badge: "Active" },
+      {
+        id: "unread",
+        label: "Drafts",
+        value: str(dash.drafts ?? dash.draftCount, String(drafts)),
+        badge: "Open",
+      },
+      {
+        id: "pinned",
+        label: "Pinned",
+        value: str(dash.pinned ?? dash.pinnedCount, String(pinned)),
+        badge: "Active",
+      },
       {
         id: "month",
-        label: "Total This Month",
-        value: String(announcements.length),
-        badge: "Current",
+        label: "Published",
+        value: str(
+          dash.published ?? dash.publishedCount ?? dash.total,
+          String(announcements.filter((item) => item.status === "published").length || announcements.length),
+        ),
+        badge: "Live",
       },
-      { id: "recipients", label: "Recipients", value: "—", badge: "All staff" },
+      {
+        id: "recipients",
+        label: "Recipients",
+        value: str(
+          dash.recipients ?? dash.recipientCount ?? dash.totalRecipients,
+          "—",
+        ),
+        badge: "All staff",
+      },
     ];
-  }, [announcements]);
+  }, [announcements, dashboardData]);
+
+  const createFields = useMemo(
+    () => [
+      { name: "title", label: "Title", required: true, fullWidth: true },
+      {
+        name: "message",
+        label: "Message",
+        type: "textarea" as const,
+        required: true,
+        fullWidth: true,
+      },
+      {
+        name: "category",
+        label: "Category",
+        type: "select" as const,
+        defaultValue: "General",
+        options: [
+          { label: "General", value: "General" },
+          { label: "HR", value: "HR" },
+          { label: "Finance", value: "Finance" },
+          { label: "Events", value: "Events" },
+          { label: "Security", value: "Security" },
+        ],
+      },
+      {
+        name: "priority",
+        label: "Priority",
+        type: "select" as const,
+        defaultValue: "normal",
+        options: [
+          { label: "Normal", value: "normal" },
+          { label: "Important", value: "important" },
+          { label: "Urgent", value: "urgent" },
+        ],
+      },
+      {
+        name: "audienceType",
+        label: "Audience",
+        type: "select" as const,
+        defaultValue: "all_staff",
+        options: [
+          { label: "All staff", value: "all_staff" },
+          { label: "One department", value: "department" },
+        ],
+      },
+      {
+        name: "departmentId",
+        label: "Department",
+        type: "select" as const,
+        defaultValue: "",
+        options: [
+          { label: "Select department", value: "" },
+          ...departments.map((department) => ({
+            label: department.name,
+            value: department.id,
+          })),
+        ],
+      },
+      {
+        name: "isPinned",
+        label: "Pin to top",
+        type: "select" as const,
+        defaultValue: "false",
+        options: [
+          { label: "No", value: "false" },
+          { label: "Yes", value: "true" },
+        ],
+      },
+      {
+        name: "expiresAt",
+        label: "Expires (optional)",
+        type: "date" as const,
+      },
+      {
+        name: "status",
+        label: "When to send",
+        type: "select" as const,
+        defaultValue: "published",
+        options: [
+          { label: "Publish now", value: "published" },
+          { label: "Save as draft", value: "draft" },
+        ],
+      },
+    ],
+    [departments],
+  );
 
   const filtered = useMemo(() => {
     return announcements.filter((item) => {
       const matchesFilter =
         activeFilter === "All" ||
-        (activeFilter === "Unread" && item.unread) ||
-        (activeFilter === "Pinned" && item.pinned);
+        (activeFilter === "Drafts" &&
+          (item.status === "draft" || item.status === "scheduled")) ||
+        (activeFilter === "Pinned" && item.pinned) ||
+        (activeFilter === "Unread" && item.unread);
       const matchesCategory =
         activeCategory === "All" || item.category === activeCategory;
       const haystack = `${item.title} ${item.source} ${item.body}`.toLowerCase();
@@ -124,17 +252,34 @@ export function AnnouncementsPage() {
   }, [activeFilter, activeCategory, query, announcements]);
 
   async function handleCreate(values: Record<string, string>) {
-    await runAction("Create announcement", async () => {
-      await superAdminApi.announcements.create(values);
-      refetch();
-    });
+    await runAction(
+      values.status === "draft" ? "Save draft" : "Publish announcement",
+      async () => {
+        await publishCompanyAnnouncement(values);
+        refetch();
+      },
+    );
   }
 
   async function unpinAnnouncement(id: string) {
     await runAction("Unpin announcement", async () => {
-      await superAdminApi.announcements.action(id, "unpin");
+      await unpinAdminAnnouncement(id);
       refetch();
-    });
+    }).catch(() => undefined);
+  }
+
+  async function pinAnnouncement(id: string) {
+    await runAction("Pin announcement", async () => {
+      await pinAdminAnnouncement(id);
+      refetch();
+    }).catch(() => undefined);
+  }
+
+  async function publishDraft(id: string) {
+    await runAction("Publish announcement", async () => {
+      await publishAdminAnnouncement(id, true);
+      refetch();
+    }).catch(() => undefined);
   }
 
   function handleRefresh() {
@@ -325,8 +470,17 @@ export function AnnouncementsPage() {
                 {expanded && (
                   <>
                     <p className={styles.body}>{item.body}</p>
-                    {item.pinned && (
-                      <div className={styles.cardFooter}>
+                    <div className={styles.cardFooter}>
+                      {item.status === "draft" || item.status === "scheduled" ? (
+                        <button
+                          type="button"
+                          className={styles.unpinButton}
+                          onClick={() => void publishDraft(item.id)}
+                        >
+                          Publish
+                        </button>
+                      ) : null}
+                      {item.pinned ? (
                         <button
                           type="button"
                           className={styles.unpinButton}
@@ -335,8 +489,17 @@ export function AnnouncementsPage() {
                           <Pin size={14} strokeWidth={2} />
                           Unpin
                         </button>
-                      </div>
-                    )}
+                      ) : (
+                        <button
+                          type="button"
+                          className={styles.unpinButton}
+                          onClick={() => void pinAnnouncement(item.id)}
+                        >
+                          <Pin size={14} strokeWidth={2} />
+                          Pin
+                        </button>
+                      )}
+                    </div>
                   </>
                 )}
               </article>
@@ -352,9 +515,10 @@ export function AnnouncementsPage() {
       <SimpleModal
         open={createOpen}
         title="New announcement"
-        description="Publish a company-wide notice or policy update."
+        description="Publishing sends this to the staff feed. Drafts stay hidden until you publish."
         fields={createFields}
-        submitLabel="Publish"
+        submitLabel="Save"
+        wide
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />

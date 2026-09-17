@@ -5,6 +5,7 @@ import { departmentsApi } from "./departments";
 export const lookupsApi = {
   hods: () => apiRequest<Record<string, unknown>>("/lookups/hods"),
   employees: () => apiRequest<Record<string, unknown>>("/lookups/employees"),
+  departments: () => apiRequest<Record<string, unknown>>("/lookups/departments"),
 };
 
 export async function loadHodOptions(): Promise<HodOption[]> {

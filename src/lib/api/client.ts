@@ -135,14 +135,23 @@ export async function apiRequest<T>(
   const isJson = contentType.includes("application/json");
   const payload = isJson ? await response.json() : await response.text();
 
-  if (!response.ok) {
-    if (response.status === 401 && getSessionToken()) {
+    if (!response.ok) {
+    const message = extractErrorMessage(payload, response.statusText);
+    const passwordChangeRequired = /password change required/i.test(message);
+    if (
+      response.status === 401 &&
+      getSessionToken() &&
+      !passwordChangeRequired
+    ) {
       clearTokens();
-      if (typeof window !== "undefined" && window.location.pathname !== "/") {
-        window.location.assign("/");
+      if (typeof window !== "undefined") {
+        const path = window.location.pathname;
+        const signingOut = path === "/sign-out" || path.startsWith("/sign-out/");
+        if (!signingOut && path !== "/") {
+          window.location.assign("/");
+        }
       }
     }
-    const message = extractErrorMessage(payload, response.statusText);
     throw new ApiError(response.status, message, payload);
   }
 
@@ -173,7 +182,10 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   ATTENDANCE_SCHEDULE_NAME_REQUIRED: "Schedule name is required.",
   EMPLOYEE_CHECK_IN_ROLE_REQUIRED: "This account cannot GPS check in.",
   ATTENDANCE_CHECK_IN_FORBIDDEN: "You do not have permission to check in.",
-  EMPLOYEE_PROFILE_REQUIRED: "No employee or intern profile is linked.",
+  NO_ACTIVE_EMPLOYEE_PROFILE:
+    "This login is not linked to an employee profile. Ask an admin to add you on the Employees page.",
+  EMPLOYEE_PROFILE_REQUIRED:
+    "This login is not linked to an employee profile. Ask an admin to add you on the Employees page.",
   CHECK_IN_ACCOUNT_INACTIVE: "This account is not eligible to check in.",
   ATTENDANCE_MONITOR_FORBIDDEN: "You cannot monitor attendance records.",
   ATTENDANCE_MANAGE_FORBIDDEN:
@@ -185,8 +197,46 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   ATTENDANCE_SCHEDULE_NOT_FOUND: "Attendance schedule was not found.",
   ATTENDANCE_RECORD_NOT_FOUND: "Attendance record was not found.",
   HOD_NOT_FOUND: "That person is not a current user. Choose a live HOD.",
+  EMPLOYEE_NOT_FOUND:
+    "That employee was not found. Choose someone from the live employee list.",
+  EMPLOYEE_ALREADY_EXISTS:
+    "An employee with those details already exists. Refresh the directory to see them.",
+  EMAIL_ALREADY_EXISTS:
+    "An employee with that email already exists. Refresh the directory to see them.",
+  DUPLICATE_EMAIL:
+    "An employee with that email already exists. Refresh the directory to see them.",
+  USER_ALREADY_EXISTS:
+    "A user with that email already exists. Refresh the directory to see them.",
   MEETING_TYPE_NOT_FOUND:
     "Meeting type was not found. Create the meeting without a meeting type.",
+  PASSWORD_CHANGE_REQUIRED:
+    "Change your password before updating other account details.",
+  ANNOUNCEMENT_REQUIRED_FIELDS: "Title and message are required.",
+  ANNOUNCEMENT_AUDIENCE_REQUIRED: "Choose who should receive this announcement.",
+  ANNOUNCEMENT_DEPARTMENT_REQUIRED: "Pick a department for this audience.",
+  ANNOUNCEMENT_EMPLOYEE_REQUIRED: "Pick at least one employee for this audience.",
+  ANNOUNCEMENT_ALREADY_PUBLISHED: "This announcement is already published.",
+  ANNOUNCEMENT_NOT_PUBLISHABLE:
+    "This announcement cannot be published in its current status.",
+  ANNOUNCEMENT_NOT_SCHEDULABLE: "Only drafts can be scheduled.",
+  ANNOUNCEMENT_SCHEDULE_REQUIRED: "A schedule date is required.",
+  ANNOUNCEMENT_INVALID_SCHEDULE: "That schedule date is not valid.",
+  ANNOUNCEMENT_SCHEDULE_IN_PAST: "Schedule a time in the future.",
+  ANNOUNCEMENT_NOT_FOUND: "That announcement was not found.",
+  LEAVE_TYPE_NOT_FOUND: "That leave type was not found. Choose a type from the list.",
+  LEAVE_TYPE_INACTIVE: "That leave type is not active.",
+  INVALID_LEAVE_DURATION:
+    "Those dates have no working days. Choose a range that includes a weekday.",
+  LEAVE_DATES_OVERLAP: "Those dates overlap an existing leave request.",
+  INSUFFICIENT_LEAVE_BALANCE: "There is not enough leave balance for those dates.",
+  NOTICE_REQUIRED: "This leave type needs more notice before the start date.",
+  MAXIMUM_LEAVE_EXCEEDED: "That stretch is longer than the leave policy allows.",
+  LEAVE_NOT_PENDING: "Only pending leave can be approved, rejected, or withdrawn.",
+  LEAVE_NOT_APPROVED: "Only approved leave can be cancelled.",
+  LEAVE_REQUEST_NOT_FOUND: "That leave request was not found.",
+  REJECTION_REASON_REQUIRED: "A rejection reason is required.",
+  ACTIVE_PLACEMENT_EXISTS:
+    "This person already has an active NYSC or intern placement.",
 };
 
 const GENERIC_ERROR_MESSAGES = new Set([
@@ -203,13 +253,20 @@ function isUsefulErrorMessage(value: unknown): value is string {
   return !GENERIC_ERROR_MESSAGES.has(trimmed.toLowerCase());
 }
 
+function friendlyForbiddenMessage(value: string): string | null {
+  if (/^forbidden\.?$/i.test(value.trim())) {
+    return "Access denied. You do not have permission to do that.";
+  }
+  return null;
+}
+
 /** Parse API error payloads (superadmin + /api/v1/auth formats). */
 export function extractErrorMessage(payload: unknown, fallback: string): string {
   if (typeof payload === "string" && payload.trim()) {
     if (payload.toLowerCase().includes("internal server error")) {
       return "The API returned an internal server error. Check that the backend is running and configured correctly.";
     }
-    return payload;
+    return friendlyForbiddenMessage(payload) ?? payload;
   }
 
   if (typeof payload === "object" && payload !== null) {
@@ -265,12 +322,21 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
     }
 
     if (isUsefulErrorMessage(nestedError)) {
+      if (/^forbidden\.?$/i.test(nestedError.trim())) {
+        return "Access denied. You do not have permission to do that.";
+      }
+      if (/unable to reach the backend api/i.test(nestedError)) {
+        return "The backend could not be reached. Wait a few seconds and try again.";
+      }
       return nestedError;
     }
 
     const candidates = [record.detail, record.title, record.message];
     for (const candidate of candidates) {
       if (isUsefulErrorMessage(candidate)) {
+        if (/^forbidden\.?$/i.test(candidate.trim())) {
+          return "Access denied. You do not have permission to do that.";
+        }
         return candidate;
       }
     }

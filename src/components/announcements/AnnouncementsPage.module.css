@@ -417,6 +417,8 @@
 
 .cardFooter {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: 0 18px 16px 70px;
 }
 

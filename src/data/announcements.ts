@@ -1,4 +1,4 @@
-export type AnnouncementFilter = "All" | "Unread" | "Pinned";
+export type AnnouncementFilter = "All" | "Drafts" | "Pinned" | "Unread";
 export type AnnouncementCategory = "All" | "HR" | "Finance" | "General" | "Urgent";
 
 export type AnnouncementTagTone = "finance" | "urgent" | "hr" | "general" | "pinned";
@@ -14,6 +14,9 @@ export type Announcement = {
   pinned: boolean;
   unread: boolean;
   category: Exclude<AnnouncementCategory, "All">;
+  status?: string;
+  priority?: string;
+  code?: string;
 };
 
 export const announcementStats = [
