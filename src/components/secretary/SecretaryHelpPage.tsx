@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import styles from "@/components/employee/EmployeeUtilityPages.module.css";
 
@@ -30,7 +31,7 @@ export function SecretaryHelpPage() {
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Monday, August 3</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.avatarChip}>GB</ProfileLink>

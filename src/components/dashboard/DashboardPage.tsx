@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -215,7 +216,7 @@ export function DashboardPage() {
   return (
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>Thursday, July 20</p>
+          <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading dashboard…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">

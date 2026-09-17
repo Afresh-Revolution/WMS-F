@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -269,7 +270,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   return (
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>Monday, August 3</p>
+          <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading placements…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">

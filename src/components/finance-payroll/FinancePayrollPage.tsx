@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
   ClipboardList,
@@ -152,7 +153,7 @@ export function FinancePayrollPage() {
         </div>
 
         <div className={styles.statsBar}>
-          <p className={styles.statsDate}>Tuesday, July 28</p>
+          <PageDateLabel className={styles.statsDate} />
           <div className={styles.statsGroup}>
             {payrollStats.map((stat) => (
               <div key={stat.id} className={styles.statItem}>

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { FormEvent, useState } from "react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { usePageActions } from "@/hooks/usePageActions";
@@ -28,7 +29,7 @@ export function SecretarySettingsPage() {
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Monday, August 3</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.avatarChip}>GB</ProfileLink>

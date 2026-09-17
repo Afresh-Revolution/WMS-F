@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import { ChevronRight, Plus, RefreshCw, Search, Star } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
@@ -256,7 +257,7 @@ export function TargetsPage() {
     <>
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>Monday, August 1</p>
+          <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading targets…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">

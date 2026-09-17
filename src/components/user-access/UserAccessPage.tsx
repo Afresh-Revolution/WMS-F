@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useCallback, useMemo, useState } from "react";
 import {
   Lock,
@@ -196,7 +197,7 @@ export function UserAccessPage() {
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Monday, August 3</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.avatarChip}>MC</ProfileLink>

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useState } from "react";
 import Link from "next/link";
 import { Bell, Search, UserRound } from "lucide-react";
@@ -35,7 +36,7 @@ export function NyscAnnouncementsPage() {
     <div className={styles.page}>
       <AccountantStatusLine loading={loading} error={error} resource="news" />
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Monday, August 17</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={15} className={styles.searchIcon} />

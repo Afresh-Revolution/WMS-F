@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Bell, Search } from "lucide-react";
 import { useCurrentUser } from "./CurrentUserProvider";
+import { PageDateLabel } from "./PageDateLabel";
 import styles from "./PageTopBar.module.css";
 
 type PageTopBarProps = {
@@ -31,7 +32,11 @@ export function PageTopBar({
   return (
     <div className={`${styles.topBar} app-top-bar`}>
       <div className={styles.lead}>
-        {dateLabel ? <p className={styles.dateLabel}>{dateLabel}</p> : null}
+        {dateLabel ? (
+          <p className={styles.dateLabel}>{dateLabel}</p>
+        ) : (
+          <PageDateLabel className={styles.dateLabel} />
+        )}
         {status}
       </div>
       <div className={styles.actions}>

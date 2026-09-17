@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { Bell, Search } from "lucide-react";
@@ -59,7 +60,7 @@ export function NyscAccountPage() {
         resource="account settings"
       />
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Monday, August 17</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={15} className={styles.searchIcon} />

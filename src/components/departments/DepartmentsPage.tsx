@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
   Briefcase,
@@ -187,7 +188,7 @@ export function DepartmentsPage() {
           <div>
             <p className={styles.eyebrow}>Departments &amp; how they work</p>
             <h1 className={styles.title}>AfrESH is organised</h1>
-            <p className={styles.dateLabel}>Monday, August 12</p>
+            <PageDateLabel className={styles.dateLabel} />
           </div>
           <div className={styles.headerActions}>
             <label className={styles.search}>

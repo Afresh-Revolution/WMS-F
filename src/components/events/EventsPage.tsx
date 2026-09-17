@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays, Check, Plus, RefreshCw, Search, Send } from "lucide-react";
@@ -226,7 +227,7 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
     <>
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>Monday, August 3</p>
+          <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading events…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">

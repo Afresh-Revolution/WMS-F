@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo } from "react";
 import {
   Activity,
@@ -147,7 +148,7 @@ export function SystemHealthPage() {
       <div className={styles.header}>
         <p className={styles.eyebrow}>System · Health</p>
         <h1 className={styles.title}>System health</h1>
-        <p className={styles.dateLabel}>Monday, August 3</p>
+        <PageDateLabel className={styles.dateLabel} />
         {loading ? <p className={styles.dateLabel}>Loading health data…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">

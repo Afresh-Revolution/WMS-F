@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -119,7 +120,7 @@ export function AccountantVendorsPage() {
     <div className={styles.page}>
       <AccountantStatusLine loading={loading} error={error} resource="vendors" />
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Tuesday, August 11</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
           <Link
             href="/accountant/notifications"
