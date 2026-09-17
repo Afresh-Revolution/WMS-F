@@ -138,18 +138,6 @@ export function FinancePurchasesPage() {
         <div className={payrollStyles.topBar}>
           <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>
           <div className={payrollStyles.topActions}>
-            <button
-              type="button"
-              aria-label="Search"
-              className={payrollStyles.iconButton}
-              onClick={() => {
-                document
-                  .querySelector<HTMLInputElement>("[data-purchases-search]")
-                  ?.focus();
-              }}
-            >
-              <Search size={16} />
-            </button>
             <NotificationsLink className={payrollStyles.iconButton} />
             <button
               type="button"

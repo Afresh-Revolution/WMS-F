@@ -162,18 +162,6 @@ export function FinancePayrollPage() {
             ))}
           </div>
           <div className={styles.topActions}>
-            <button
-              type="button"
-              aria-label="Search"
-              className={styles.iconButton}
-              onClick={() => {
-                document
-                  .querySelector<HTMLInputElement>("[data-payroll-search]")
-                  ?.focus();
-              }}
-            >
-              <Search size={16} />
-            </button>
             <NotificationsLink className={styles.iconButton} />
             <button
               type="button"

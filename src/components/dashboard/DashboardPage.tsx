@@ -239,9 +239,6 @@ export function DashboardPage() {
               Get started
             </Link>
           </div>
-          <div className={styles.heroAvatar} aria-hidden="true">
-            DS
-          </div>
           <div className={styles.heroDecoration}>
             <div className={styles.heroDecorationInner} />
           </div>

@@ -279,16 +279,6 @@ export function SecretaryEmailDirectoryPage({
           </p>
         ) : null}
         <div className={styles.topActions}>
-          <label className={styles.search}>
-            <Search size={15} className={styles.searchIcon} />
-            <input
-              ref={searchRef}
-              type="search"
-              placeholder="Search"
-              className={styles.searchInput}
-            />
-            <kbd className={styles.shortcut}>⌘ K</kbd>
-          </label>
           <NotificationsLink className={styles.iconButton}>
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
@@ -335,6 +325,7 @@ export function SecretaryEmailDirectoryPage({
         <label className={styles.listSearch}>
           <Search size={15} className={styles.searchIcon} />
           <input
+            ref={searchRef}
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}

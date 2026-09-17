@@ -119,19 +119,6 @@ export function FinanceVendorsPage() {
         <div className={payrollStyles.topBar}>
           <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>
           <div className={payrollStyles.topActions}>
-            <button
-              type="button"
-              aria-label="Search"
-              className={payrollStyles.iconButton}
-              onClick={() => {
-                const input = document.querySelector<HTMLInputElement>(
-                  "[data-vendor-search]",
-                );
-                input?.focus();
-              }}
-            >
-              <Search size={16} />
-            </button>
             <NotificationsLink className={payrollStyles.iconButton} />
             <button
               type="button"

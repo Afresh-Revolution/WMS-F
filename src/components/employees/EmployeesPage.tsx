@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   LayoutGrid,
   List,
@@ -41,7 +41,6 @@ export function EmployeesPage() {
   const [activeFilter, setActiveFilter] = useState<DepartmentFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [addOpen, setAddOpen] = useState(false);
-  const searchRef = useRef<HTMLInputElement>(null);
 
   const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
@@ -71,11 +70,6 @@ export function EmployeesPage() {
     });
   }, [activeFilter, query, employees]);
 
-  function focusSearch() {
-    searchRef.current?.focus();
-    showToast("Use the search field below", "info");
-  }
-
   function viewProfile(employee: (typeof employees)[number]) {
     showToast(
       `${employee.name} — ${employee.title}, ${employee.department}`,
@@ -96,15 +90,6 @@ export function EmployeesPage() {
         <div className={styles.topBar}>
           {loading ? <span>Loading employees…</span> : null}
           {error ? <span role="alert">{error}</span> : null}
-          <button
-            type="button"
-            className={styles.globalSearch}
-            onClick={focusSearch}
-          >
-            <Search size={15} className={styles.globalSearchIcon} />
-            <span className={styles.globalSearchText}>Search</span>
-            <span className={styles.shortcut}>⌘ K</span>
-          </button>
           <div className={styles.topActions}>
             <NotificationsLink className={styles.iconButton} />
             <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
@@ -156,7 +141,6 @@ export function EmployeesPage() {
         <label className={styles.staffSearch}>
           <Search size={16} className={styles.staffSearchIcon} />
           <input
-            ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search staff..."

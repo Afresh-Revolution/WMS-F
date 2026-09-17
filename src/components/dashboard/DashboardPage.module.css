@@ -125,35 +125,23 @@
 }
 
 .heroButton {
-  margin-top: 20px;
-  height: 38px;
-  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 24px;
+  min-height: 52px;
+  padding: 14px 32px;
   border-radius: 999px;
   background: #fff;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
   color: var(--afresh-orange);
   transition: background 0.15s ease;
 }
 
 .heroButton:hover {
   background: rgba(255, 255, 255, 0.92);
-}
-
-.heroAvatar {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #ffb74d, #ff7043);
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .heroDecoration {

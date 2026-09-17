@@ -121,16 +121,6 @@ export function AccountantVendorsPage() {
       <div className={styles.topBar}>
         <p className={styles.dateLabel}>Tuesday, August 11</p>
         <div className={styles.topActions}>
-          <label className={styles.search}>
-            <Search size={15} className={styles.searchIcon} />
-            <input
-              type="search"
-              placeholder="Search"
-              className={styles.searchInput}
-              aria-label="Search"
-            />
-            <kbd className={styles.searchKbd}>⌘ K</kbd>
-          </label>
           <Link
             href="/accountant/notifications"
             className={styles.iconButton}
