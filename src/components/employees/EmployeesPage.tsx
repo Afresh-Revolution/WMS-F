@@ -16,6 +16,7 @@ import {
   type EmployeeStatus,
 } from "@/data/employees";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { EmployeeProfileDrawer } from "@/components/employees/EmployeeProfileDrawer";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import {
@@ -25,7 +26,7 @@ import {
   lookupsApi,
 } from "@/lib/api";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
-import { listFrom, mapEmployee, readTemporaryPassword, str } from "@/lib/api/mappers";
+import { listFrom, mapEmployee, readTemporaryPassword, str, type MappedEmployee } from "@/lib/api/mappers";
 import styles from "./EmployeesPage.module.css";
 
 type ViewMode = "grid" | "list";
@@ -53,6 +54,9 @@ export function EmployeesPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [profileEmployee, setProfileEmployee] = useState<MappedEmployee | null>(
+    null,
+  );
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { showToast } = usePageActions();
@@ -142,12 +146,8 @@ export function EmployeesPage() {
     showToast("Use the search field below", "info");
   }
 
-  function viewProfile(employee: (typeof employees)[number]) {
-    showToast(
-      `${employee.name} — ${employee.title}, ${employee.department}`,
-      "info",
-    );
-    window.location.href = `mailto:${employee.email}`;
+  function viewProfile(employee: MappedEmployee) {
+    setProfileEmployee(employee);
   }
 
   function closeAddModal() {
@@ -444,6 +444,13 @@ export function EmployeesPage() {
               document.body,
             )
           : null}
+
+        {profileEmployee ? (
+          <EmployeeProfileDrawer
+            employee={profileEmployee}
+            onClose={() => setProfileEmployee(null)}
+          />
+        ) : null}
       </div>
   );
 }

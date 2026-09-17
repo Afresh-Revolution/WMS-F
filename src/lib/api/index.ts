@@ -109,6 +109,7 @@ export {
 } from "./discipline";
 export {
   listStaffEmployees,
+  getStaffEmployee,
   createStaffEmployee,
   findStaffEmployeeByEmail,
 } from "./staffEmployees";

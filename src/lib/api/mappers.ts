@@ -280,6 +280,7 @@ export type MappedEmployee = {
   department: string;
   location: string;
   email: string;
+  phone: string;
   status: "Active" | "On leave";
   avatarColor: string;
 };
@@ -337,6 +338,13 @@ export function mapEmployee(record: Record<string, unknown>): MappedEmployee {
     ),
     location: str(nested.location ?? nested.office ?? overview?.location),
     email,
+    phone: str(
+      nested.phone ??
+        nested.phoneNumber ??
+        nested.mobile ??
+        profile?.phone ??
+        user?.phone,
+    ),
     status: statusRaw.includes("leave") ? "On leave" : "Active",
     avatarColor: str(nested.avatarColor ?? record.avatarColor, avatarColor(id || name)),
   };

@@ -36,7 +36,21 @@
   justify-content: space-between;
   gap: 2rem;
   padding: 2.25rem 2.5rem;
-  background: linear-gradient(165deg, #ef5f2f 0%, #e85528 52%, #df4f24 100%);
+  background:
+    radial-gradient(
+      120% 70% at 50% -8%,
+      rgba(255, 186, 140, 0.18) 0%,
+      transparent 52%
+    ),
+    linear-gradient(
+      180deg,
+      #f16232 0%,
+      #ed5a28 38%,
+      #d24a22 58%,
+      #8a3018 74%,
+      #3d160f 88%,
+      #140807 100%
+    );
   color: #fff;
   overflow: hidden;
 }
