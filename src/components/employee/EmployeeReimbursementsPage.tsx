@@ -1,79 +1,131 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { employeeHome, employeeProfile } from "@/data/employeeHome";
-import { useAsyncData } from "@/hooks/useAsyncData";
-import { expensesApi } from "@/lib/api";
-import { listFrom, str } from "@/lib/api/mappers";
-import styles from "./EmployeeUtilityPages.module.css";
+import { employeeProfile } from "@/data/employeeHome";
+import styles from "./EmployeeExpensesPage.module.css";
 
-function isReimbursement(status: string) {
-  const value = status.toLowerCase();
-  return (
-    value.includes("reimburse") ||
-    value === "paid" ||
-    value === "returned" ||
-    value === "return"
-  );
+type ReimbursementStatus = "Pending" | "Paid" | "Returned";
+type ReimbursementFilter = "All" | ReimbursementStatus;
+type Reimbursement = {
+  id: string;
+  title: string;
+  status: ReimbursementStatus;
+  category: string;
+  date: string;
+  amount: string;
+};
+
+const filters: ReimbursementFilter[] = ["All", "Pending", "Paid", "Returned"];
+
+const reimbursements: Reimbursement[] = [
+  {
+    id: "RB-2144",
+    title: "Home internet top-up",
+    status: "Pending",
+    category: "Utilities",
+    date: "8 Aug",
+    amount: "₦ 15,000",
+  },
+  {
+    id: "RB-2138",
+    title: "Design software subscription",
+    status: "Paid",
+    category: "Software",
+    date: "29 Jul",
+    amount: "₦ 32,400",
+  },
+  {
+    id: "RB-2119",
+    title: "Conference travel",
+    status: "Returned",
+    category: "Travel",
+    date: "12 Jul",
+    amount: "₦ 86,000",
+  },
+];
+
+function statusClass(status: ReimbursementStatus) {
+  if (status === "Paid") return styles.statusSuccess;
+  if (status === "Returned") return styles.statusRejected;
+  return styles.statusSubmitted;
 }
 
 export function EmployeeReimbursementsPage() {
-  const { data, loading, error } = useAsyncData(() => expensesApi.list(), []);
-
-  const items = useMemo(() => {
-    const mapped = listFrom(data ?? undefined)
-      .map((record, index) => ({
-        id: str(record.id ?? record._id, String(index)),
-        title: str(record.title ?? record.name ?? record.description, "Expense"),
-        status: str(record.status ?? record.state, "Pending"),
-      }))
-      .filter((item) => isReimbursement(item.status));
-    if (mapped.length > 0) return mapped;
-    return employeeHome.reimbursements.map((item, index) => ({
-      id: `local-${index}`,
-      title: item.title,
-      status: item.status,
-    }));
-  }, [data]);
+  const [filter, setFilter] = useState<ReimbursementFilter>("All");
+  const visible = useMemo(
+    () =>
+      reimbursements.filter(
+        (item) => filter === "All" || item.status === filter,
+      ),
+    [filter],
+  );
 
   return (
     <div className={styles.page}>
-      {loading ? <p className={styles.hint}>Loading reimbursements…</p> : null}
-      {error ? (
-        <p className={styles.hint} role="alert">
-          {error}
-        </p>
-      ) : null}
-      <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Wednesday, August 12</p>
+      <header className={styles.topBar}>
+        <p>Wednesday, August 12</p>
         <div className={styles.topActions}>
+          <label className={styles.search}>
+            <Search size={14} />
+            <input aria-label="Search" placeholder="Search" readOnly />
+            <kbd>⌘ K</kbd>
+          </label>
           <NotificationsLink className={styles.iconButton} />
-          <ProfileLink className={styles.avatarChip}>
+          <ProfileLink className={styles.profileButton}>
             {employeeProfile.initials}
           </ProfileLink>
         </div>
+      </header>
+
+      <div className={styles.heading}>
+        <div>
+          <p>My reimbursements</p>
+          <h1>Reimbursement status</h1>
+          <span>Track claims that Accounts is processing or has paid.</span>
+        </div>
       </div>
 
-      <p className={styles.eyebrow}>My reimbursements</p>
-      <h1 className={styles.title}>Payments on your claims</h1>
-      <p className={styles.subtitle}>
-        Track which approved expenses have been paid, returned, or are still
-        processing.
-      </p>
+      <nav className={styles.filters} aria-label="Reimbursement filters">
+        {filters.map((item) => (
+          <button
+            type="button"
+            key={item}
+            className={filter === item ? styles.filterActive : ""}
+            onClick={() => setFilter(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </nav>
 
-      <div className={styles.list}>
-        {items.length === 0 ? (
-          <p className={styles.empty}>No reimbursements to show.</p>
+      <section
+        className={styles.expenseList}
+        aria-label={`${filter} reimbursements`}
+      >
+        {visible.length === 0 ? (
+          <p className={styles.empty}>No reimbursements in this view.</p>
         ) : (
-          items.map((item) => (
-            <article key={item.id} className={styles.card}>
-              <h2 className={styles.cardTitle}>{item.title}</h2>
-              <p className={styles.cardMeta}>{item.status}</p>
+          visible.map((item) => (
+            <article key={item.id} className={styles.expenseCard}>
+              <div className={styles.expenseBody}>
+                <div className={styles.expenseHeading}>
+                  <span className={styles.expenseId}>{item.id}</span>
+                  <h2>{item.title}</h2>
+                  <span className={`${styles.status} ${statusClass(item.status)}`}>
+                    {item.status}
+                  </span>
+                </div>
+                <p>
+                  {item.category} · {item.date}
+                </p>
+              </div>
+              <strong>{item.amount}</strong>
             </article>
           ))
         )}
-      </div>
+      </section>
     </div>
   );
 }

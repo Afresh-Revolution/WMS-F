@@ -414,3 +414,132 @@
     font-size: 28px;
   }
 }
+
+.passwordBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(28, 25, 23, 0.45);
+}
+
+.passwordModal {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 440px);
+  max-height: min(90vh, 720px);
+  min-height: 0;
+  overflow: hidden;
+  padding: 1.25rem;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+}
+
+.passwordTitle {
+  flex-shrink: 0;
+  margin: 0 0 0.35rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.passwordCopy {
+  flex-shrink: 0;
+  margin: 0 0 1rem;
+  color: #57534e;
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.passwordValue {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 8px;
+  background: #fafaf9;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.passwordField {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.875rem;
+}
+
+.addForm {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+
+.addFormFields {
+  display: grid;
+  gap: 0.85rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.35rem;
+  scrollbar-width: thin;
+  scrollbar-color: #d6d3d1 transparent;
+}
+
+.addFormFields::-webkit-scrollbar {
+  width: 8px;
+}
+
+.addFormFields::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.addFormFields::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #d6d3d1;
+}
+
+.addField {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
+.addField input,
+.addField select {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #d6d3d1;
+  border-radius: 8px;
+}
+
+.addSubmit {
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  background: var(--afresh-orange);
+  color: #fff;
+  font-weight: 600;
+}
+
+.passwordActions {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #e7e5e4;
+}
+
+.passwordCancel {
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  background: #f5f5f4;
+  color: #44403c;
+  font-weight: 600;
+}

@@ -9,9 +9,14 @@ export function SignOutPage() {
   const router = useRouter();
 
   useEffect(() => {
-    void authApi.logout().finally(() => {
-      router.replace("/");
-    });
+    void authApi
+      .logout()
+      .catch(() => {
+        /* Tokens are cleared even if the server session is already gone. */
+      })
+      .finally(() => {
+        router.replace("/");
+      });
   }, [router]);
 
   return (

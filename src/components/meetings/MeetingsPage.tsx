@@ -37,6 +37,18 @@ const createMeetingFields = [
   { name: "location", label: "Location", required: true },
 ];
 
+function meetingWriteBody(values: Record<string, string>) {
+  const body: Record<string, unknown> = {
+    title: values.title.trim(),
+    date: values.date.trim(),
+    time: values.time.replace(/\s+/g, "").toUpperCase(),
+    location: values.location.trim(),
+  };
+  const duration = values.duration.trim().toUpperCase();
+  if (duration) body.duration = duration;
+  return body;
+}
+
 export function MeetingsPage() {
   const [activeFilter, setActiveFilter] = useState<MeetingFilter>("Upcoming");
   const [query, setQuery] = useState("");
@@ -106,13 +118,7 @@ export function MeetingsPage() {
 
   async function handleCreateMeeting(values: Record<string, string>) {
     await runAction("Create meeting", async () => {
-      await superAdminApi.meetings.create({
-        title: values.title.trim(),
-        date: values.date.trim(),
-        time: values.time.replace(/\s+/g, ""),
-        duration: values.duration.trim(),
-        location: values.location.trim(),
-      });
+      await superAdminApi.meetings.create(meetingWriteBody(values));
       refetch();
     });
   }
@@ -120,13 +126,7 @@ export function MeetingsPage() {
   async function handleEditMeeting(values: Record<string, string>) {
     if (!editMeeting) return;
     await runAction("Update meeting", async () => {
-      await superAdminApi.meetings.patch(editMeeting.id, {
-        title: values.title.trim(),
-        date: values.date.trim(),
-        time: values.time.replace(/\s+/g, ""),
-        duration: values.duration.trim(),
-        location: values.location.trim(),
-      });
+      await superAdminApi.meetings.patch(editMeeting.id, meetingWriteBody(values));
       refetch();
     });
     setEditMeeting(null);

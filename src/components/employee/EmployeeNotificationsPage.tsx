@@ -1,100 +1,150 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { employeeHome, employeeProfile } from "@/data/employeeHome";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
+import { employeeHome, employeeProfile } from "@/data/employeeHome";
 import { notificationsApi } from "@/lib/api";
-import { listFrom, str } from "@/lib/api/mappers";
-import styles from "./EmployeeUtilityPages.module.css";
+import { bool, listFrom, str } from "@/lib/api/mappers";
+import styles from "./EmployeeNotificationsPage.module.css";
+
+type EmployeeNotification = {
+  id: string;
+  message: string;
+  time: string;
+  unread: boolean;
+};
+
+const fallbackNotifications: EmployeeNotification[] =
+  employeeHome.notifications.map((item, index) => ({
+    id: `local-${index + 1}`,
+    message: item.message,
+    time: "Today",
+    unread: true,
+  }));
+
+function mapNotification(
+  record: Record<string, unknown>,
+  index: number,
+): EmployeeNotification {
+  return {
+    id: str(record.id ?? index),
+    message: str(record.message ?? record.body ?? record.title),
+    time: str(record.timeAgo ?? record.createdAt ?? record.time),
+    unread: bool(record.unread ?? record.isUnread ?? !record.readAt, true),
+  };
+}
 
 export function EmployeeNotificationsPage() {
   const { runAction } = usePageActions();
-  const { data, loading, error, refetch } = useAsyncData(
-    () => notificationsApi.list(),
-    [],
-  );
+  const [localRead, setLocalRead] = useState<Set<string>>(new Set());
+  const { data } = useAsyncData(async () => {
+    try {
+      return await notificationsApi.list();
+    } catch {
+      return null;
+    }
+  }, []);
 
   const notifications = useMemo(() => {
-    const mapped = listFrom(data ?? undefined).map((record, index) => ({
-      id: str(record.id ?? record._id, String(index)),
-      text: str(
-        record.message ?? record.body ?? record.title,
-        "Notification update",
-      ),
-      unread: !Boolean(record.read ?? record.isRead ?? record.readAt),
-    }));
-    if (mapped.length > 0) return mapped;
-    return employeeHome.notifications.map((item, index) => ({
-      id: `local-${index}`,
-      text: item.message,
-      unread: true,
-    }));
-  }, [data]);
+    const live = listFrom(data ?? undefined).map(mapNotification);
+    const source = live.length > 0 ? live : fallbackNotifications;
+    return source.map((item) =>
+      localRead.has(item.id) ? { ...item, unread: false } : item,
+    );
+  }, [data, localRead]);
 
   const unread = notifications.filter((item) => item.unread);
 
-  async function handleMarkRead(id: string, currentlyUnread: boolean) {
-    if (!currentlyUnread) return;
-    await runAction(
-      "Mark as read",
-      async () => {
-        await notificationsApi.markRead(id);
-        refetch();
-      },
-      "Notification marked as read",
-    );
+  function markLocal(ids: string[]) {
+    setLocalRead((current) => {
+      const next = new Set(current);
+      for (const id of ids) next.add(id);
+      return next;
+    });
+  }
+
+  async function handleMarkRead(item: EmployeeNotification) {
+    if (!item.unread) return;
+    try {
+      await runAction(
+        "Mark as read",
+        async () => {
+          if (!item.id.startsWith("local-")) {
+            await notificationsApi.markRead(item.id);
+          }
+          markLocal([item.id]);
+        },
+        "Notification marked as read",
+      );
+    } catch {
+      /* runAction already showed the API error */
+    }
   }
 
   async function handleMarkAllRead() {
-    await runAction(
-      "Mark all as read",
-      async () => {
-        await notificationsApi.markAllRead();
-        refetch();
-      },
-      "All notifications marked as read",
-    );
+    if (unread.length === 0) return;
+    try {
+      await runAction(
+        "Mark all as read",
+        async () => {
+          const remote = unread.filter((item) => !item.id.startsWith("local-"));
+          if (remote.length > 0) {
+            try {
+              await notificationsApi.markAllRead();
+            } catch {
+              await Promise.all(
+                remote.map((item) => notificationsApi.markRead(item.id)),
+              );
+            }
+          }
+          markLocal(unread.map((item) => item.id));
+        },
+        "All notifications marked as read",
+      );
+    } catch {
+      /* runAction already showed the API error */
+    }
   }
 
   return (
     <div className={styles.page}>
-      {loading ? <p className={styles.hint}>Loading notifications…</p> : null}
-      {error ? (
-        <p className={styles.hint} role="alert">
-          {error}
-        </p>
-      ) : null}
-      <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Wednesday, August 12</p>
+      <header className={styles.topBar}>
+        <p>Wednesday, August 12</p>
         <div className={styles.topActions}>
+          <label className={styles.search}>
+            <Search size={14} />
+            <input aria-label="Search" placeholder="Search" readOnly />
+            <kbd>⌘ K</kbd>
+          </label>
           <NotificationsLink className={styles.iconButton} />
-          <ProfileLink className={styles.avatarChip}>
+          <ProfileLink className={styles.profileButton}>
             {employeeProfile.initials}
           </ProfileLink>
         </div>
-      </div>
+      </header>
 
-      <div className={styles.headerRow}>
+      <div className={styles.heading}>
         <div>
-          <p className={styles.eyebrow}>Notifications</p>
-          <h1 className={styles.title}>Your alerts</h1>
+          <p>Notifications</p>
+          <h1>Your alerts</h1>
+          <span>
+            Leave, tasks, meetings and company updates for your workspace.
+          </span>
         </div>
         <button
           type="button"
-          className={styles.markAllButton}
+          className={styles.markAll}
           onClick={() => void handleMarkAllRead()}
           disabled={unread.length === 0}
         >
           Mark all as read
         </button>
       </div>
-      <p className={styles.subtitle}>
-        Leave, task, meeting, and expense updates for your workspace.
-      </p>
 
-      <div className={styles.list}>
+      <section className={styles.list} aria-label="Notifications">
         {notifications.length === 0 ? (
           <p className={styles.empty}>No notifications yet.</p>
         ) : (
@@ -102,21 +152,20 @@ export function EmployeeNotificationsPage() {
             <button
               key={item.id}
               type="button"
-              className={`${styles.noticeCard} ${
-                item.unread ? styles.noticeCardUnread : ""
-              }`}
-              onClick={() => void handleMarkRead(item.id, item.unread)}
+              className={`${styles.card} ${item.unread ? styles.cardUnread : ""}`}
+              onClick={() => void handleMarkRead(item)}
             >
-              <span className={styles.noticeTop}>
-                <span className={styles.cardTitle}>{item.text}</span>
+              <span className={styles.cardTop}>
+                <span className={styles.message}>{item.message}</span>
                 {item.unread ? (
                   <span className={styles.unreadDot} aria-label="Unread" />
                 ) : null}
               </span>
+              {item.time ? <span className={styles.time}>{item.time}</span> : null}
             </button>
           ))
         )}
-      </div>
+      </section>
     </div>
   );
 }

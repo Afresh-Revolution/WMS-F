@@ -22,7 +22,12 @@ import {
   type LeaveStatus,
 } from "@/data/dashboard";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { superAdminApi, unwrapRecord } from "@/lib/api";
+import {
+  approveLeaveRequest,
+  rejectLeaveRequest,
+  superAdminApi,
+  unwrapRecord,
+} from "@/lib/api";
 import { avatarColor, initials, listFrom, num, str } from "@/lib/api/mappers";
 import styles from "./DashboardPage.module.css";
 
@@ -60,18 +65,21 @@ export function DashboardPage() {
 
   function approveLeave(id: string, name: string) {
     void runAction(`Approve ${name}'s leave`, async () => {
-      await superAdminApi.hr.leave.approve(id);
+      await approveLeaveRequest(id, "Get well soon. Approved.");
       setLeaveMenuId(null);
       refetch();
-    });
+    }).catch(() => undefined);
   }
 
   function rejectLeave(id: string, name: string) {
     void runAction(`Decline ${name}'s leave`, async () => {
-      await superAdminApi.hr.leave.reject(id);
+      await rejectLeaveRequest(
+        id,
+        "Team coverage is not available that week.",
+      );
       setLeaveMenuId(null);
       refetch();
-    });
+    }).catch(() => undefined);
   }
 
   const overview = useMemo(() => unwrapRecord(data), [data]);

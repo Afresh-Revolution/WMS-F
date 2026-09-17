@@ -9,7 +9,42 @@ const FORWARD_REQUEST_HEADERS = [
 
 const FORWARD_RESPONSE_HEADERS = ["content-type", "content-disposition"];
 
+/** The Response constructor rejects a non-null body for these statuses. */
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
+
 /** Server-side backend URL (route handlers). Prefer API_ROOT_URL over NEXT_PUBLIC_*. */
+const PROXY_ATTEMPTS = 3;
+const PROXY_TIMEOUT_MS = 15_000;
+
+async function fetchBackend(
+  targetUrl: string,
+  init: RequestInit,
+): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= PROXY_ATTEMPTS; attempt += 1) {
+    try {
+      return await fetch(targetUrl, {
+        ...init,
+        signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
+      });
+    } catch (error) {
+      lastError = error;
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(
+        `[api-proxy] attempt ${attempt}/${PROXY_ATTEMPTS} failed:`,
+        targetUrl,
+        detail,
+      );
+      if (attempt < PROXY_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+      }
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Backend fetch failed");
+}
+
 export function resolveApiRoot(): string {
   const candidates = [
     process.env.API_ROOT_URL,
@@ -42,13 +77,14 @@ export async function proxyToBackend(
   }
 
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  const requestBody = hasBody ? await request.text() : undefined;
   let response: Response;
 
   try {
-    response = await fetch(targetUrl, {
+    response = await fetchBackend(targetUrl, {
       method: request.method,
       headers,
-      body: hasBody ? await request.text() : undefined,
+      body: requestBody,
       cache: "no-store",
     });
   } catch (error) {
@@ -56,7 +92,8 @@ export async function proxyToBackend(
     console.error("[api-proxy] fetch failed:", targetUrl, detail);
     return Response.json(
       {
-        error: "Unable to reach the backend API.",
+        error:
+          "The backend could not be reached. Wait a few seconds and try again.",
         detail,
         target: targetUrl,
       },
@@ -70,7 +107,11 @@ export async function proxyToBackend(
     if (value) responseHeaders.set(name, value);
   }
 
-  return new Response(await response.arrayBuffer(), {
+  const responseBody = NULL_BODY_STATUSES.has(response.status)
+    ? null
+    : await response.arrayBuffer();
+
+  return new Response(responseBody, {
     status: response.status,
     headers: responseHeaders,
   });

@@ -18,8 +18,8 @@ export type { ManagerApi, ManagerListParams } from "./manager";
 export { secretaryApi } from "./secretary";
 export type { SecretaryListParams } from "./secretary";
 
-export { authApi, dashboardApi, healthApi, searchApi } from "./auth";
-export type { AuthUser, LoginPayload, LoginResponse, BootstrapPayload, BootstrapStatus } from "./auth";
+export { authApi, dashboardApi, healthApi, searchApi, DEFAULT_LOGIN_OPTIONS } from "./auth";
+export type { AuthUser, LoginPayload, LoginOptions, LoginResponse, BootstrapPayload, BootstrapStatus } from "./auth";
 
 export { profileApi } from "./profile";
 export type { ProfileRecord } from "./profile";
@@ -30,6 +30,7 @@ export { securityApi } from "./security";
 export { emailConfigApi, notificationConfigApi, notificationsApi } from "./notifications";
 export { usersApi, rolesApi, permissionsApi } from "./users";
 export { departmentsApi, hrApi } from "./departments";
+export { lookupsApi, loadHodOptions } from "./lookups";
 export { reportsApi, auditLogsApi } from "./reports";
 export { superAdminApi, saRequest } from "./superAdmin";
 
@@ -73,4 +74,43 @@ export {
   announcementsApi,
   purchasesApi,
 } from "./resources";
+export {
+  listCompanyAnnouncements,
+  publishCompanyAnnouncement,
+  getAdminAnnouncementDashboard,
+  publishAdminAnnouncement,
+  pinAdminAnnouncement,
+  unpinAdminAnnouncement,
+  listStaffAnnouncements,
+  getStaffUnreadCount,
+  getStaffAnnouncement,
+  markStaffAnnouncementRead,
+  staffUnreadCountFrom,
+} from "./companyAnnouncements";
+export {
+  listLeaveTypes,
+  listMyLeave,
+  listLeaveBalances,
+  listOrganisationLeave,
+  applyForLeave,
+  getEmployeeLeave,
+  approveLeaveRequest,
+  rejectLeaveRequest,
+  withdrawLeaveRequest,
+  leaveDayCount,
+  employeeBalanceCards,
+  remainingDaysForType,
+  leaveDecisionLetter,
+} from "./leave";
+export type { LeaveTypeOption, LeaveBalanceCard, LeaveApplyInput } from "./leave";
+export {
+  listDisciplinaryRecords,
+  createDisciplinaryRecord,
+} from "./discipline";
+export {
+  listStaffEmployees,
+  createStaffEmployee,
+  findStaffEmployeeByEmail,
+} from "./staffEmployees";
+export type { DisciplinaryRecordInput } from "./discipline";
 export type { ResourceModule } from "./resources";

@@ -35,7 +35,7 @@ export function DisciplineRecordModal({
       await superAdminApi.discipline.action(record.id, "acknowledge");
       onUpdated?.();
       onClose();
-    });
+    }).catch(() => undefined);
   }
 
   function closeCase() {
@@ -43,7 +43,7 @@ export function DisciplineRecordModal({
       await superAdminApi.discipline.action(record.id, "close");
       onUpdated?.();
       onClose();
-    });
+    }).catch(() => undefined);
   }
 
   useEffect(() => {

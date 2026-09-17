@@ -277,16 +277,24 @@
 .modalBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
-  display: grid;
-  place-items: center;
+  z-index: 120;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px;
   background: rgba(45, 31, 24, 0.52);
 }
 
 .modal {
   position: relative;
+  display: flex;
+  flex-direction: column;
   width: min(440px, 100%);
+  max-height: min(calc(100dvh - 40px), 720px);
+  min-height: 0;
+  margin: auto;
   padding: 28px 26px 24px;
   border-top: 4px solid var(--afresh-orange);
   border-radius: 14px;
@@ -295,6 +303,7 @@
 }
 
 .modal h2 {
+  flex-shrink: 0;
   margin: 0;
   color: var(--afresh-orange);
   font-family: var(--font-display);
@@ -303,6 +312,7 @@
 }
 
 .modalDescription {
+  flex-shrink: 0;
   margin: 8px 0 18px;
   color: #78716c;
   font-size: 11px;
@@ -314,6 +324,38 @@
   right: 18px;
   display: inline-flex;
   color: #a8a29e;
+}
+
+.modal form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.modalFields {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #d6d3d1 transparent;
+}
+
+.modalFields::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modalFields::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modalFields::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #d6d3d1;
 }
 
 .modalField {
@@ -361,15 +403,20 @@
   box-shadow: 0 0 0 3px rgba(242, 84, 38, 0.1);
 }
 
+.modalField input:disabled {
+  color: #a8a29e;
+  background: #f5f5f4;
+  cursor: not-allowed;
+}
+
 .dateFields {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  margin-top: 15px;
 }
 
 .duration {
-  margin: 10px 0 16px;
+  margin: 0;
   color: #a8a29e;
   font-size: 10px;
 }
@@ -379,12 +426,30 @@
   font-weight: 600;
 }
 
+.letterBody {
+  flex: 1;
+  min-height: 0;
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  overflow-y: auto;
+  border: 1px solid #ebe6e1;
+  border-radius: 12px;
+  background: #fffaf7;
+  color: var(--afresh-ink);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
 .modalActions {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 24px;
+  margin-top: 16px;
+  padding-top: 8px;
 }
 
 .modalCancel,

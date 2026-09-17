@@ -8,6 +8,7 @@ import {
   ApiError,
 } from "./client";
 import { cacheCurrentUserFromPayload } from "@/lib/currentUser";
+import { cacheWorkspaceFromPayload } from "@/lib/workspace";
 
 export type AuthUser = {
   id: string;
@@ -20,6 +21,20 @@ export type AuthUser = {
 export type LoginPayload = {
   email: string;
   password: string;
+  keepMeSignedIn?: boolean;
+};
+
+export type LoginOptions = {
+  forgotPasswordEnabled: boolean;
+  keepMeSignedInEnabled: boolean;
+  ssoEnabled: boolean;
+};
+
+/** Used until /auth/login-options ships, so the screen keeps its current UI. */
+export const DEFAULT_LOGIN_OPTIONS: LoginOptions = {
+  forgotPasswordEnabled: true,
+  keepMeSignedInEnabled: true,
+  ssoEnabled: true,
 };
 
 export type LoginResponse = {
@@ -29,6 +44,11 @@ export type LoginResponse = {
   refreshToken?: string;
   refresh_token?: string;
   user?: AuthUser;
+  workspace?: {
+    roleKey?: string;
+    homePath?: string;
+    dashboardPath?: string;
+  };
   mfaRequired?: boolean;
   challengeToken?: string;
   data?: Record<string, unknown>;
@@ -122,6 +142,48 @@ function storeAuthTokens(response: LoginResponse) {
   }
 
   cacheCurrentUserFromPayload(response);
+  cacheWorkspaceFromPayload(response);
+}
+
+function readFlag(
+  record: Record<string, unknown>,
+  keys: string[],
+  fallback: boolean,
+): boolean {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "boolean") return value;
+  }
+  return fallback;
+}
+
+function parseLoginOptions(payload: unknown): LoginOptions {
+  const root =
+    payload && typeof payload === "object"
+      ? (payload as Record<string, unknown>)
+      : {};
+  const data =
+    root.data && typeof root.data === "object"
+      ? (root.data as Record<string, unknown>)
+      : root;
+
+  return {
+    forgotPasswordEnabled: readFlag(
+      data,
+      ["forgotPasswordEnabled", "forgotPassword", "allowForgotPassword"],
+      DEFAULT_LOGIN_OPTIONS.forgotPasswordEnabled,
+    ),
+    keepMeSignedInEnabled: readFlag(
+      data,
+      ["keepMeSignedInEnabled", "keepMeSignedIn", "allowKeepMeSignedIn"],
+      DEFAULT_LOGIN_OPTIONS.keepMeSignedInEnabled,
+    ),
+    ssoEnabled: readFlag(
+      data,
+      ["ssoEnabled", "sso", "allowSso"],
+      DEFAULT_LOGIN_OPTIONS.ssoEnabled,
+    ),
+  };
 }
 
 function readMfaChallenge(response: LoginResponse) {
@@ -209,7 +271,34 @@ export const authApi = {
     return response;
   },
 
-  login: async (body: LoginPayload) => {
+  /** Shared sign-in for every role. Staff users must not use superAdminLogin. */
+  login: async ({ email, password, keepMeSignedIn = true }: LoginPayload) => {
+    const response = await apiRequest<
+      LoginResponse & { success?: boolean; message?: string }
+    >("/auth/login", {
+      method: "POST",
+      body: { email, password, keepMeSignedIn },
+      auth: false,
+    });
+    assertLoginSucceeded(response);
+    return response;
+  },
+
+  /** Flags for forgot-password, keep-me-signed-in and SSO on the login screen. */
+  loginOptions: async (): Promise<LoginOptions> => {
+    try {
+      const response = await apiRequest<Record<string, unknown>>(
+        "/auth/login-options",
+        { auth: false },
+      );
+      return parseLoginOptions(response);
+    } catch {
+      return DEFAULT_LOGIN_OPTIONS;
+    }
+  },
+
+  /** Super Admin-only legacy route. Kept for recovery, not for staff sign-in. */
+  superAdminLogin: async (body: LoginPayload) => {
     const response = await apiRequest<
       LoginResponse & { success?: boolean; message?: string }
     >("/auth/login", {
@@ -255,6 +344,8 @@ export const authApi = {
       await v1ThenLegacy<void>("/auth/logout", "/api/superadmin/logout", {
         method: "POST",
       });
+    } catch {
+      /* Local sign-out still succeeds if the server session is already gone. */
     } finally {
       clearTokens();
     }
@@ -304,7 +395,7 @@ export const authApi = {
   legacy: {
     bootstrapStatus: () => authApi.bootstrapStatus(),
     bootstrap: (body: BootstrapPayload) => authApi.bootstrap(body),
-    login: (body: LoginPayload) => authApi.login(body),
+    login: (body: LoginPayload) => authApi.superAdminLogin(body),
     refresh: (refreshToken?: string) => authApi.refresh(refreshToken),
     logout: () => authApi.logout(),
     me: () => authApi.me(),

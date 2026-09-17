@@ -1,74 +1,143 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { employeeHome, employeeProfile } from "@/data/employeeHome";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { announcementsApi } from "@/lib/api";
-import { listFrom, str } from "@/lib/api/mappers";
-import styles from "./EmployeeUtilityPages.module.css";
+import { employeeProfile } from "@/data/employeeHome";
+import {
+  getStaffAnnouncement,
+  getStaffUnreadCount,
+  listStaffAnnouncements,
+  markStaffAnnouncementRead,
+  staffUnreadCountFrom,
+} from "@/lib/api";
+import { listFrom, mapAnnouncement } from "@/lib/api/mappers";
+import styles from "./EmployeeAnnouncementsPage.module.css";
+
+type EmployeeAnnouncement = {
+  id: string;
+  title: string;
+  source: string;
+  date: string;
+  body: string;
+  unread: boolean;
+  pinned: boolean;
+};
 
 export function EmployeeAnnouncementsPage() {
+  const [openedId, setOpenedId] = useState<string | null>(null);
+  const [localRead, setLocalRead] = useState<Set<string>>(new Set());
+
   const { data, loading, error } = useAsyncData(
-    () => announcementsApi.list(),
+    () => listStaffAnnouncements(),
+    [],
+  );
+  const { data: unreadPayload } = useAsyncData(
+    () => getStaffUnreadCount().catch(() => null),
     [],
   );
 
-  const announcements = useMemo(() => {
-    const mapped = listFrom(data ?? undefined).map((record, index) => ({
-      id: str(record.id ?? record._id, String(index)),
-      title: str(record.title ?? record.name, "Announcement"),
-      meta: str(
-        record.department ?? record.source ?? record.createdAt ?? record.date,
-      ),
-      body: str(record.body ?? record.summary ?? record.description),
-    }));
-    if (mapped.length > 0) return mapped;
-    return employeeHome.announcements.map((item, index) => ({
-      id: `local-${index}`,
-      title: item.title,
-      meta: item.meta,
-      body: "",
-    }));
-  }, [data]);
+  const announcements = useMemo((): EmployeeAnnouncement[] => {
+    return listFrom(data ?? undefined).map((record) => {
+      const item = mapAnnouncement(record);
+      return {
+        id: item.id,
+        title: item.title,
+        source: item.source,
+        date: item.date,
+        body: item.body,
+        unread: localRead.has(item.id) ? false : item.unread,
+        pinned: item.pinned,
+      };
+    });
+  }, [data, localRead]);
+
+  const unreadCount = useMemo(() => {
+    const mapped = announcements.filter((item) => item.unread).length;
+    if (localRead.size > 0 || !unreadPayload) return mapped;
+    return staffUnreadCountFrom(unreadPayload) || mapped;
+  }, [announcements, localRead.size, unreadPayload]);
+
+  async function openAnnouncement(item: EmployeeAnnouncement) {
+    const next = openedId === item.id ? null : item.id;
+    setOpenedId(next);
+    if (!next || !item.unread) return;
+    try {
+      await getStaffAnnouncement(item.id).catch(() => undefined);
+      await markStaffAnnouncementRead(item.id);
+      setLocalRead((current) => new Set(current).add(item.id));
+    } catch {
+      /* keep the item open even if mark-read fails */
+    }
+  }
 
   return (
     <div className={styles.page}>
-      {loading ? <p className={styles.hint}>Loading announcements…</p> : null}
-      {error ? (
-        <p className={styles.hint} role="alert">
-          {error}
-        </p>
-      ) : null}
-      <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Wednesday, August 12</p>
+      <header className={styles.topBar}>
+        <p>Wednesday, August 12</p>
         <div className={styles.topActions}>
+          <label className={styles.search}>
+            <Search size={14} />
+            <input aria-label="Search" placeholder="Search" readOnly />
+            <kbd>⌘ K</kbd>
+          </label>
           <NotificationsLink className={styles.iconButton} />
-          <ProfileLink className={styles.avatarChip}>
+          <ProfileLink className={styles.profileButton}>
             {employeeProfile.initials}
           </ProfileLink>
         </div>
+      </header>
+
+      <div className={styles.heading}>
+        <p>Announcements</p>
+        <h1>Company and department news</h1>
+        <span>Published updates targeted to you. Expired and draft items stay off this feed.</span>
+        {loading ? <p className={styles.metaLine}>Loading announcements…</p> : null}
+        {error ? (
+          <p className={styles.error} role="alert">
+            {error}
+          </p>
+        ) : null}
+        {!loading && !error ? (
+          <p className={styles.metaLine}>
+            {unreadCount} unread
+          </p>
+        ) : null}
       </div>
 
-      <p className={styles.eyebrow}>Announcements</p>
-      <h1 className={styles.title}>Company and team news</h1>
-      <p className={styles.subtitle}>
-        Updates from HR and your department that apply to your role.
-      </p>
-
-      <div className={styles.list}>
-        {announcements.length === 0 ? (
+      <section className={styles.list} aria-label="Announcements">
+        {announcements.length === 0 && !loading ? (
           <p className={styles.empty}>No announcements yet.</p>
         ) : (
-          announcements.map((item) => (
-            <article key={item.id} className={styles.card}>
-              <h2 className={styles.cardTitle}>{item.title}</h2>
-              {item.body ? <p className={styles.cardBody}>{item.body}</p> : null}
-              {item.meta ? <p className={styles.cardMeta}>{item.meta}</p> : null}
-            </article>
-          ))
+          announcements.map((item) => {
+            const open = openedId === item.id;
+            return (
+              <article
+                key={item.id}
+                className={`${styles.card} ${item.unread ? styles.cardUnread : ""}`}
+              >
+                <button
+                  type="button"
+                  className={styles.cardButton}
+                  onClick={() => void openAnnouncement(item)}
+                >
+                  <div className={styles.cardTop}>
+                    <h2 className={item.unread ? styles.titleUnread : undefined}>
+                      {item.title}
+                    </h2>
+                    <span>{item.pinned ? "Pinned" : item.source}</span>
+                  </div>
+                  {item.date ? <p className={styles.date}>{item.date}</p> : null}
+                </button>
+                {open && item.body ? (
+                  <p className={styles.body}>{item.body}</p>
+                ) : null}
+              </article>
+            );
+          })
         )}
-      </div>
+      </section>
     </div>
   );
 }

@@ -4,7 +4,13 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight, Shield } from "lucide-react";
-import { authApi, ApiError, getSessionToken } from "@/lib/api";
+import {
+  authApi,
+  ApiError,
+  getSessionToken,
+  DEFAULT_LOGIN_OPTIONS,
+  type LoginOptions,
+} from "@/lib/api";
 import { homePathForRole } from "@/lib/auth/portals";
 import {
   cacheCurrentUser,
@@ -32,6 +38,7 @@ export function LoginPage() {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [options, setOptions] = useState<LoginOptions>(DEFAULT_LOGIN_OPTIONS);
   const [mfaRequired, setMfaRequired] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
   const [challengeToken, setChallengeToken] = useState("");
@@ -59,6 +66,16 @@ export function LoginPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
+  useEffect(() => {
+    let active = true;
+    void authApi.loginOptions().then((next) => {
+      if (active) setOptions(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setLoading(true);
@@ -67,7 +84,11 @@ export function LoginPage() {
       if (mfaRequired) {
         await authApi.verifyMfa({ code: mfaCode, challengeToken });
       } else {
-        const response = await authApi.login({ email, password });
+        const response = await authApi.login({
+          email,
+          password,
+          keepMeSignedIn: remember,
+        });
         if (response.mfaRequired) {
           setMfaRequired(true);
           setChallengeToken(response.challengeToken ?? "");
@@ -180,25 +201,29 @@ export function LoginPage() {
               )}
 
               <div className={styles.formRow}>
-                <label className={styles.checkbox}>
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(event) => setRemember(event.target.checked)}
-                  />
-                  <span>Keep me signed in</span>
-                </label>
-                <button
-                  type="button"
-                  className={styles.textLink}
-                  onClick={() => {
-                    setForgotOpen(true);
-                    setForgotSent(false);
-                    setError(null);
-                  }}
-                >
-                  Forgot password?
-                </button>
+                {options.keepMeSignedInEnabled ? (
+                  <label className={styles.checkbox}>
+                    <input
+                      type="checkbox"
+                      checked={remember}
+                      onChange={(event) => setRemember(event.target.checked)}
+                    />
+                    <span>Keep me signed in</span>
+                  </label>
+                ) : null}
+                {options.forgotPasswordEnabled ? (
+                  <button
+                    type="button"
+                    className={styles.textLink}
+                    onClick={() => {
+                      setForgotOpen(true);
+                      setForgotSent(false);
+                      setError(null);
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                ) : null}
               </div>
 
               {error ? (

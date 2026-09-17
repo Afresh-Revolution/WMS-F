@@ -285,20 +285,154 @@ export type MappedEmployee = {
 };
 
 export function mapEmployee(record: Record<string, unknown>): MappedEmployee {
-  const name = str(record.name ?? record.fullName);
-  const id = str(record.id ?? record._id);
-  const statusRaw = str(record.status).toLowerCase();
+  const nested = asRecord(record.data) ?? record;
+  const user = asRecord(nested.user);
+  const profile = asRecord(nested.profile) ?? asRecord(nested.employee);
+  const avatar = asRecord(nested.avatar);
+  const overview = asRecord(nested.overview);
+  const email = str(
+    nested.email ??
+      user?.email ??
+      profile?.email ??
+      nested.workEmail ??
+      nested.companyEmail,
+  );
+  const name = str(
+    nested.fullName ??
+      nested.name ??
+      overview?.fullName ??
+      user?.name ??
+      user?.fullName ??
+      profile?.fullName,
+    email,
+  );
+  const id = str(
+    nested.id ??
+      nested._id ??
+      nested.employeeId ??
+      record.id ??
+      record._id ??
+      user?.id,
+  );
+  const statusRaw = str(nested.status ?? user?.status ?? overview?.status).toLowerCase();
   return {
     id,
     name,
-    initials: str(record.initials, initials(name)),
-    title: str(record.title ?? record.jobTitle ?? record.position),
-    department: str(record.department ?? record.departmentName),
-    location: str(record.location ?? record.office),
-    email: str(record.email),
+    initials: str(
+      nested.initials ?? avatar?.initials ?? overview?.initials,
+      initials(name),
+    ),
+    title: str(
+      nested.jobPosition ??
+        nested.jobTitle ??
+        nested.title ??
+        nested.position ??
+        overview?.position ??
+        user?.jobTitle,
+    ),
+    department: nestedStr(
+      nested.department ?? overview?.department,
+      ["name", "title", "label"],
+      str(nested.departmentName ?? user?.department ?? profile?.department),
+    ),
+    location: str(nested.location ?? nested.office ?? overview?.location),
+    email,
     status: statusRaw.includes("leave") ? "On leave" : "Active",
-    avatarColor: str(record.avatarColor, avatarColor(id || name)),
+    avatarColor: str(nested.avatarColor ?? record.avatarColor, avatarColor(id || name)),
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+export function readTemporaryPassword(payload: unknown): string {
+  const keyPattern = /temp|plain|generated|initial|login|temporary/i;
+
+  const walk = (value: unknown, depth: number): string => {
+    if (depth > 8 || value == null) return "";
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = walk(item, depth + 1);
+        if (found) return found;
+      }
+      return "";
+    }
+    if (typeof value !== "object") return "";
+    const record = value as Record<string, unknown>;
+    for (const [key, nested] of Object.entries(record)) {
+      if (
+        typeof nested === "string" &&
+        nested.trim() &&
+        /password/i.test(key) &&
+        keyPattern.test(key)
+      ) {
+        return nested.trim();
+      }
+    }
+    for (const nested of Object.values(record)) {
+      const found = walk(nested, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  };
+
+  return walk(payload, 0);
+}
+
+export type HodOption = {
+  id: string;
+  userId: string;
+  fullName: string;
+  name: string;
+  email: string;
+};
+
+function hodOptionFrom(record: Record<string, unknown>): HodOption | null {
+  const nested = asRecord(record.user) ?? asRecord(record.employee) ?? record;
+  const id = str(record.id ?? record.hodId ?? nested.id ?? nested.userId);
+  const userId = str(record.userId ?? nested.userId ?? id);
+  const fullName = str(
+    record.fullName ?? nested.fullName ?? record.name ?? nested.name,
+  );
+  const name = str(record.name ?? nested.name ?? fullName);
+  const email = str(record.email ?? nested.email);
+  if (!id && !userId) return null;
+  if (!fullName && !name && !email) return null;
+  return {
+    id: id || userId,
+    userId: userId || id,
+    fullName: fullName || name || email,
+    name: name || fullName || email,
+    email,
+  };
+}
+
+export function parseHodOptions(payload: unknown): HodOption[] {
+  const root = asRecord(payload);
+  const data = asRecord(root?.data) ?? root;
+  const meta = asRecord(root?.meta) ?? asRecord(data?.meta);
+  const named = [
+    ...listFrom(meta?.hods as never),
+    ...listFrom(data?.hods as never),
+    ...listFrom(data?.employees as never),
+    ...listFrom(data?.options as never),
+  ];
+  const pool = named.length
+    ? named
+    : [...listFrom(payload as never), ...listFrom(data as never)];
+  const seen = new Set<string>();
+  const options: HodOption[] = [];
+  for (const record of pool) {
+    const option = hodOptionFrom(record);
+    if (!option || seen.has(option.id)) continue;
+    seen.add(option.id);
+    options.push(option);
+  }
+  return options;
 }
 
 
@@ -306,7 +440,15 @@ export function mapDepartmentRecord(
   record: Record<string, unknown>,
   index: number,
 ): Department {
-  const managerName = str(record.head ?? record.hod ?? record.managerName, "—");
+  const hod = asRecord(record.hod) ?? asRecord(record.head);
+  const managerName = str(
+    hod?.fullName ??
+      hod?.name ??
+      record.hodName ??
+      record.head ??
+      record.managerName,
+    "—",
+  );
   const icons = ["software", "fashion", "media", "hardware", "hr", "model"] as const;
   return {
     id: str(record.id ?? record._id ?? index),
@@ -416,31 +558,109 @@ function mapIncrementStatus(
 }
 
 export function mapLeaveRequest(record: Record<string, unknown>) {
-  const name = str(record.name ?? record.employeeName);
+  const nested = asRecord(record.data) ?? record;
+  const leaveType = asRecord(nested.leaveType) ?? asRecord(nested.type);
+  const employee = asRecord(nested.employee);
+  const name = str(
+    nested.name ?? nested.employeeName ?? employee?.name ?? employee?.fullName,
+  );
+  const start = str(nested.startDate ?? nested.from);
+  const end = str(nested.endDate ?? nested.to);
   return {
-    id: str(record.id ?? record._id),
-    initials: str(record.initials, initials(name)),
+    id: str(nested.id ?? nested._id ?? record.id),
+    initials: str(nested.initials, initials(name)),
     name,
-    avatarColor: str(record.avatarColor, avatarColor(name)),
-    type: str(record.type ?? record.leaveType),
-    dateRange: str(record.dateRange ?? record.period ?? record.startDate),
-    days: num(record.days ?? record.duration),
-    status: mapLeaveStatus(record.status),
+    avatarColor: str(nested.avatarColor, avatarColor(name)),
+    type: str(
+      nested.leaveTypeName ??
+        leaveType?.name ??
+        nested.type ??
+        nested.leaveType,
+    ),
+    dateRange:
+      start && end && end !== start
+        ? `${start} – ${end}`
+        : str(nested.dateRange ?? nested.period ?? start),
+    days: num(
+      nested.duration ?? nested.workingDays ?? nested.days ?? nested.totalDays,
+    ),
+    status: mapLeaveStatus(nested.status),
+    reason: str(nested.reason ?? nested.note ?? nested.comment ?? nested.notes),
+  };
+}
+
+export function mapEmployeeLeaveRequest(record: Record<string, unknown>) {
+  const mapped = mapLeaveRequest(record);
+  const nested = asRecord(record.data) ?? record;
+  const start = str(nested.startDate ?? nested.from ?? nested.start);
+  const end = str(nested.endDate ?? nested.to ?? nested.end);
+  const dates = start
+    ? end && end !== start
+      ? `${start} – ${end}`
+      : start
+    : str(nested.dateRange ?? nested.period ?? nested.dates);
+  const statusRaw = str(nested.status).toUpperCase();
+  let status: "Pending" | "Approved" | "Rejected" | "Withdrawn" | "Cancelled" =
+    "Pending";
+  if (statusRaw.includes("APPROVE")) status = "Approved";
+  else if (statusRaw.includes("REJECT") || statusRaw.includes("DECLIN")) {
+    status = "Rejected";
+  } else if (statusRaw.includes("WITHDRAW")) status = "Withdrawn";
+  else if (statusRaw.includes("CANCEL")) status = "Cancelled";
+  const note = str(
+    nested.note ??
+      nested.reason ??
+      nested.comment ??
+      nested.reviewComment ??
+      nested.decisionNote,
+  );
+  return {
+    id: str(nested.id ?? nested._id, mapped.id),
+    code: str(nested.id ?? nested._id, mapped.id).slice(0, 8),
+    type: str(nested.leaveTypeName, mapped.type || "Leave"),
+    days: num(nested.duration ?? nested.workingDays, mapped.days),
+    status,
+    dates,
+    reason: note,
+    note,
   };
 }
 
 export function mapLeaveBalance(record: Record<string, unknown>, index: number) {
+  const nested = asRecord(record.data) ?? record;
+  const leaveType = asRecord(nested.leaveType) ?? asRecord(nested.type);
+  const code = str(
+    nested.code ?? nested.leaveTypeCode ?? leaveType?.code ?? nested.label,
+  ).toLowerCase();
   const icons = ["annual", "sick", "parental", "personal"] as const;
-  const total = num(record.total ?? record.allocated, 1);
-  const used = num(record.used ?? record.taken);
-  const remaining = num(record.remaining ?? record.balance, total - used);
+  const icon = (
+    code.includes("sick")
+      ? "sick"
+      : code.includes("personal")
+        ? "personal"
+        : code.includes("parent")
+          ? "parental"
+          : "annual"
+  ) as (typeof icons)[number];
+  const total = num(
+    nested.allocatedDays ?? nested.total ?? nested.allocated,
+    1,
+  );
+  const used = num(nested.usedDays ?? nested.used ?? nested.taken);
+  const remaining = num(
+    nested.remainingDays ?? nested.remaining ?? nested.balance,
+    total - used - num(nested.pendingDays),
+  );
   return {
-    id: str(record.id ?? record.type ?? index),
-    label: str(record.label ?? record.type, "Leave"),
+    id: str(nested.id ?? nested._id ?? nested.type ?? index),
+    label: str(
+      nested.leaveTypeName ?? leaveType?.name ?? nested.label ?? nested.type,
+      "Leave",
+    ),
     remaining,
     used,
     total,
-    icon: icons[index % icons.length],
+    icon: icons.includes(icon) ? icon : icons[index % icons.length],
   };
 }
 
@@ -525,40 +745,105 @@ export function mapPerformanceReview(record: Record<string, unknown>) {
 }
 
 export function mapAnnouncement(record: Record<string, unknown>) {
-  const category = str(record.category, "General") as
-    | "HR"
-    | "Finance"
-    | "General"
-    | "Urgent";
+  const nested = asRecord(record.data) ?? record;
+  const categoryRaw = str(nested.category, "General");
+  const priority = str(nested.priority, "normal").toLowerCase();
+  const status = str(nested.status, "published").toLowerCase();
+  const lowerCategory = categoryRaw.toLowerCase();
+  const category = (
+    lowerCategory === "urgent" || priority === "urgent"
+      ? "Urgent"
+      : lowerCategory === "finance"
+        ? "Finance"
+        : lowerCategory === "hr"
+          ? "HR"
+          : "General"
+  ) as "HR" | "Finance" | "General" | "Urgent";
   const toneMap: Record<string, "finance" | "urgent" | "hr" | "general" | "pinned"> = {
     finance: "finance",
+    events: "general",
+    security: "urgent",
     urgent: "urgent",
     hr: "hr",
     general: "general",
+    important: "urgent",
+    draft: "general",
+    scheduled: "general",
+    published: "general",
+    archived: "general",
   };
-  const tags = Array.isArray(record.tags)
-    ? (record.tags as { label: string; tone?: string }[]).map((tag) => ({
-        label: str(tag.label),
-        tone: (toneMap[str(tag.tone ?? tag.label).toLowerCase()] ?? "general") as
-          | "finance"
-          | "urgent"
-          | "hr"
-          | "general"
-          | "pinned",
-      }))
-    : [{ label: category, tone: toneMap[category.toLowerCase()] ?? "general" }];
+  const tags: { label: string; tone: "finance" | "urgent" | "hr" | "general" | "pinned" }[] =
+    Array.isArray(nested.tags)
+      ? (nested.tags as { label: string; tone?: string }[]).map((tag) => ({
+          label: str(tag.label),
+          tone: (toneMap[str(tag.tone ?? tag.label).toLowerCase()] ?? "general") as
+            | "finance"
+            | "urgent"
+            | "hr"
+            | "general"
+            | "pinned",
+        }))
+      : [
+          {
+            label: categoryRaw,
+            tone: toneMap[lowerCategory] ?? "general",
+          },
+        ];
+  if (priority === "urgent" && !tags.some((tag) => tag.tone === "urgent")) {
+    tags.push({ label: "Urgent", tone: "urgent" });
+  }
+  const pinned = bool(nested.isPinned ?? nested.pinned);
+  if (pinned && !tags.some((tag) => tag.tone === "pinned")) {
+    tags.push({ label: "Pinned", tone: "pinned" });
+  }
+  if (status && status !== "published" && !tags.some((tag) => tag.label.toLowerCase() === status)) {
+    tags.push({
+      label: status.charAt(0).toUpperCase() + status.slice(1),
+      tone: "general",
+    });
+  }
+
+  const isRead = nested.isRead;
+  const unread =
+    typeof isRead === "boolean"
+      ? !isRead
+      : bool(nested.unread ?? nested.isUnread);
+
+  const publishedAt = str(
+    nested.publishedAt ?? nested.date ?? nested.createdAt,
+  );
+  let date = publishedAt;
+  const parsed = publishedAt ? new Date(publishedAt) : null;
+  if (parsed && !Number.isNaN(parsed.getTime()) && publishedAt.includes("T")) {
+    date = parsed.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  const source =
+    str(nested.source) ||
+    nestedStr(nested.publishedBy) ||
+    str(nested.author) ||
+    nestedStr(nested.createdBy) ||
+    categoryRaw ||
+    "Company";
 
   return {
-    id: str(record.id ?? record._id),
-    initials: str(record.initials, initials(str(record.source ?? record.title))),
-    title: str(record.title),
-    source: str(record.source ?? record.author),
-    date: str(record.date ?? record.publishedAt ?? record.createdAt),
-    body: str(record.body ?? record.content ?? record.description),
+    id: str(nested.id ?? nested._id ?? record.id ?? record._id),
+    code: str(nested.code),
+    initials: str(nested.initials, initials(source || str(nested.title))),
+    title: str(nested.title),
+    source,
+    date,
+    body: str(nested.message ?? nested.body ?? nested.content ?? nested.description),
     tags,
-    pinned: bool(record.pinned ?? record.isPinned),
-    unread: bool(record.unread ?? record.isUnread ?? !record.readAt),
+    pinned,
+    unread,
     category,
+    status,
+    priority,
   };
 }
 
@@ -585,25 +870,53 @@ export function mapEvent(record: Record<string, unknown>) {
 }
 
 export function mapDisciplineCase(record: Record<string, unknown>) {
-  const name = str(record.name ?? record.employeeName);
+  const employee = asRecord(record.employee) ?? asRecord(record.staff);
+  const name = str(
+    record.name ??
+      record.employeeName ??
+      employee?.fullName ??
+      employee?.name,
+  );
   const statusRaw = str(record.status).toLowerCase();
   const status = statusRaw.includes("closed") ? "Closed" : "Active";
+  const actionLabel = str(
+    record.actionType ?? record.type ?? record.action,
+    status,
+  );
   return {
     id: str(record.id ?? record._id),
     ref: str(record.ref ?? record.reference ?? record.caseNumber),
     initials: str(record.initials, initials(name)),
     name,
-    role: str(record.role ?? record.department),
+    role: str(
+      record.role ??
+        record.department ??
+        nestedStr(employee?.department, ["name", "title", "label"]),
+    ),
     date: str(record.date ?? record.issuedAt ?? record.createdAt),
-    issuedBy: str(record.issuedBy ?? record.issuer),
-    description: str(record.description ?? record.summary),
+    issuedBy: str(
+      record.issuedBy ?? record.issuer ?? nestedStr(record.issuedByUser),
+    ),
+    description: str(record.description ?? record.reason ?? record.summary),
     status: status as "Active" | "Closed",
     tags: Array.isArray(record.tags)
       ? (record.tags as { label: string; tone?: string }[]).map((tag) => ({
           label: str(tag.label),
           tone: (str(tag.tone, "active") as "warning" | "unacknowledged" | "active" | "closed" | "acknowledged" | "strike"),
         }))
-      : [{ label: status, tone: status === "Closed" ? "closed" : "active" as const }],
+      : [
+          {
+            label: actionLabel,
+            tone:
+              actionLabel.toLowerCase().includes("strike")
+                ? ("strike" as const)
+                : actionLabel.toLowerCase().includes("warn")
+                  ? ("warning" as const)
+                  : status === "Closed"
+                    ? ("closed" as const)
+                    : ("active" as const),
+          },
+        ],
   };
 }
 

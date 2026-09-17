@@ -175,11 +175,11 @@ export function DepartmentsPage() {
     await runAction("Add department", async () => {
       const body: Record<string, unknown> = {
         name: values.name.trim(),
-        description: values.description.trim(),
       };
-      if (values.hodId) {
-        body.hodId = values.hodId;
-      }
+      const description = values.description.trim();
+      const hodId = values.hodId.trim();
+      if (description) body.description = description;
+      if (hodId) body.hodId = hodId;
       await superAdminApi.departments.create(body);
       refetch();
     });

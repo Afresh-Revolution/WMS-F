@@ -36,6 +36,9 @@ export const departmentsApi = {
   setHod: (id: Id, body: Record<string, unknown>) =>
     apiRequest<void>(`/departments/${id}/hod`, { method: "POST", body }),
 
+  hodOptions: () =>
+    apiRequest<Record<string, unknown>>("/departments/hod-options"),
+
   removeHod: (id: Id) =>
     apiRequest<void>(`/departments/${id}/hod`, { method: "DELETE" }),
 

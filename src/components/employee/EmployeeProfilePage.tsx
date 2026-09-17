@@ -12,6 +12,7 @@ import {
   Search,
   ShieldCheck,
 } from "lucide-react";
+import Link from "next/link";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { employeeProfile } from "@/data/employeeHome";
 import styles from "./EmployeeProfilePage.module.css";
@@ -75,7 +76,11 @@ export function EmployeeProfilePage() {
         <h1>Your employment record</h1>
         <span>
           Your personal and employment details. To change contact details, go
-          to Account Settings.
+          to{" "}
+          <Link href="/employee/settings" className={styles.inlineLink}>
+            Account Settings
+          </Link>
+          .
         </span>
       </div>
 
