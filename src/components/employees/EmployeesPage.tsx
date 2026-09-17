@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   LayoutGrid,
   List,
@@ -49,6 +49,7 @@ const roleOptions = [
 
 export function EmployeesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<DepartmentFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -60,6 +61,10 @@ export function EmployeesPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { showToast } = usePageActions();
+  useEffect(() => {
+    const department = searchParams.get("department");
+    if (department) setActiveFilter(department);
+  }, [searchParams]);
   const { data, loading, error, refetch } = useAsyncData(
     () => listStaffEmployees(),
     [],

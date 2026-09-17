@@ -16,7 +16,7 @@ export type Department = {
 export const departmentStats = [
   { id: "departments", label: "Departments", value: "6" },
   { id: "headcount", label: "Total Headcount", value: "1,248" },
-  { id: "regions", label: "For All Regions", value: "0" },
+  { id: "unassignedHod", label: "HOD Not assigned", value: "0" },
 ] as const;
 
 export const departmentFilters: DepartmentFilter[] = [

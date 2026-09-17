@@ -15,8 +15,10 @@ import {
 } from "lucide-react";
 import {
   departmentFilters,
+  type Department,
   type DepartmentFilter,
 } from "@/data/departments";
+import { DepartmentDetailDrawer } from "@/components/departments/DepartmentDetailDrawer";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
@@ -83,8 +85,10 @@ export function DepartmentsPage() {
   const [activeFilter, setActiveFilter] =
     useState<DepartmentFilter>("All departments");
   const [addOpen, setAddOpen] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] =
+    useState<Department | null>(null);
 
-  const { runAction, showToast } = usePageActions();
+  const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
     () => superAdminApi.departments.list(),
     [],
@@ -116,9 +120,9 @@ export function DepartmentsPage() {
         value: totalHeadcount.toLocaleString(),
       },
       {
-        id: "regions",
-        label: "For All Regions",
-        value: "All",
+        id: "unassignedHod",
+        label: "HOD Not assigned",
+        value: "0",
       },
     ];
   }, [departments]);
@@ -157,18 +161,8 @@ export function DepartmentsPage() {
     [hodOptions],
   );
 
-  function viewDepartment(department: (typeof departments)[number]) {
-    void (async () => {
-      try {
-        await superAdminApi.departments.get(department.id);
-      } catch {
-        /* keep local card details if the overview endpoint is unavailable */
-      }
-      showToast(
-        `${department.name} — ${department.activeCount} active, HOD: ${department.managerName}`,
-        "info",
-      );
-    })();
+  function viewDepartment(department: Department) {
+    setSelectedDepartment(department);
   }
 
   async function handleAddDepartment(values: Record<string, string>) {
@@ -315,6 +309,15 @@ export function DepartmentsPage() {
           onClose={() => setAddOpen(false)}
           onSubmit={handleAddDepartment}
         />
+
+        {selectedDepartment ? (
+          <DepartmentDetailDrawer
+            department={selectedDepartment}
+            hodOptions={hodOptions ?? []}
+            onClose={() => setSelectedDepartment(null)}
+            onUpdated={refetch}
+          />
+        ) : null}
       </div>
   );
 }
