@@ -130,6 +130,7 @@
   border: 1px solid #ebe6e1;
   border-radius: 16px;
   background: #fff;
+  overflow: hidden;
 }
 
 .cardTop {
@@ -225,22 +226,28 @@
 }
 
 .detailsButton {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  width: 100%;
-  margin-top: 14px;
-  padding-top: 14px;
+  width: calc(100% + 40px);
+  margin: 14px -20px -20px;
+  padding: 12px 20px;
+  border: 0;
   border-top: 1px solid #f5f5f4;
+  border-radius: 0 0 16px 16px;
+  background: #fafaf9;
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
   color: #78716c;
-  transition: color 0.15s ease;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .detailsButton:hover {
   color: var(--afresh-orange);
+  background: #f5f5f4;
 }
 
 .empty {

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Download, Plus, Search, X } from "lucide-react";
@@ -198,7 +199,7 @@ export function EmployeeLeavePage({
   return (
     <div className={styles.page}>
       <header className={styles.topBar}>
-        <p>Wednesday, August 12</p>
+        <PageDateLabel />
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />

@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   LayoutGrid,
   List,
@@ -16,6 +16,7 @@ import {
   type EmployeeStatus,
 } from "@/data/employees";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { EmployeeProfileDrawer } from "@/components/employees/EmployeeProfileDrawer";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import {
@@ -25,7 +26,7 @@ import {
   lookupsApi,
 } from "@/lib/api";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
-import { listFrom, mapEmployee, readTemporaryPassword, str } from "@/lib/api/mappers";
+import { listFrom, mapEmployee, readTemporaryPassword, str, type MappedEmployee } from "@/lib/api/mappers";
 import { portalHref } from "@/lib/portalPaths";
 import styles from "./EmployeesPage.module.css";
 
@@ -50,14 +51,22 @@ const roleOptions = [
 export function EmployeesPage() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<DepartmentFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [profileEmployee, setProfileEmployee] = useState<MappedEmployee | null>(
+    null,
+  );
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { showToast } = usePageActions();
+  useEffect(() => {
+    const department = searchParams.get("department");
+    if (department) setActiveFilter(department);
+  }, [searchParams]);
   const { data, loading, error, refetch } = useAsyncData(
     () => listStaffEmployees(),
     [],
@@ -144,12 +153,8 @@ export function EmployeesPage() {
     showToast("Use the search field below", "info");
   }
 
-  function viewProfile(employee: (typeof employees)[number]) {
-    showToast(
-      `${employee.name} — ${employee.title}, ${employee.department}`,
-      "info",
-    );
-    window.location.href = `mailto:${employee.email}`;
+  function viewProfile(employee: MappedEmployee) {
+    setProfileEmployee(employee);
   }
 
   function closeAddModal() {
@@ -319,15 +324,13 @@ export function EmployeesPage() {
                     </p>
                   </div>
                 </div>
-                <div className={styles.cardFooter}>
-                  <button
-                    type="button"
-                    className={styles.profileLink}
-                    onClick={() => viewProfile(employee)}
-                  >
-                    View profile
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className={styles.cardFooter}
+                  onClick={() => viewProfile(employee)}
+                >
+                  View profile
+                </button>
               </article>
             ))}
 
@@ -448,6 +451,13 @@ export function EmployeesPage() {
               document.body,
             )
           : null}
+
+        {profileEmployee ? (
+          <EmployeeProfileDrawer
+            employee={profileEmployee}
+            onClose={() => setProfileEmployee(null)}
+          />
+        ) : null}
       </div>
   );
 }

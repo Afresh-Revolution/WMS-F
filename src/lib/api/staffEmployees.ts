@@ -95,6 +95,33 @@ export async function listStaffEmployees(): Promise<Record<string, unknown>[]> {
   return [];
 }
 
+export async function getStaffEmployee(
+  id: string,
+): Promise<Record<string, unknown>> {
+  const trimmed = id.trim();
+  if (!trimmed) throw new ApiError(400, "Employee id is required.");
+
+  let lastError: unknown;
+  const paths = [
+    `/employees/${trimmed}`,
+    `/super-admin/employees/${trimmed}`,
+    `/hr/employees/${trimmed}`,
+  ];
+
+  for (const path of paths) {
+    try {
+      return await apiRequest<Record<string, unknown>>(path);
+    } catch (error) {
+      lastError = error;
+      if (isMissingRoute(error)) continue;
+      throw error;
+    }
+  }
+
+  if (lastError instanceof ApiError) throw lastError;
+  throw new ApiError(404, "Employee not found.");
+}
+
 export async function findStaffEmployeeByEmail(email: string) {
   const needle = email.trim().toLowerCase();
   if (!needle) return null;

@@ -1,5 +1,7 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
+import { getClientTimeZone } from "@/lib/pageDate";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -202,14 +204,7 @@ function formatLongDate(date: Date) {
     month: "long",
     day: "numeric",
     year: "numeric",
-  });
-}
-
-function formatTopDate(date: Date) {
-  return date.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
+    timeZone: getClientTimeZone(),
   });
 }
 
@@ -416,18 +411,8 @@ export function AttendancePage({
         resource="attendance"
       />
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>{formatTopDate(today)}</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
-          <label className={styles.search}>
-            <Search size={15} className={styles.searchIcon} />
-            <input
-              type="search"
-              placeholder="Search"
-              className={styles.searchInput}
-              aria-label="Search"
-            />
-            <kbd className={styles.searchKbd}>⌘ K</kbd>
-          </label>
           <NotificationsLink className={styles.iconButton}>
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />

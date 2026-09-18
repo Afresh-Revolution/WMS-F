@@ -1,17 +1,22 @@
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 140;
   display: grid;
   place-items: center;
-  padding: 1rem;
+  padding: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-right))
+    max(0.75rem, env(safe-area-inset-bottom)) max(0.75rem, env(safe-area-inset-left));
   background: rgba(28, 25, 23, 0.45);
 }
 
 .modal {
+  display: flex;
+  flex-direction: column;
   width: min(100%, 440px);
-  max-height: min(90vh, 640px);
-  overflow: auto;
+  max-width: 100%;
+  min-width: 0;
+  max-height: min(90dvh, 640px);
+  overflow: hidden;
   padding: 1.25rem;
   border-radius: 16px;
   background: #fff;
@@ -20,10 +25,11 @@
 
 .modalWide {
   width: min(100%, 720px);
-  max-height: min(92vh, 760px);
+  max-height: min(92dvh, 760px);
 }
 
 .head {
+  flex-shrink: 0;
   margin-bottom: 1rem;
 }
 
@@ -42,6 +48,10 @@
 .form {
   display: grid;
   gap: 0.85rem;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .formWide {
@@ -62,6 +72,7 @@
 .field {
   display: grid;
   gap: 0.35rem;
+  min-width: 0;
   font-size: 0.875rem;
 }
 
@@ -72,6 +83,10 @@
 .field input,
 .field textarea,
 .field select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 0.65rem 0.75rem;
   border: 1px solid #d6d3d1;
   border-radius: 8px;
@@ -80,17 +95,27 @@
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   grid-column: 1 / -1;
   gap: 0.5rem;
   margin-top: 0.5rem;
+  position: sticky;
+  bottom: 0;
+  padding-top: 0.75rem;
+  background: #fff;
 }
 
 .cancel,
 .submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
   padding: 0.6rem 0.9rem;
   border-radius: 8px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .cancel {
@@ -106,5 +131,28 @@
 @media (max-width: 640px) {
   .formWide {
     grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .cancel,
+  .submit {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .modal,
+  .modalWide {
+    width: 100%;
+    max-height: min(94dvh, 100%);
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
+  .title {
+    font-size: 1.05rem;
   }
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Bell, Check, Plus, Search, Undo2, Wallet } from "lucide-react";
@@ -169,7 +170,7 @@ export function AccountantExpensesPage() {
     <div className={styles.page}>
       <AccountantStatusLine loading={loading} error={error} resource="expenses" />
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Tuesday, August 11</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={15} className={styles.searchIcon} />

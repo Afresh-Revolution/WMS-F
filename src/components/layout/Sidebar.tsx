@@ -38,7 +38,6 @@ import {
   Bell,
 } from "lucide-react";
 import { AfreshLogo } from "./AfreshLogo";
-import { GlobalSearch } from "./GlobalSearch";
 import { useCurrentUser } from "./CurrentUserProvider";
 import styles from "./Sidebar.module.css";
 
@@ -130,9 +129,21 @@ const employeePrimaryNav: NavItem[] = [
   },
 ];
 
-const footerNav: NavItem[] = [
+const adminFooterNav: NavItem[] = [
   { href: "/help", label: "Help center", icon: CircleHelp },
   { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/sign-out", label: "Sign out", icon: LogOut },
+];
+
+const secretaryFooterNav: NavItem[] = [
+  { href: "/secretary/help", label: "Help center", icon: CircleHelp },
+  { href: "/secretary/settings", label: "Settings", icon: Settings },
+  { href: "/sign-out", label: "Sign out", icon: LogOut },
+];
+
+const employeeFooterNav: NavItem[] = [
+  { href: "/employee/help", label: "Help center", icon: CircleHelp },
+  { href: "/employee/settings", label: "Settings", icon: Settings },
   { href: "/sign-out", label: "Sign out", icon: LogOut },
 ];
 
@@ -173,6 +184,11 @@ export function Sidebar({
     : employee
       ? employeePrimaryNav
       : adminPrimaryNav;
+  const footerNav = secretary
+    ? secretaryFooterNav
+    : employee
+      ? employeeFooterNav
+      : adminFooterNav;
   const homeHref = secretary ? "/secretary" : employee ? "/employee" : "/dashboard";
   const { user: currentUser } = useCurrentUser();
   const fallbackRole = secretary
@@ -196,8 +212,6 @@ export function Sidebar({
       <Link href={homeHref} onClick={onNavigate} className={styles.brand}>
         <AfreshLogo />
       </Link>
-
-      {secretary || employee ? null : <GlobalSearch />}
 
       <Link href={profileHref} onClick={onNavigate} className={`${styles.userCard} ${
           isActive(pathname, profileHref) ? styles.userCardActive : ""

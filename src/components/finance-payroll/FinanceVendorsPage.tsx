@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
   Building2,
@@ -117,21 +118,8 @@ export function FinanceVendorsPage() {
         {error ? <p role="alert">{error}</p> : null}
 
         <div className={payrollStyles.topBar}>
-          <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>
+          <PageDateLabel className={payrollStyles.dateLabel} />
           <div className={payrollStyles.topActions}>
-            <button
-              type="button"
-              aria-label="Search"
-              className={payrollStyles.iconButton}
-              onClick={() => {
-                const input = document.querySelector<HTMLInputElement>(
-                  "[data-vendor-search]",
-                );
-                input?.focus();
-              }}
-            >
-              <Search size={16} />
-            </button>
             <NotificationsLink className={payrollStyles.iconButton} />
             <button
               type="button"

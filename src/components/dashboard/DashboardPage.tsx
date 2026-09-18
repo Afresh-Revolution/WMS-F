@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -215,7 +216,7 @@ export function DashboardPage() {
   return (
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>Thursday, July 20</p>
+          <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading dashboard…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
@@ -246,9 +247,6 @@ export function DashboardPage() {
             <Link href="/employees" className={styles.heroButton}>
               Get started
             </Link>
-          </div>
-          <div className={styles.heroAvatar} aria-hidden="true">
-            DS
           </div>
           <div className={styles.heroDecoration}>
             <div className={styles.heroDecorationInner} />
@@ -357,15 +355,17 @@ export function DashboardPage() {
             <h2 className={styles.cardTitle}>Overview 2024</h2>
             <div className={styles.overviewList}>
               {overviewItems.map((item) => (
-                <article key={item.id} className={styles.overviewItem}>
+                <Link
+                  key={item.id}
+                  href="/events"
+                  className={styles.overviewItem}
+                >
                   <span className={styles.overviewDate}>{item.date}</span>
                   <div className={styles.overviewBody}>
                     <p className={styles.overviewTitle}>{item.title}</p>
-                    <Link href="/events" className={styles.overviewLink}>
-                      View details
-                    </Link>
+                    <span className={styles.overviewLink}>View details</span>
                   </div>
-                </article>
+                </Link>
               ))}
             </div>
           </section>

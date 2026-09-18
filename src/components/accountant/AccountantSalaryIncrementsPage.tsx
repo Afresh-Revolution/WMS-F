@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo } from "react";
 import {
@@ -68,7 +69,7 @@ export function AccountantSalaryIncrementsPage() {
         resource="salary implementations"
       />
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Tuesday, August 11</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={15} className={styles.searchIcon} />

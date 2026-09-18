@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useCallback, useMemo, useState } from "react";
 import { Eye, FileText, Search } from "lucide-react";
 import { type DocumentTemplateStatus } from "@/data/documentTemplates";
@@ -60,7 +61,7 @@ export function DocumentTemplatesPage() {
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Monday, August 3</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
           <label className={styles.topSearch}>
             <Search size={15} className={styles.topSearchIcon} />

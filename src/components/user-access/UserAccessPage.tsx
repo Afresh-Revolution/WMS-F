@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useCallback, useMemo, useState } from "react";
 import {
   Lock,
@@ -196,18 +197,8 @@ export function UserAccessPage() {
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Monday, August 3</p>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
-          <label className={styles.topSearch}>
-            <Search size={15} className={styles.topSearchIcon} />
-            <input
-              placeholder="Search"
-              className={styles.topSearchInput}
-              readOnly
-              aria-label="Search"
-            />
-            <kbd className={styles.searchShortcut}>⌘K</kbd>
-          </label>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
         </div>

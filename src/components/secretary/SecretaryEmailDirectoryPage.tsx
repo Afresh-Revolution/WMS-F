@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -271,7 +272,7 @@ export function SecretaryEmailDirectoryPage({
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Monday, August 3</p>
+        <PageDateLabel className={styles.dateLabel} />
         {loading ? <p className={styles.dateLabel}>Loading directory…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
@@ -279,16 +280,6 @@ export function SecretaryEmailDirectoryPage({
           </p>
         ) : null}
         <div className={styles.topActions}>
-          <label className={styles.search}>
-            <Search size={15} className={styles.searchIcon} />
-            <input
-              ref={searchRef}
-              type="search"
-              placeholder="Search"
-              className={styles.searchInput}
-            />
-            <kbd className={styles.shortcut}>⌘ K</kbd>
-          </label>
           <NotificationsLink className={styles.iconButton}>
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
@@ -335,6 +326,7 @@ export function SecretaryEmailDirectoryPage({
         <label className={styles.listSearch}>
           <Search size={15} className={styles.searchIcon} />
           <input
+            ref={searchRef}
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}

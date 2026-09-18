@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
   CalendarDays,
@@ -154,7 +155,7 @@ export function TasksPage() {
         {loading ? <p>Loading tasks…</p> : null}
         {error ? <p role="alert">{error}</p> : null}
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>Monday, August 3</p>
+          <PageDateLabel className={styles.dateLabel} />
           <div className={styles.topActions}>
             <label className={styles.search}>
               <Search size={15} className={styles.searchIcon} />

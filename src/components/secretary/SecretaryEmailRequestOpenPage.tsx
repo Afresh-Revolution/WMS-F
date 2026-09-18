@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -227,7 +228,7 @@ export function SecretaryEmailRequestOpenPage({ requestId }: { requestId: string
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>
-        <p className={styles.dateLabel}>Monday, August 3</p>
+        <PageDateLabel className={styles.dateLabel} />
         {loading ? <p className={styles.dateLabel}>Loading request…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
@@ -235,16 +236,6 @@ export function SecretaryEmailRequestOpenPage({ requestId }: { requestId: string
           </p>
         ) : null}
         <div className={styles.topActions}>
-          <label className={styles.search}>
-            <Search size={15} className={styles.searchIcon} />
-            <input
-              ref={searchRef}
-              type="search"
-              placeholder="Search"
-              className={styles.searchInput}
-            />
-            <kbd className={styles.shortcut}>⌘ K</kbd>
-          </label>
           <NotificationsLink className={styles.iconButton}>
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
@@ -332,6 +323,7 @@ export function SecretaryEmailRequestOpenPage({ requestId }: { requestId: string
             }}
           >
             <input
+              ref={searchRef}
               type="email"
               value={address}
               onChange={(event) => {

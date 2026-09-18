@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import { Check, Plus, RefreshCw, Search, ShoppingCart, X } from "lucide-react";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
@@ -136,20 +137,8 @@ export function FinancePurchasesPage() {
         {error ? <p role="alert">{error}</p> : null}
 
         <div className={payrollStyles.topBar}>
-          <p className={payrollStyles.dateLabel}>Tuesday, July 28</p>
+          <PageDateLabel className={payrollStyles.dateLabel} />
           <div className={payrollStyles.topActions}>
-            <button
-              type="button"
-              aria-label="Search"
-              className={payrollStyles.iconButton}
-              onClick={() => {
-                document
-                  .querySelector<HTMLInputElement>("[data-purchases-search]")
-                  ?.focus();
-              }}
-            >
-              <Search size={16} />
-            </button>
             <NotificationsLink className={payrollStyles.iconButton} />
             <button
               type="button"

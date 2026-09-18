@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
@@ -104,13 +105,7 @@ export function EmployeeNotificationsPage() {
   return (
     <div className={styles.page}>
       <header className={styles.topBar}>
-        <p>
-          {new Date().toLocaleDateString("en-US", {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-          })}
-        </p>
+        <PageDateLabel />
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />

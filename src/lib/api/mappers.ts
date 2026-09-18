@@ -280,6 +280,7 @@ export type MappedEmployee = {
   department: string;
   location: string;
   email: string;
+  phone: string;
   status: "Active" | "On leave";
   avatarColor: string;
 };
@@ -337,6 +338,13 @@ export function mapEmployee(record: Record<string, unknown>): MappedEmployee {
     ),
     location: str(nested.location ?? nested.office ?? overview?.location),
     email,
+    phone: str(
+      nested.phone ??
+        nested.phoneNumber ??
+        nested.mobile ??
+        profile?.phone ??
+        user?.phone,
+    ),
     status: statusRaw.includes("leave") ? "On leave" : "Active",
     avatarColor: str(nested.avatarColor ?? record.avatarColor, avatarColor(id || name)),
   };
@@ -926,17 +934,36 @@ function asObject(value: unknown): Record<string, unknown> {
     : {};
 }
 
-export function mapPlacement(record: Record<string, unknown>) {
-  const profile = asObject(record.profile);
-  const placement = asObject(record.placement);
-  const department = asObject(record.department ?? profile.department);
-  const supervisor = asObject(record.supervisor ?? profile.supervisor);
-  const progressObj = asObject(placement.progress ?? record.progress);
+function formatPlacementDate(value: unknown): string {
+  const raw = str(value);
+  if (!raw) return "";
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
-  const name = str(profile.fullName ?? record.name ?? record.fullName);
-  const typeRaw = str(profile.type ?? record.type ?? record.placementType).toUpperCase();
+export function mapPlacement(record: Record<string, unknown>) {
+  const nested = asObject(record.data);
+  const root = Object.keys(nested).length > 0 ? { ...record, ...nested } : record;
+  const profile = asObject(root.profile);
+  const placement = asObject(root.placement);
+  const contact = asObject(root.contact ?? profile.contact);
+  const education = asObject(root.education ?? profile.education);
+  const emergency = asObject(
+    contact.emergencyContact ?? profile.emergencyContact ?? root.emergencyContact,
+  );
+  const department = asObject(root.department ?? profile.department ?? placement.department);
+  const supervisor = asObject(root.supervisor ?? profile.supervisor ?? placement.supervisor);
+  const progressObj = asObject(placement.progress ?? root.progress);
+
+  const name = str(profile.fullName ?? root.name ?? root.fullName);
+  const typeRaw = str(profile.type ?? root.type ?? root.placementType).toUpperCase();
   const statusRaw = str(
-    placement.placementStatus ?? record.placementStatus ?? record.status,
+    placement.placementStatus ?? root.placementStatus ?? root.status,
   ).toUpperCase();
   let status: "Active" | "Exiting soon" | "Exited" = "Active";
   if (statusRaw.includes("ENDING") || statusRaw.includes("SOON")) {
@@ -951,51 +978,55 @@ export function mapPlacement(record: Record<string, unknown>) {
   }
 
   const institution = str(
-    profile.institution ?? record.institution ?? record.school,
+    education.institution ?? profile.institution ?? root.institution ?? root.school,
   );
-  const course = str(profile.courseOfStudy ?? record.courseOfStudy);
+  const course = str(
+    education.courseOfStudy ?? profile.courseOfStudy ?? root.courseOfStudy,
+  );
   const school = course ? `${institution} · ${course}` : institution;
-  const endRaw = str(
-    placement.expectedEndDate ??
-      record.expectedEndDate ??
-      record.endDate ??
-      record.completionDate,
-  );
-  const parsedEnd = endRaw ? new Date(endRaw) : null;
-  const endDate =
-    parsedEnd && !Number.isNaN(parsedEnd.getTime())
-      ? parsedEnd.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })
-      : endRaw;
 
   const supervisorName = str(
     supervisor.fullName ??
       supervisor.name ??
-      (typeof record.supervisor === "string" ? record.supervisor : "") ??
-      record.supervisorName,
+      (typeof root.supervisor === "string" ? root.supervisor : "") ??
+      root.supervisorName,
   );
 
   return {
-    id: str(profile.id ?? record.id ?? record._id),
-    initials: str(record.initials ?? profile.initials, initials(name)),
+    id: str(profile.id ?? placement.id ?? root.id ?? root._id),
+    initials: str(root.initials ?? profile.initials, initials(name)),
     name,
     type: (typeRaw.includes("NYSC") ? "NYSC" : "Intern") as "NYSC" | "Intern",
     school,
+    institution,
+    course,
     department: str(
       department.name ??
-        (typeof record.department === "string" ? record.department : "") ??
-        record.departmentName,
+        (typeof root.department === "string" ? root.department : "") ??
+        root.departmentName,
     ),
     supervisor: supervisorName,
-    endDate,
+    startDate: formatPlacementDate(
+      placement.startDate ?? root.startDate ?? profile.startDate,
+    ),
+    endDate: formatPlacementDate(
+      placement.expectedEndDate ??
+        root.expectedEndDate ??
+        root.endDate ??
+        root.completionDate,
+    ),
+    email: str(contact.email ?? profile.email ?? root.email),
+    phone: str(contact.phone ?? profile.phone ?? root.phone),
+    address: str(contact.address ?? profile.address ?? root.address),
+    emergencyName: str(
+      emergency.name ?? emergency.fullName ?? profile.emergencyContactName,
+    ),
+    emergencyPhone: str(emergency.phone ?? profile.emergencyContactPhone),
     progress: num(
       progressObj.progressPercentage ??
         progressObj.completionProgress ??
-        record.progress ??
-        record.completionPercent,
+        root.progress ??
+        root.completionPercent,
     ),
     status,
   };

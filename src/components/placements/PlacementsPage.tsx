@@ -1,6 +1,8 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, Download, Plus, Search } from "lucide-react";
 import { type PlacementFilter } from "@/data/placements";
@@ -59,7 +61,6 @@ function isActivePlacementConflict(error: unknown) {
 }
 
 function memberWriteBody(values: Record<string, string>) {
-  const supervisorId = values.employeeId.trim();
   return {
     fullName: values.name.trim(),
     name: values.name.trim(),
@@ -72,13 +73,6 @@ function memberWriteBody(values: Record<string, string>) {
     departmentId: values.departmentId,
     ...(values.email.trim() ? { email: values.email.trim() } : {}),
     ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
-    ...(supervisorId
-      ? {
-          employeeId: supervisorId,
-          supervisorId: supervisorId,
-          supervisorEmployeeId: supervisorId,
-        }
-      : {}),
   };
 }
 
@@ -168,7 +162,6 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       },
       { name: "email", label: "Email" },
       { name: "phone", label: "Phone" },
-      { name: "employeeId", label: "Supervisor employee ID" },
     ],
     [departmentOptions],
   );
@@ -203,13 +196,6 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   function handleFilterChange(filter: PlacementFilter) {
     setActiveFilter(filter);
     router.push(portalHref(pathname, filterRoutes[filter]));
-  }
-
-  function viewProfile(member: (typeof placementMembers)[number]) {
-    showToast(
-      `${member.name} (${member.type}) — ${member.department}, ends ${member.endDate}`,
-      "info",
-    );
   }
 
   async function handleExport() {
@@ -330,7 +316,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   return (
       <div className={styles.page}>
         <div className={styles.topBar}>
-          <p className={styles.dateLabel}>Monday, August 3</p>
+          <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading placements…</p> : null}
           {error ? (
             <p className={styles.dateLabel} role="alert">
@@ -463,16 +449,13 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
                 </div>
               </div>
 
-              <div className={styles.cardFooter}>
-                <button
-                  type="button"
-                  className={styles.profileLink}
-                  onClick={() => viewProfile(member)}
-                >
-                  View profile
-                  <ChevronRight size={14} strokeWidth={2.5} />
-                </button>
-              </div>
+              <Link
+                href={portalHref(pathname, `/nysc-interns/${member.id}`)}
+                className={styles.cardFooter}
+              >
+                View profile
+                <ChevronRight size={14} strokeWidth={2.5} />
+              </Link>
             </article>
           ))}
 

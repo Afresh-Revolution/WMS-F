@@ -1,5 +1,6 @@
 "use client";
 
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
   ClipboardList,
@@ -165,7 +166,7 @@ export function FinancePayrollPage() {
         </div>
 
         <div className={styles.statsBar}>
-          <p className={styles.statsDate}>Tuesday, July 28</p>
+          <PageDateLabel className={styles.statsDate} />
           <div className={styles.statsGroup}>
             {payrollStats.map((stat) => (
               <div key={stat.id} className={styles.statItem}>
@@ -175,18 +176,6 @@ export function FinancePayrollPage() {
             ))}
           </div>
           <div className={styles.topActions}>
-            <button
-              type="button"
-              aria-label="Search"
-              className={styles.iconButton}
-              onClick={() => {
-                document
-                  .querySelector<HTMLInputElement>("[data-payroll-search]")
-                  ?.focus();
-              }}
-            >
-              <Search size={16} />
-            </button>
             <NotificationsLink className={styles.iconButton} />
             <button
               type="button"
