@@ -1,5 +1,6 @@
 import { ApiError, apiRequest, buildQuery } from "./client";
 import { unwrapList } from "./types";
+import { readCachedWorkspace } from "@/lib/workspace";
 
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -59,12 +60,28 @@ const LIST_PATHS = [
   "/super-admin/employees",
 ];
 
+const MANAGER_LIST_PATHS = [
+  `/manager/employees${LIST_QUERY}`,
+  "/manager/employees",
+];
+
+function isManagerWorkspace() {
+  const role = readCachedWorkspace()?.roleKey ?? "";
+  return /hod|manager/i.test(role);
+}
+
+function staffListPaths() {
+  return isManagerWorkspace()
+    ? [...MANAGER_LIST_PATHS, ...LIST_PATHS]
+    : [...LIST_PATHS, ...MANAGER_LIST_PATHS];
+}
+
 const CREATE_PATHS = ["/employees", "/super-admin/employees"];
 
 export async function listStaffEmployees(): Promise<Record<string, unknown>[]> {
   let lastError: unknown;
 
-  for (const path of LIST_PATHS) {
+  for (const path of staffListPaths()) {
     try {
       return rowsFrom(await apiRequest(path));
     } catch (error) {

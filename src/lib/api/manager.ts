@@ -31,8 +31,20 @@ export const managerApi = {
     return apiRequest<unknown>(managerPath("/dashboard/stats", query)).then(unwrapData);
   },
 
+  getProfile() {
+    return apiRequest<unknown>(managerPath("/profile")).then(unwrapData);
+  },
+
+  getEmploymentRecord() {
+    return apiRequest<unknown>(managerPath("/employment-record")).then(unwrapData);
+  },
+
   listEmployees(query?: ManagerListParams) {
     return list("/employees", query);
+  },
+
+  listAttendance(query?: ManagerListParams) {
+    return list("/attendance", query);
   },
 
   getEmployee(id: Id) {
@@ -132,6 +144,29 @@ export const managerApi = {
 
   listFinance(query?: ManagerListParams) {
     return apiRequest<unknown>(managerPath("/finance", query)).then(unwrapData);
+  },
+
+  listPayrollRuns(query?: ManagerListParams) {
+    return list("/payroll/runs", query);
+  },
+
+  listPayrollPeriods(query?: ManagerListParams) {
+    return list("/payroll/periods", query);
+  },
+
+  runPayroll(body: unknown) {
+    return apiRequest<unknown>(managerPath("/payroll/runs"), {
+      method: "POST",
+      body,
+    }).then(unwrapData);
+  },
+
+  getPayrollRun(id: Id) {
+    return apiRequest<unknown>(managerPath(`/payroll/runs/${id}`)).then(unwrapData);
+  },
+
+  exportPayroll(query?: ManagerListParams) {
+    return apiRequest<unknown>(managerPath("/payroll/export", query));
   },
 
   listExpenses(query?: ManagerListParams) {
@@ -238,6 +273,35 @@ export const managerApi = {
 
   listAuditLogs(query?: ManagerListParams) {
     return list("/audit-logs", query);
+  },
+
+  listNyscInterns(query?: ManagerListParams) {
+    return list("/nysc-interns", query);
+  },
+
+  createNyscIntern(body: unknown) {
+    return apiRequest<unknown>(managerPath("/nysc-interns"), {
+      method: "POST",
+      body,
+    }).then(unwrapData);
+  },
+
+  updateNyscIntern(id: Id, body: unknown) {
+    return apiRequest<unknown>(managerPath(`/nysc-interns/${id}`), {
+      method: "PATCH",
+      body,
+    }).then(unwrapData);
+  },
+
+  assignNyscSupervisor(id: Id, body: unknown) {
+    return apiRequest<unknown>(managerPath(`/nysc-interns/${id}/supervisor`), {
+      method: "POST",
+      body,
+    }).then(unwrapData);
+  },
+
+  exportNyscInterns(query?: ManagerListParams) {
+    return apiRequest<unknown>(managerPath("/nysc-interns/export", query));
   },
 };
 

@@ -7,6 +7,7 @@ export type CurrentUser = {
   name: string;
   role: string;
   initials: string;
+  employeeId?: string;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -67,6 +68,24 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function readEmployeeId(record: Record<string, unknown>): string {
+  const employee =
+    asRecord(record.employee) ??
+    asRecord(record.profile) ??
+    asRecord(record.staff);
+  return (
+    readString(record, [
+      "employeeId",
+      "employee_id",
+      "staffId",
+      "staff_id",
+    ]) ||
+    (employee
+      ? readString(employee, ["id", "employeeId", "employee_id", "_id"])
+      : "")
+  );
 }
 
 function collectRoleStrings(record: Record<string, unknown>): string[] {
@@ -139,6 +158,8 @@ export function parseAuthUser(payload: unknown): CurrentUser | null {
   const id = readString(user, ["id", "userId", "sub"]) || email;
   const initials =
     readString(user, ["initials"]) || initialsFromIdentity(name, email);
+  const employeeId =
+    readEmployeeId(user) || readEmployeeId(data) || readEmployeeId(root);
 
   if (!name && !email && !initials) return null;
 
@@ -148,6 +169,7 @@ export function parseAuthUser(payload: unknown): CurrentUser | null {
     name,
     role: formatRoleLabel(role),
     initials,
+    ...(employeeId ? { employeeId } : {}),
   };
 }
 

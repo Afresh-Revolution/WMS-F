@@ -1,4 +1,4 @@
-import { apiRequest, buildQuery } from "./client";
+import { ApiError, apiRequest, buildQuery } from "./client";
 import type { Id } from "./types";
 
 const BASE = "/attendance";
@@ -11,6 +11,27 @@ export async function attendanceSettled<T>(
   } catch {
     return null;
   }
+}
+
+function isMissingAttendanceRoute(error: unknown) {
+  if (!(error instanceof ApiError)) return false;
+  return error.status === 404 || error.status === 405;
+}
+
+async function firstAttendanceRoute<T>(attempts: Array<() => Promise<T>>): Promise<T> {
+  let lastError: unknown;
+  for (const attempt of attempts) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
+      if (isMissingAttendanceRoute(error)) continue;
+      throw error;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new ApiError(404, "Attendance route was not found.");
 }
 
 export type GpsCheckInBody = {
@@ -28,6 +49,18 @@ export type GpsCheckInBody = {
   };
 };
 
+function postCheckIn(
+  path: string,
+  body: GpsCheckInBody,
+  idempotencyKey?: string,
+) {
+  return apiRequest<unknown>(path, {
+    method: "POST",
+    body,
+    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+  });
+}
+
 export const attendanceApi = {
   me: {
     locations: () => apiRequest<unknown>(`${BASE}/me/locations`),
@@ -37,13 +70,7 @@ export const attendanceApi = {
   },
 
   checkIn: (body: GpsCheckInBody, idempotencyKey?: string) =>
-    apiRequest<unknown>(`${BASE}/check-in`, {
-      method: "POST",
-      body,
-      headers: idempotencyKey
-        ? { "Idempotency-Key": idempotencyKey }
-        : undefined,
-    }),
+    postCheckIn(`${BASE}/check-in`, body, idempotencyKey),
 
   locations: {
     list: (params?: Record<string, unknown>) =>
@@ -107,5 +134,35 @@ export const attendanceApi = {
         method: "PATCH",
         body,
       }),
+    locations: () =>
+      firstAttendanceRoute([
+        () => apiRequest<unknown>(`/manager/attendance/locations`),
+        () => apiRequest<unknown>(`/hod/attendance/locations`),
+      ]),
+    status: () =>
+      firstAttendanceRoute([
+        () => apiRequest<unknown>(`/manager/attendance/status`),
+        () => apiRequest<unknown>(`/manager/attendance/me/status`),
+        () => apiRequest<unknown>(`/hod/attendance/status`),
+        () => apiRequest<unknown>(`/hod/attendance/me/status`),
+      ]),
+    history: (params?: Record<string, unknown>) =>
+      firstAttendanceRoute([
+        () =>
+          apiRequest<unknown>(
+            `/manager/attendance/history${buildQuery(params)}`,
+          ),
+        () =>
+          apiRequest<unknown>(
+            `/manager/attendance/me/history${buildQuery(params)}`,
+          ),
+        () =>
+          apiRequest<unknown>(`/hod/attendance/history${buildQuery(params)}`),
+      ]),
+    checkIn: (body: GpsCheckInBody, idempotencyKey?: string) =>
+      firstAttendanceRoute([
+        () => postCheckIn(`/manager/attendance/check-in`, body, idempotencyKey),
+        () => postCheckIn(`/hod/attendance/check-in`, body, idempotencyKey),
+      ]),
   },
 };

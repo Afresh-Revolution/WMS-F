@@ -1006,13 +1006,17 @@ export function mapPayRun(record: Record<string, unknown>) {
   return {
     id: str(record.id ?? record._id),
     ref: str(record.ref ?? record.reference),
-    period: str(record.period ?? record.payPeriod),
-    runDate: str(record.runDate ?? record.processedAt),
-    staff: num(record.staff ?? record.employeeCount),
-    totalAmount: str(record.totalAmount ?? record.amount),
-    status: (statusRaw.includes("complete") ? "Completed" : "Processing") as
-      | "Processing"
-      | "Completed",
+    period: str(record.period ?? record.periodName ?? record.payPeriod),
+    runDate: str(record.runDate ?? record.run_date ?? record.processedAt),
+    staff: num(record.staff ?? record.employeeCount ?? record.employee_count),
+    totalAmount: str(
+      record.totalAmount ?? record.netAmount ?? record.net_amount ?? record.amount,
+    ),
+    status: (statusRaw.includes("complete") ||
+    statusRaw.includes("paid") ||
+    statusRaw.includes("lock")
+      ? "Completed"
+      : "Processing") as "Processing" | "Completed",
   };
 }
 

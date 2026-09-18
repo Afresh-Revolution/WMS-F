@@ -3,6 +3,7 @@ export type AppPortal =
   | "accountant"
   | "nysc"
   | "secretary"
+  | "manager"
   | "employee";
 
 function normalizeRole(role: string): string {
@@ -29,9 +30,10 @@ const PORTAL_ALIASES: Record<string, AppPortal> = {
   corper: "nysc",
   employee: "employee",
   staff: "employee",
-  manager: "employee",
-  hod: "employee",
-  headofdepartment: "employee",
+  manager: "manager",
+  hod: "manager",
+  headofdepartment: "manager",
+  linemanager: "manager",
 };
 
 export function portalForRole(role: string): AppPortal {
@@ -43,6 +45,7 @@ export function portalForRole(role: string): AppPortal {
     return "nysc";
   }
   if (key.includes("secretar")) return "secretary";
+  if (key.includes("hod") || key.includes("manager")) return "manager";
   if (key.includes("hr")) return "superadmin";
   return "employee";
 }
@@ -52,7 +55,8 @@ const PORTAL_RANK: Record<AppPortal, number> = {
   accountant: 1,
   nysc: 2,
   secretary: 3,
-  employee: 4,
+  manager: 4,
+  employee: 5,
 };
 
 /** Prefer a section-specific role when the payload lists several (e.g. user + accountant). */
@@ -74,6 +78,8 @@ export function homePathForRole(role: string): string {
       return "/nysc";
     case "secretary":
       return "/secretary";
+    case "manager":
+      return "/manager";
     case "employee":
       return "/employee";
     default:
@@ -96,6 +102,9 @@ export function portalForPath(pathname: string): AppPortal | null {
   }
   if (pathname === "/employee" || pathname.startsWith("/employee/")) {
     return "employee";
+  }
+  if (pathname === "/manager" || pathname.startsWith("/manager/")) {
+    return "manager";
   }
   return "superadmin";
 }

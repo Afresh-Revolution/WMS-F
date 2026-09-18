@@ -12,8 +12,9 @@ import {
 } from "@/data/targets";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi, unwrapRecord } from "@/lib/api";
+import { managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapPerformanceReview, str } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./TargetsPage.module.css";
 
 const statusClass: Record<ReviewStatus, string> = {
@@ -72,14 +73,15 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 export function TargetsPage() {
+  const manager = useManagerPortal();
   const [activeTab, setActiveTab] = useState<TargetTab>("Reviews");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction, exportRows } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.targets.list(),
-    [],
+    () => (manager ? managerApi.listTargets() : superAdminApi.targets.list()),
+    [manager],
   );
 
   const performanceReviews = useMemo(() => {
@@ -148,18 +150,33 @@ export function TargetsPage() {
       }
       const rating = Math.min(5, Math.max(1, Number(values.rating) || 1));
 
-      await superAdminApi.targets.create({
-        title,
-        name,
-        employeeName: name,
-        role,
-        jobTitle: role,
-        reviewedBy,
-        reviewer: reviewedBy,
-        rating,
-        score: rating,
-        status: "In review",
-      });
+      if (manager) {
+        await managerApi.createTarget({
+          title,
+          name,
+          employeeName: name,
+          role,
+          jobTitle: role,
+          reviewedBy,
+          reviewer: reviewedBy,
+          rating,
+          score: rating,
+          status: "In review",
+        });
+      } else {
+        await superAdminApi.targets.create({
+          title,
+          name,
+          employeeName: name,
+          role,
+          jobTitle: role,
+          reviewedBy,
+          reviewer: reviewedBy,
+          rating,
+          score: rating,
+          status: "In review",
+        });
+      }
       refetch();
     });
   }

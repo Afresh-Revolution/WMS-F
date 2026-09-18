@@ -27,6 +27,7 @@ import { listFrom, mapDisciplineCase, mapEmployee } from "@/lib/api/mappers";
 import { DisciplineRecordModal } from "./DisciplineRecordModal";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { usePageActions } from "@/hooks/usePageActions";
+import { portalHref } from "@/lib/portalPaths";
 import styles from "./DisciplinePage.module.css";
 
 const filters: DisciplineFilter[] = ["Active", "Closed", "All"];
@@ -161,28 +162,33 @@ export function DisciplinePage({
   function closeModal() {
     setIsModalOpen(false);
     resetForm();
-    if (pathname === "/discipline/create") router.push("/discipline");
+    if (pathname.endsWith("/discipline/create") || pathname.endsWith("/discipline/new")) {
+      router.push(portalHref(pathname, "/discipline"));
+    }
   }
 
   function closeRecordModal() {
     setSelectedRecordId(null);
-    if (pathname === "/discipline/closed/view") {
-      router.push("/discipline/closed");
-    } else if (pathname === "/discipline/all/view" || pathname === "/discipline/new") {
-      router.push("/discipline/all");
-    } else if (pathname.match(/^\/discipline\/[^/]+$/)) {
-      router.push(filterRoutes[activeFilter]);
+    if (pathname.endsWith("/discipline/closed/view")) {
+      router.push(portalHref(pathname, "/discipline/closed"));
+    } else if (
+      pathname.endsWith("/discipline/all/view") ||
+      pathname.endsWith("/discipline/new")
+    ) {
+      router.push(portalHref(pathname, "/discipline/all"));
+    } else if (/\/discipline\/[^/]+$/.test(pathname)) {
+      router.push(portalHref(pathname, filterRoutes[activeFilter]));
     }
   }
 
   function openRecord(id: string) {
     setSelectedRecordId(id);
-    router.push(`/discipline/${id}`);
+    router.push(portalHref(pathname, `/discipline/${id}`));
   }
 
   function handleFilterChange(filter: DisciplineFilter) {
     setActiveFilter(filter);
-    router.push(filterRoutes[filter]);
+    router.push(portalHref(pathname, filterRoutes[filter]));
   }
 
   function handleSubmit(event: FormEvent) {

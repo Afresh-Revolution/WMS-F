@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutGrid,
   List,
@@ -26,6 +26,7 @@ import {
 } from "@/lib/api";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
 import { listFrom, mapEmployee, readTemporaryPassword, str } from "@/lib/api/mappers";
+import { portalHref } from "@/lib/portalPaths";
 import styles from "./EmployeesPage.module.css";
 
 type ViewMode = "grid" | "list";
@@ -48,6 +49,7 @@ const roleOptions = [
 
 export function EmployeesPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<DepartmentFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -187,7 +189,7 @@ export function EmployeesPage() {
       });
       refetch();
       setAddOpen(false);
-      router.push("/employees/created");
+      router.push(portalHref(pathname, "/employees/created"));
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Something went wrong";

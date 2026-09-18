@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { CalendarDays, Check, Plus, RefreshCw, Search, Send } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
@@ -11,8 +11,10 @@ import {
 } from "@/data/events";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapEvent } from "@/lib/api/mappers";
+import { portalHref } from "@/lib/portalPaths";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./EventsPage.module.css";
 
 const filters: EventFilter[] = ["All", "Upcoming", "Sponsorship", "Completed"];
@@ -64,11 +66,13 @@ type EventsPageProps = {
 
 export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [activeFilter, setActiveFilter] = useState<EventFilter>(initialFilter);
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
   const { runAction, exportRows } = usePageActions();
+  const manager = useManagerPortal();
 
   useEffect(() => {
     setActiveFilter(initialFilter);
@@ -79,10 +83,14 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
 
   const { data, loading, error, refetch } = useAsyncData(
     () =>
-      superAdminApi.events.list(
-        filterParam ? { category: filterParam } : undefined,
-      ),
-    [filterParam],
+      manager
+        ? managerApi.listEvents(
+            filterParam ? { category: filterParam } : undefined,
+          )
+        : superAdminApi.events.list(
+            filterParam ? { category: filterParam } : undefined,
+          ),
+    [filterParam, manager],
   );
 
   const events = useMemo(() => {
@@ -146,7 +154,7 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
 
   function handleFilterChange(filter: EventFilter) {
     setActiveFilter(filter);
-    router.push(filterRoutes[filter]);
+    router.push(portalHref(pathname, filterRoutes[filter]));
   }
 
   function handleRefresh() {
@@ -171,12 +179,16 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
   async function handleSave(values: Record<string, string>) {
     if (editingEvent) {
       await runAction("Update event", async () => {
-        await superAdminApi.events.patch(editingEvent.id, values);
+        await (manager
+          ? managerApi.updateEvent(editingEvent.id, values)
+          : superAdminApi.events.patch(editingEvent.id, values));
         refetch();
       });
     } else {
       await runAction("Create event", async () => {
-        await superAdminApi.events.create(values);
+        await (manager
+          ? managerApi.createEvent(values)
+          : superAdminApi.events.create(values));
         refetch();
       });
     }

@@ -16,8 +16,9 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapSalaryIncrement } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./SalaryIncrementsPage.module.css";
 
 const statusClass: Record<IncrementStatus, string> = {
@@ -41,16 +42,19 @@ const newIncrementFields = [
 ];
 
 export function SalaryIncrementsPage() {
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<IncrementFilter>("All");
   const [createOpen, setCreateOpen] = useState(false);
 
   const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
     () =>
-      superAdminApi.salaryIncrements
-        .list()
-        .catch(() => superAdminApi.hr.salaryAdjustments.list()),
-    [],
+      manager
+        ? managerApi.listSalaryRecommendations()
+        : superAdminApi.salaryIncrements
+            .list()
+            .catch(() => superAdminApi.hr.salaryAdjustments.list()),
+    [manager],
   );
 
   const salaryIncrements = useMemo(() => {
@@ -93,9 +97,13 @@ export function SalaryIncrementsPage() {
 
   async function handleCreateIncrement(values: Record<string, string>) {
     await runAction("New recommendation", async () => {
-      await superAdminApi.hr.salaryAdjustments
-        .create(values)
-        .catch(() => superAdminApi.salaryIncrements.create(values));
+      if (manager) {
+        await managerApi.createSalaryRecommendation(values);
+      } else {
+        await superAdminApi.hr.salaryAdjustments
+          .create(values)
+          .catch(() => superAdminApi.salaryIncrements.create(values));
+      }
       refetch();
     });
   }

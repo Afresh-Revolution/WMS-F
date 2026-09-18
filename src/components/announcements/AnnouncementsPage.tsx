@@ -22,16 +22,24 @@ import {
   type AnnouncementTagTone,
 } from "@/data/announcements";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { usePageActions } from "@/hooks/usePageActions";
 import {
   listCompanyAnnouncements,
+  listManagerAnnouncements,
   publishCompanyAnnouncement,
+  publishManagerAnnouncement,
   getAdminAnnouncementDashboard,
+  getManagerAnnouncementDashboard,
   publishAdminAnnouncement,
+  publishManagerDraft,
   pinAdminAnnouncement,
+  pinManagerAnnouncement,
   unpinAdminAnnouncement,
+  unpinManagerAnnouncement,
   departmentsApi,
   lookupsApi,
+  managerApi,
 } from "@/lib/api";
 import { listFrom, mapAnnouncement, str, unwrapRecord } from "@/lib/api/mappers";
 import styles from "./AnnouncementsPage.module.css";
@@ -68,6 +76,7 @@ function TagIcon({ tone }: { tone: AnnouncementTagTone }) {
 }
 
 export function AnnouncementsPage() {
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<AnnouncementFilter>("All");
   const [activeCategory, setActiveCategory] = useState<AnnouncementCategory>("All");
   const [query, setQuery] = useState("");
@@ -76,23 +85,27 @@ export function AnnouncementsPage() {
   const { runAction, exportRows } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => listCompanyAnnouncements(),
-    [],
+    () => (manager ? listManagerAnnouncements() : listCompanyAnnouncements()),
+    [manager],
   );
   const { data: dashboardData } = useAsyncData(
-    () => getAdminAnnouncementDashboard().catch(() => null),
-    [],
+    () =>
+      (manager
+        ? getManagerAnnouncementDashboard()
+        : getAdminAnnouncementDashboard()
+      ).catch(() => null),
+    [manager],
   );
   const { data: departmentData } = useAsyncData(async () => {
     const settled = await Promise.allSettled([
       lookupsApi.departments(),
-      departmentsApi.list(),
+      manager ? managerApi.listDepartments() : departmentsApi.list(),
     ]);
     for (const result of settled) {
       if (result.status === "fulfilled") return result.value;
     }
     return null;
-  }, []);
+  }, [manager]);
 
   const announcements = useMemo(() => {
     return listFrom(data ?? undefined).map((record) => mapAnnouncement(record));
@@ -255,7 +268,9 @@ export function AnnouncementsPage() {
     await runAction(
       values.status === "draft" ? "Save draft" : "Publish announcement",
       async () => {
-        await publishCompanyAnnouncement(values);
+        await (manager
+          ? publishManagerAnnouncement(values)
+          : publishCompanyAnnouncement(values));
         refetch();
       },
     );
@@ -263,21 +278,27 @@ export function AnnouncementsPage() {
 
   async function unpinAnnouncement(id: string) {
     await runAction("Unpin announcement", async () => {
-      await unpinAdminAnnouncement(id);
+      await (manager
+        ? unpinManagerAnnouncement(id)
+        : unpinAdminAnnouncement(id));
       refetch();
     }).catch(() => undefined);
   }
 
   async function pinAnnouncement(id: string) {
     await runAction("Pin announcement", async () => {
-      await pinAdminAnnouncement(id);
+      await (manager
+        ? pinManagerAnnouncement(id)
+        : pinAdminAnnouncement(id));
       refetch();
     }).catch(() => undefined);
   }
 
   async function publishDraft(id: string) {
     await runAction("Publish announcement", async () => {
-      await publishAdminAnnouncement(id, true);
+      await (manager
+        ? publishManagerDraft(id, true)
+        : publishAdminAnnouncement(id, true));
       refetch();
     }).catch(() => undefined);
   }

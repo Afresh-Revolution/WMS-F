@@ -16,9 +16,10 @@ import {
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi, unwrapRecord } from "@/lib/api";
+import { ApiError, managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import { downloadApiBlob } from "@/lib/export/downloadBlob";
-import { listFrom, num, str } from "@/lib/api/mappers";
+import { listFrom, nestedStr, num, str } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./ReportsPage.module.css";
 
 type GrowthPoint = { month: string; value: number };
@@ -43,6 +44,90 @@ const quickExportActions: Record<
   "Leave balances snapshot": () => superAdminApi.reports.leave(),
   "Payroll summary": () => superAdminApi.reports.payroll(),
 };
+
+function flattenExportRow(record: Record<string, unknown>) {
+  const row: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      row[key] = nestedStr(value);
+      continue;
+    }
+    if (Array.isArray(value)) continue;
+    row[key] = value ?? "";
+  }
+  return row;
+}
+
+function exportableRows(payload: unknown) {
+  const listed = listFrom(payload as never);
+  if (listed.length > 0) return listed.map(flattenExportRow);
+
+  const record = unwrapRecord(payload);
+  for (const key of ["employees", "attendance", "leave", "runs", "payroll"]) {
+    const nested = listFrom(record[key] as never);
+    if (nested.length > 0) return nested.map(flattenExportRow);
+  }
+
+  const flat: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (key === "scope") continue;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      for (const [innerKey, innerValue] of Object.entries(
+        value as Record<string, unknown>,
+      )) {
+        if (innerValue !== null && typeof innerValue !== "object") {
+          flat[`${key}.${innerKey}`] = innerValue;
+        }
+      }
+      continue;
+    }
+    if (Array.isArray(value) || value === null || value === undefined) continue;
+    flat[key] = value;
+  }
+  return Object.keys(flat).length > 0 ? [flat] : [];
+}
+
+function metricText(value: unknown, keys: string[], suffix = "") {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const record = value as Record<string, unknown>;
+    for (const key of keys) {
+      const nested = record[key];
+      if (nested !== null && nested !== undefined && typeof nested !== "object") {
+        return `${nested}${suffix}`;
+      }
+    }
+    return "—";
+  }
+  if (value === null || value === undefined || typeof value === "object") {
+    return "—";
+  }
+  return `${value}${suffix}`;
+}
+
+async function managerQuickExportPayload(
+  label: (typeof quickExports)[number],
+) {
+  switch (label) {
+    case "Full headcount roster":
+      return managerApi.listEmployees({ limit: 500 });
+    case "This month's attendance":
+      return managerApi.listAttendance({ period: "current", limit: 500 });
+    case "Leave balances snapshot":
+      return managerApi.listLeave({ limit: 500 });
+    case "Payroll summary":
+      try {
+        return await managerApi.listPayrollRuns({ limit: 100 });
+      } catch (error) {
+        if (
+          error instanceof ApiError &&
+          (error.status === 404 || error.status === 405)
+        ) {
+          return managerApi.getReports();
+        }
+        throw error;
+      }
+  }
+}
 
 function HeadcountChart({ data }: { data: GrowthPoint[] }) {
   const width = 440;
@@ -168,59 +253,81 @@ function DepartmentDonut({ data }: { data: DeptPoint[] }) {
 }
 
 export function ReportsPage() {
+  const manager = useManagerPortal();
   const { runAction, exportRows } = usePageActions();
   const [tab, setTab] = useState<"Overview" | "Saved reports">("Overview");
   const [query, setQuery] = useState("");
 
   const { data: overview, loading, error } = useAsyncData(
-    () => superAdminApi.reports.overview(),
-    [],
+    () => (manager ? managerApi.getReports() : superAdminApi.reports.overview()),
+    [manager],
   );
   const { data: growthData } = useAsyncData(
-    () => superAdminApi.reports.headcountGrowth(),
-    [],
+    () =>
+      manager ? managerApi.getReports() : superAdminApi.reports.headcountGrowth(),
+    [manager],
   );
   const { data: deptData } = useAsyncData(
-    () => superAdminApi.reports.departments(),
-    [],
+    () =>
+      manager ? managerApi.getReports() : superAdminApi.reports.departments(),
+    [manager],
   );
   const { data: attendanceData } = useAsyncData(
-    () => superAdminApi.reports.attendance(),
-    [],
+    () =>
+      manager ? managerApi.getReports() : superAdminApi.reports.attendance(),
+    [manager],
   );
   const { data: savedData } = useAsyncData(
-    () => superAdminApi.reports.saved.list(),
-    [],
+    () => (manager ? Promise.resolve(null) : superAdminApi.reports.saved.list()),
+    [manager],
   );
 
   const reportKpis = useMemo(() => {
     const data = unwrapRecord(overview);
+    const headcount = data.headcount;
+    const attendance = data.attendance;
     return [
       {
         id: "headcount",
         label: "Total Headcount",
-        value: str(data.headcount ?? data.totalHeadcount, "—"),
+        value: metricText(headcount ?? data.totalHeadcount, [
+          "total",
+          "active",
+          "count",
+        ]),
         badge: str(data.headcountChange, ""),
         tone: "up" as const,
       },
       {
         id: "attendance",
         label: "Avg Attendance",
-        value: str(data.attendance ?? data.avgAttendance, "—"),
+        value: metricText(
+          attendance ?? data.avgAttendance,
+          ["attendanceRate", "rate", "present"],
+          typeof attendance === "object" ? "%" : "",
+        ),
         badge: str(data.attendanceWindow, ""),
         tone: "meta" as const,
       },
       {
         id: "attrition",
         label: "Attrition Rate",
-        value: str(data.attrition ?? data.attritionRate, "—"),
+        value: metricText(data.attrition ?? data.attritionRate, [
+          "rate",
+          "value",
+          "percent",
+        ]),
         badge: str(data.attritionChange, ""),
         tone: "down" as const,
       },
       {
         id: "accuracy",
         label: "Report Accuracy",
-        value: str(data.accuracy ?? data.reportAccuracy, "—"),
+        value: metricText(data.accuracy ?? data.reportAccuracy, [
+          "value",
+          "percent",
+          "score",
+        ]),
         badge: str(data.accuracyNote, ""),
         tone: "good" as const,
       },
@@ -273,6 +380,17 @@ export function ReportsPage() {
 
   function exportFullReport() {
     void runAction("Export report", async () => {
+      if (manager) {
+        const employees = await managerApi.listEmployees({ limit: 500 });
+        const rows = exportableRows(employees);
+        if (rows.length > 0) {
+          exportRows(rows, "workforce-report.csv");
+          return;
+        }
+        const reports = await managerApi.getReports();
+        exportRows(exportableRows(reports), "workforce-report.csv");
+        return;
+      }
       await downloadApiBlob(
         superAdminApi.reports.exportPath(),
         "workforce-report.csv",
@@ -282,20 +400,19 @@ export function ReportsPage() {
 
   function runQuickExport(label: (typeof quickExports)[number]) {
     void runAction(`Export ${label}`, async () => {
-      const payload = await quickExportActions[label]();
-      const source = payload as Record<string, unknown>;
-      const rows = listFrom(
-        (source.data ?? source.rows ?? source.items) as never,
+      const payload = manager
+        ? await managerQuickExportPayload(label)
+        : await quickExportActions[label]();
+      const rows = exportableRows(payload);
+      exportRows(
+        rows,
+        `${label.toLowerCase().replace(/\s+/g, "-")}.csv`,
       );
-      if (rows.length > 0) {
-        exportRows(rows, `${label.toLowerCase().replace(/\s+/g, "-")}.csv`);
-        return;
-      }
-      exportRows([payload as Record<string, unknown>], `${label}.csv`);
     });
   }
 
   function runSavedReport(id: string, name: string) {
+    if (manager) return;
     void runAction(`Run ${name}`, async () => {
       await superAdminApi.reports.saved.action(id, "run");
     });

@@ -3,6 +3,8 @@ import { unwrapRecord } from "./types";
 
 const ADMIN = "/announcements/admin";
 const ADMIN_ALIAS = "/super-admin/announcements/admin";
+const MANAGER = "/manager/announcements";
+const HOD = "/hod/announcements";
 const STAFF = "/announcements";
 
 const AUDIENCE_TYPES = new Set([
@@ -113,12 +115,37 @@ export function announcementWriteBody(values: Record<string, string>) {
   return body;
 }
 
+function managerRequest<T>(
+  path = "",
+  options?: Parameters<typeof apiRequest>[1],
+) {
+  const suffix =
+    !path || path.startsWith("/") || path.startsWith("?")
+      ? path
+      : `/${path}`;
+  return firstSuccessful<T>(
+    [
+      () => apiRequest<T>(`${MANAGER}${suffix}`, options),
+      () => apiRequest<T>(`${HOD}${suffix}`, options),
+    ],
+    "Manager announcements API was not found.",
+  );
+}
+
 export function listCompanyAnnouncements(params?: Record<string, unknown>) {
   return adminRequest<unknown>(buildQuery(params));
 }
 
+export function listManagerAnnouncements(params?: Record<string, unknown>) {
+  return managerRequest<unknown>(buildQuery(params));
+}
+
 export function getAdminAnnouncementDashboard() {
   return adminRequest<unknown>("/dashboard");
+}
+
+export function getManagerAnnouncementDashboard() {
+  return managerRequest<unknown>("/dashboard");
 }
 
 export function publishCompanyAnnouncement(values: Record<string, string>) {
@@ -129,8 +156,31 @@ export function publishCompanyAnnouncement(values: Record<string, string>) {
   return adminRequest<unknown>("", { method: "POST", body });
 }
 
+export function publishManagerAnnouncement(values: Record<string, string>) {
+  const body = announcementWriteBody(values);
+  if (body.status === "draft") {
+    return firstSuccessful(
+      [
+        () => apiRequest(`${MANAGER}/drafts`, { method: "POST", body }),
+        () => apiRequest(MANAGER, { method: "POST", body }),
+        () => apiRequest(`${HOD}/drafts`, { method: "POST", body }),
+        () => apiRequest(HOD, { method: "POST", body }),
+      ],
+      "Could not save that announcement draft.",
+    );
+  }
+  return managerRequest<unknown>("", { method: "POST", body });
+}
+
 export function publishAdminAnnouncement(id: string, notify = true) {
   return adminRequest<unknown>(`/${id}/publish`, {
+    method: "POST",
+    body: { notify },
+  });
+}
+
+export function publishManagerDraft(id: string, notify = true) {
+  return managerRequest<unknown>(`/${id}/publish`, {
     method: "POST",
     body: { notify },
   });
@@ -147,12 +197,34 @@ export function pinAdminAnnouncement(id: string) {
   );
 }
 
+export function pinManagerAnnouncement(id: string) {
+  return firstSuccessful(
+    [
+      () => apiRequest(`${MANAGER}/${id}/pin`, { method: "PATCH" }),
+      () => apiRequest(`${MANAGER}/${id}/pin`, { method: "POST" }),
+      () => apiRequest(`${HOD}/${id}/pin`, { method: "PATCH" }),
+    ],
+    "Could not pin that announcement.",
+  );
+}
+
 export function unpinAdminAnnouncement(id: string) {
   return firstSuccessful(
     [
       () => apiRequest(`${ADMIN}/${id}/unpin`, { method: "PATCH" }),
       () => apiRequest(`${ADMIN_ALIAS}/${id}/unpin`, { method: "PATCH" }),
       () => apiRequest(`${ADMIN}/${id}/unpin`, { method: "POST" }),
+    ],
+    "Could not unpin that announcement.",
+  );
+}
+
+export function unpinManagerAnnouncement(id: string) {
+  return firstSuccessful(
+    [
+      () => apiRequest(`${MANAGER}/${id}/unpin`, { method: "PATCH" }),
+      () => apiRequest(`${MANAGER}/${id}/unpin`, { method: "POST" }),
+      () => apiRequest(`${HOD}/${id}/unpin`, { method: "PATCH" }),
     ],
     "Could not unpin that announcement.",
   );

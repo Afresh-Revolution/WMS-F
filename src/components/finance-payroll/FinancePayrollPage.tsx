@@ -21,8 +21,9 @@ import {
 } from "@/data/financePayroll";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi, unwrapRecord } from "@/lib/api";
+import { managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapPayRun, str } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./FinancePayrollPage.module.css";
 
 const statusClass: Record<PayRunStatus, string> = {
@@ -36,14 +37,15 @@ const runPayrollFields = [
 ];
 
 export function FinancePayrollPage() {
+  const manager = useManagerPortal();
   const [activeSection, setActiveSection] = useState<PayrollSectionTab>("Pay runs");
   const [runOpen, setRunOpen] = useState(false);
   const [query, setQuery] = useState("");
   const { runAction, exportRows, showToast } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.payroll.list(),
-    [],
+    () => (manager ? managerApi.listPayrollRuns() : superAdminApi.payroll.list()),
+    [manager],
   );
 
   const payRuns = useMemo(() => {
@@ -96,14 +98,25 @@ export function FinancePayrollPage() {
 
   async function handleRunPayroll(values: Record<string, string>) {
     await runAction("Run payroll", async () => {
-      await superAdminApi.payroll.collectionAction("run", values);
+      if (manager) {
+        await managerApi.runPayroll({
+          period: values.period,
+          notes: values.notes,
+        });
+      } else {
+        await superAdminApi.payroll.collectionAction("run", values);
+      }
       refetch();
     });
   }
 
   async function downloadRun(run: PayRun) {
     await runAction(`Download ${run.ref}`, async () => {
-      await superAdminApi.payroll.getAction(run.id, "download");
+      if (manager) {
+        await managerApi.getPayrollRun(run.id);
+      } else {
+        await superAdminApi.payroll.getAction(run.id, "download");
+      }
     });
   }
 

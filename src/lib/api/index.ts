@@ -76,11 +76,17 @@ export {
 } from "./resources";
 export {
   listCompanyAnnouncements,
+  listManagerAnnouncements,
   publishCompanyAnnouncement,
+  publishManagerAnnouncement,
   getAdminAnnouncementDashboard,
+  getManagerAnnouncementDashboard,
   publishAdminAnnouncement,
+  publishManagerDraft,
   pinAdminAnnouncement,
+  pinManagerAnnouncement,
   unpinAdminAnnouncement,
+  unpinManagerAnnouncement,
   listStaffAnnouncements,
   getStaffUnreadCount,
   getStaffAnnouncement,

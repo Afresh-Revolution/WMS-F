@@ -183,9 +183,9 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   EMPLOYEE_CHECK_IN_ROLE_REQUIRED: "This account cannot GPS check in.",
   ATTENDANCE_CHECK_IN_FORBIDDEN: "You do not have permission to check in.",
   NO_ACTIVE_EMPLOYEE_PROFILE:
-    "This login is not linked to an employee profile. Ask an admin to add you on the Employees page.",
+    "Your employee profile is still being set up. Wait a few seconds and try again.",
   EMPLOYEE_PROFILE_REQUIRED:
-    "This login is not linked to an employee profile. Ask an admin to add you on the Employees page.",
+    "Your employee profile is still being set up. Wait a few seconds and try again.",
   CHECK_IN_ACCOUNT_INACTIVE: "This account is not eligible to check in.",
   ATTENDANCE_MONITOR_FORBIDDEN: "You cannot monitor attendance records.",
   ATTENDANCE_MANAGE_FORBIDDEN:
@@ -260,13 +260,32 @@ function friendlyForbiddenMessage(value: string): string | null {
   return null;
 }
 
+function rewriteKnownApiMessage(value: string, code = ""): string {
+  const trimmed = value.trim();
+  if (
+    /not linked to an employee/i.test(trimmed) ||
+    /no active employee profile/i.test(trimmed)
+  ) {
+    return "Your employee profile is still being set up. Wait a few seconds and try again.";
+  }
+  const mapped = code ? ERROR_CODE_MESSAGES[code] : undefined;
+  const isAllCaps =
+    trimmed === trimmed.toUpperCase() &&
+    /[A-Z]/.test(trimmed) &&
+    trimmed.length > 20;
+  if (mapped && (isAllCaps || GENERIC_ERROR_MESSAGES.has(trimmed.toLowerCase()))) {
+    return mapped;
+  }
+  return friendlyForbiddenMessage(trimmed) ?? trimmed;
+}
+
 /** Parse API error payloads (superadmin + /api/v1/auth formats). */
 export function extractErrorMessage(payload: unknown, fallback: string): string {
   if (typeof payload === "string" && payload.trim()) {
     if (payload.toLowerCase().includes("internal server error")) {
       return "The API returned an internal server error. Check that the backend is running and configured correctly.";
     }
-    return friendlyForbiddenMessage(payload) ?? payload;
+    return rewriteKnownApiMessage(payload);
   }
 
   if (typeof payload === "object" && payload !== null) {
@@ -301,43 +320,47 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
         if (typeof details === "object" && details !== null) {
           const detailMessage = (details as Record<string, unknown>).message;
           if (isUsefulErrorMessage(detailMessage)) {
-            return detailMessage;
+            return rewriteKnownApiMessage(detailMessage, code);
           }
         }
         return "Access denied. You do not have permission to do that.";
       }
 
+      if (code && ERROR_CODE_MESSAGES[code]) {
+        if (typeof details === "object" && details !== null) {
+          const detailMessage = (details as Record<string, unknown>).message;
+          if (
+            isUsefulErrorMessage(detailMessage) &&
+            detailMessage !== detailMessage.toUpperCase()
+          ) {
+            return rewriteKnownApiMessage(detailMessage, code);
+          }
+        }
+        return ERROR_CODE_MESSAGES[code];
+      }
+
       if (typeof details === "object" && details !== null) {
         const detailMessage = (details as Record<string, unknown>).message;
         if (isUsefulErrorMessage(detailMessage)) {
-          return detailMessage;
+          return rewriteKnownApiMessage(detailMessage, code);
         }
       }
       if (isUsefulErrorMessage(errObj.message)) {
-        return errObj.message;
-      }
-      if (code && ERROR_CODE_MESSAGES[code]) {
-        return ERROR_CODE_MESSAGES[code];
+        return rewriteKnownApiMessage(errObj.message, code);
       }
     }
 
     if (isUsefulErrorMessage(nestedError)) {
-      if (/^forbidden\.?$/i.test(nestedError.trim())) {
-        return "Access denied. You do not have permission to do that.";
-      }
       if (/unable to reach the backend api/i.test(nestedError)) {
         return "The backend could not be reached. Wait a few seconds and try again.";
       }
-      return nestedError;
+      return rewriteKnownApiMessage(nestedError);
     }
 
     const candidates = [record.detail, record.title, record.message];
     for (const candidate of candidates) {
       if (isUsefulErrorMessage(candidate)) {
-        if (/^forbidden\.?$/i.test(candidate.trim())) {
-          return "Access denied. You do not have permission to do that.";
-        }
-        return candidate;
+        return rewriteKnownApiMessage(candidate);
       }
     }
   }

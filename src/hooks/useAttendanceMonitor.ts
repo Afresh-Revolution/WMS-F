@@ -1,44 +1,65 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  attendanceEmployees,
-  attendanceStats,
-  departmentAttendance,
-  type AttendanceEmployee,
-  type AttendanceException,
-  type AttendanceStat,
-  type DepartmentAttendance,
+import type {
+  AttendanceCorrection,
+  AttendanceEmployee,
+  AttendanceException,
+  AttendanceStat,
+  DepartmentAttendance,
 } from "@/data/attendance";
-import { employeesApi, reportsApi, attendanceApi, attendanceSettled, auditLogsApi } from "@/lib/api";
+import {
+  employeesApi,
+  reportsApi,
+  attendanceApi,
+  attendanceSettled,
+  auditLogsApi,
+  managerApi,
+} from "@/lib/api";
 import {
   buildAttendanceStats,
   buildDepartmentBreakdown,
   firstSchedule,
   liveAuditLogsOrFallback,
-  liveExceptionsOrFallback,
-  mapAttendanceLocation,
+  mapRecordsToCorrections,
+  mapRecordsToExceptions,
   mapRecordsToReportRows,
   mergeCompanyRoster,
   unwrapAttendanceList,
+  mapAttendanceLocation,
   type AttendanceReportRow,
   type MappedAttendanceLocation,
   type MappedAttendanceSchedule,
 } from "@/lib/api/attendanceMappers";
-import { mappedOrFallback } from "@/lib/api/internMappers";
 import { useAsyncData } from "./useAsyncData";
 
-export function useAttendanceMonitor() {
+export function useAttendanceMonitor(source: "admin" | "manager" = "admin") {
   const { data, loading, error, refetch } = useAsyncData(async () => {
     const [records, summary, employees, schedules, locations, reports, audits] =
       await Promise.all([
-        attendanceSettled(attendanceApi.records.list({ limit: 100 })),
+        attendanceSettled(
+          source === "manager"
+            ? attendanceApi.manager.list({ limit: 100 })
+            : attendanceApi.records.list({ limit: 100 }),
+        ),
         attendanceSettled(attendanceApi.reports.summary({ period: "current" })),
-        attendanceSettled(employeesApi.list({ limit: 100 })),
+        attendanceSettled(
+          source === "manager"
+            ? managerApi.listEmployees({ limit: 100 })
+            : employeesApi.list({ limit: 100 }),
+        ),
         attendanceSettled(attendanceApi.schedules.list({ limit: 50 })),
         attendanceSettled(attendanceApi.locations.list({ limit: 50 })),
-        attendanceSettled(reportsApi.attendance()),
-        attendanceSettled(auditLogsApi.list({ q: "attendance", limit: 50 })),
+        attendanceSettled(
+          source === "manager"
+            ? managerApi.getReports()
+            : reportsApi.attendance(),
+        ),
+        attendanceSettled(
+          source === "manager"
+            ? managerApi.listAuditLogs({ q: "attendance", limit: 50 })
+            : auditLogsApi.list({ q: "attendance", limit: 50 }),
+        ),
       ]);
     return {
       records,
@@ -49,39 +70,30 @@ export function useAttendanceMonitor() {
       reports,
       audits,
     };
-  }, []);
+  }, [source]);
 
   const roster = useMemo((): AttendanceEmployee[] => {
-    if (data?.employees == null && data?.records == null) {
-      return attendanceEmployees;
-    }
-    return mergeCompanyRoster(data.employees, data.records);
+    return mergeCompanyRoster(data?.employees, data?.records);
   }, [data]);
 
   const stats = useMemo((): AttendanceStat[] => {
-    if (data?.employees == null && data?.records == null && data?.summary == null) {
-      return attendanceStats;
-    }
     return buildAttendanceStats(roster, data?.summary);
   }, [data, roster]);
 
   const departments = useMemo((): DepartmentAttendance[] => {
-    if (data?.employees == null && data?.records == null) {
-      return departmentAttendance;
-    }
     return buildDepartmentBreakdown(roster);
-  }, [data, roster]);
+  }, [roster]);
 
   const exceptions = useMemo((): AttendanceException[] => {
-    return liveExceptionsOrFallback(data?.records);
+    return mapRecordsToExceptions(data?.records);
+  }, [data]);
+
+  const corrections = useMemo((): AttendanceCorrection[] => {
+    return mapRecordsToCorrections(data?.records);
   }, [data]);
 
   const reportRows = useMemo((): AttendanceReportRow[] => {
-    return mappedOrFallback(
-      data?.records,
-      mapRecordsToReportRows(data?.records),
-      [],
-    );
+    return mapRecordsToReportRows(data?.records);
   }, [data]);
 
   const auditLogs = useMemo(
@@ -99,7 +111,7 @@ export function useAttendanceMonitor() {
   }, [data]);
 
   return {
-    live: data?.records != null || data?.employees != null,
+    live: data != null,
     loading,
     error,
     refetch,
@@ -107,6 +119,7 @@ export function useAttendanceMonitor() {
     stats,
     departments,
     exceptions,
+    corrections,
     reportRows,
     auditLogs,
     schedule,

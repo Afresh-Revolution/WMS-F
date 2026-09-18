@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { financeModuleTabs, type FinanceModuleTab } from "@/data/financePayroll";
+import { portalHref } from "@/lib/portalPaths";
 import styles from "./FinancePayrollPage.module.css";
 
 const moduleRoutes: Partial<Record<FinanceModuleTab, string>> = {
@@ -19,8 +20,11 @@ export function FinanceModuleTabs() {
   return (
     <div className={styles.moduleTabs}>
       {financeModuleTabs.map((tab) => {
-        const href = moduleRoutes[tab];
-        const active = href ? pathname === href : false;
+        const tabHref = moduleRoutes[tab];
+        const href = tabHref ? portalHref(pathname, tabHref) : undefined;
+        const active = href
+          ? pathname === href || pathname.endsWith(tabHref)
+          : false;
 
         if (href) {
           return (

@@ -16,8 +16,9 @@ import { NotificationsLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapPromotion } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./PromotionsPage.module.css";
 
 const statusClass: Record<PromotionStatus, string> = {
@@ -43,14 +44,19 @@ const newPromotionFields = [
 ];
 
 export function PromotionsPage() {
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<PromotionFilter>("All");
   const [createOpen, setCreateOpen] = useState(false);
 
   const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
     () =>
-      superAdminApi.hr.promotions.list().catch(() => superAdminApi.promotions.list()),
-    [],
+      manager
+        ? managerApi.listPromotions()
+        : superAdminApi.hr.promotions
+            .list()
+            .catch(() => superAdminApi.promotions.list()),
+    [manager],
   );
 
   const promotions = useMemo(() => {
@@ -85,9 +91,13 @@ export function PromotionsPage() {
 
   async function handleCreatePromotion(values: Record<string, string>) {
     await runAction("New recommendation", async () => {
-      await superAdminApi.hr.promotions
-        .create(values)
-        .catch(() => superAdminApi.promotions.create(values));
+      if (manager) {
+        await managerApi.createPromotion(values);
+      } else {
+        await superAdminApi.hr.promotions
+          .create(values)
+          .catch(() => superAdminApi.promotions.create(values));
+      }
       refetch();
     });
   }

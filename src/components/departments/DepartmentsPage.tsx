@@ -20,8 +20,9 @@ import {
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi, unwrapRecord } from "@/lib/api";
+import { managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapDepartmentRecord, str } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./DepartmentsPage.module.css";
 
 const deptIcons = {
@@ -79,6 +80,7 @@ async function loadHodOptions(): Promise<HodOption[]> {
 }
 
 export function DepartmentsPage() {
+  const manager = useManagerPortal();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] =
     useState<DepartmentFilter>("All departments");
@@ -86,8 +88,11 @@ export function DepartmentsPage() {
 
   const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.departments.list(),
-    [],
+    () =>
+      manager
+        ? managerApi.listDepartments()
+        : superAdminApi.departments.list(),
+    [manager],
   );
   const { data: hodOptions } = useAsyncData(loadHodOptions, []);
 

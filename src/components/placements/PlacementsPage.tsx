@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, Download, Plus, Search } from "lucide-react";
 import { type PlacementFilter } from "@/data/placements";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { usePageActions } from "@/hooks/usePageActions";
-import { nyscInternsManageApi, superAdminApi } from "@/lib/api";
+import { lookupsApi, managerApi, nyscInternsManageApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapDepartment, mapPlacement, str } from "@/lib/api/mappers";
 import { asInternRecord } from "@/lib/api/internMappers";
+import { portalHref } from "@/lib/portalPaths";
 import styles from "./PlacementsPage.module.css";
 
 const filters: PlacementFilter[] = ["Active", "Exiting soon", "Exited", "All"];
@@ -86,6 +88,8 @@ type PlacementsPageProps = {
 
 export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<PlacementFilter>(initialFilter);
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -99,13 +103,19 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   const statusParam = statusQuery[activeFilter];
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.nyscInterns.list(),
-    [],
+    () =>
+      manager
+        ? managerApi.listNyscInterns()
+        : superAdminApi.nyscInterns.list(),
+    [manager],
   );
 
   const { data: departmentsPayload } = useAsyncData(
-    () => superAdminApi.departments.list(),
-    [],
+    () =>
+      manager
+        ? lookupsApi.departments().catch(() => managerApi.listDepartments())
+        : superAdminApi.departments.list(),
+    [manager],
   );
 
   const departmentOptions = useMemo(() => {
@@ -192,7 +202,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
 
   function handleFilterChange(filter: PlacementFilter) {
     setActiveFilter(filter);
-    router.push(filterRoutes[filter]);
+    router.push(portalHref(pathname, filterRoutes[filter]));
   }
 
   function viewProfile(member: (typeof placementMembers)[number]) {
@@ -206,6 +216,12 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     await runAction(
       "Export placements",
       async () => {
+        if (manager) {
+          await managerApi.exportNyscInterns(
+            statusParam ? { status: statusParam } : undefined,
+          );
+          return;
+        }
         await nyscInternsManageApi.export(
           statusParam ? { status: statusParam } : undefined,
         );
@@ -217,9 +233,10 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   async function findExistingInternId(email: string, phone: string) {
     const needle = email.trim().toLowerCase();
     const phoneNeedle = phone.replace(/\D/g, "");
-    const payload = await superAdminApi.nyscInterns.list(
-      needle ? { email: needle } : undefined,
-    );
+    const listMembers = manager
+      ? managerApi.listNyscInterns.bind(managerApi)
+      : superAdminApi.nyscInterns.list;
+    const payload = await listMembers(needle ? { email: needle } : undefined);
     const records = listFrom(payload ?? undefined);
     const match = records.find((record) => {
       const recEmail = internEmail(record);
@@ -231,7 +248,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     });
     if (match) return internId(match);
 
-    const all = listFrom((await superAdminApi.nyscInterns.list()) ?? undefined);
+    const all = listFrom((await listMembers()) ?? undefined);
     const fallback = all.find((record) => {
       const recEmail = internEmail(record);
       const recPhone = internPhone(record);
@@ -251,6 +268,10 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     const profile = asInternRecord(payload.profile ?? payload);
     const id = internId(profile) || internId(payload) || internId(envelope);
     if (!id) return;
+    if (manager) {
+      await managerApi.assignNyscSupervisor(id, { employeeId: supervisorId });
+      return;
+    }
     await superAdminApi.nyscInterns.action(id, "supervisor", {
       employeeId: supervisorId,
     });
@@ -259,7 +280,9 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   async function handleAddMember(values: Record<string, string>) {
     const body = memberWriteBody(values);
     try {
-      const created = await superAdminApi.nyscInterns.create(body);
+      const created = manager
+        ? await managerApi.createNyscIntern(body)
+        : await superAdminApi.nyscInterns.create(body);
       await assignSupervisor(created, values.employeeId);
       refetch();
       showToast("Member added", "success");
@@ -286,7 +309,11 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
         throw error;
       }
 
-      await superAdminApi.nyscInterns.patch(existingId, body);
+      if (manager) {
+        await managerApi.updateNyscIntern(existingId, body);
+      } else {
+        await superAdminApi.nyscInterns.patch(existingId, body);
+      }
       try {
         await assignSupervisor({ id: existingId }, values.employeeId);
       } catch {

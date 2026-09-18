@@ -20,8 +20,9 @@ import {
 } from "@/data/tasks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapTask } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./TasksPage.module.css";
 
 const priorityClass: Record<TaskPriority, string> = {
@@ -64,14 +65,15 @@ function matchesFilter(status: TaskStatus, filter: TaskFilter): boolean {
 }
 
 export function TasksPage() {
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<TaskFilter>("All");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction, exportRows } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.tasks.list(),
-    [],
+    () => (manager ? managerApi.listTasks() : superAdminApi.tasks.list()),
+    [manager],
   );
 
   const tasks = useMemo(() => {
@@ -104,7 +106,11 @@ export function TasksPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Create task", async () => {
-      await superAdminApi.tasks.create({ ...values, status: "Not Started" });
+      if (manager) {
+        await managerApi.createTask({ ...values, status: "Not Started" });
+      } else {
+        await superAdminApi.tasks.create({ ...values, status: "Not Started" });
+      }
       refetch();
     });
   }
@@ -112,7 +118,11 @@ export function TasksPage() {
   async function toggleComplete(task: Task) {
     const nextStatus = task.status === "Completed" ? "In Progress" : "Completed";
     await runAction("Update task", async () => {
-      await superAdminApi.tasks.patch(task.id, { status: nextStatus });
+      if (manager) {
+        await managerApi.updateTask(task.id, { status: nextStatus });
+      } else {
+        await superAdminApi.tasks.patch(task.id, { status: nextStatus });
+      }
       refetch();
     });
   }

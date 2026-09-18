@@ -1,0 +1,160 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(68, 40, 24, 0.38);
+}
+
+.modal {
+  position: relative;
+  width: min(100%, 480px);
+  padding: 28px 28px 24px;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(28, 25, 23, 0.18);
+}
+
+.close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: #a8a29e;
+}
+
+.close:hover:not(:disabled) {
+  background: #f5f5f4;
+  color: #57534e;
+}
+
+.close:disabled,
+.cancel:disabled,
+.submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.head {
+  padding-right: 36px;
+  margin-bottom: 18px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--afresh-orange);
+}
+
+.description {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #78716c;
+}
+
+.details {
+  margin: 0 0 24px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  min-height: 46px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3efe9;
+}
+
+.row dt {
+  margin: 0;
+  font-size: 14px;
+  color: #a8a29e;
+}
+
+.row dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--afresh-ink);
+  text-align: right;
+}
+
+.dateValue {
+  font-weight: 700;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cancel,
+.submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cancel {
+  border: 1px solid #e7e5e4;
+  background: #fff;
+  color: var(--afresh-ink);
+}
+
+.cancel:hover:not(:disabled) {
+  background: #fafaf9;
+}
+
+.submit {
+  background: var(--afresh-orange);
+  color: #fff;
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--afresh-orange-dark, #c2410c);
+}
+
+@media (max-width: 480px) {
+  .modal {
+    padding: 22px 18px 18px;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 12px 0;
+  }
+
+  .row dd {
+    text-align: left;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .cancel,
+  .submit {
+    width: 100%;
+  }
+}
