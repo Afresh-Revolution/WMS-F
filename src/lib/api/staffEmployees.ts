@@ -76,7 +76,7 @@ function staffListPaths() {
     : [...LIST_PATHS, ...MANAGER_LIST_PATHS];
 }
 
-const CREATE_PATHS = ["/employees", "/super-admin/employees"];
+const CREATE_PATHS = ["/employees", "/hr/employees", "/super-admin/employees"];
 
 export async function listStaffEmployees(): Promise<Record<string, unknown>[]> {
   let lastError: unknown;
@@ -154,7 +154,12 @@ export function buildEmployeeWriteBody(values: Record<string, string>) {
   const departmentId = departmentIdRaw || (departmentLooksLikeId ? department : "");
   const role = str(values.role).trim() || "employee";
   const phone = str(values.phone).trim();
-  const location = str(values.location).trim();
+  const locationType =
+    str(values.locationType).trim().toLowerCase() || "onsite";
+  const typedLocation =
+    locationType === "remote"
+      ? str(values.location).trim() || "Remote"
+      : str(values.location).trim();
   const staffType =
     role === "nysc" || role === "intern" ? role : "employee";
 
@@ -169,6 +174,8 @@ export function buildEmployeeWriteBody(values: Record<string, string>) {
     staffType,
     employmentType: "Full-time",
     status: "active",
+    locationType,
+    location_type: locationType,
   };
   if (departmentId) {
     body.departmentId = departmentId;
@@ -176,7 +183,11 @@ export function buildEmployeeWriteBody(values: Record<string, string>) {
   }
   if (department) body.department = department;
   if (phone) body.phone = phone;
-  if (location) body.location = location;
+  if (typedLocation) {
+    body.location = typedLocation;
+    body.workLocation = typedLocation;
+    body.work_location = typedLocation;
+  }
   return body;
 }
 

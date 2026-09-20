@@ -109,6 +109,19 @@ export function portalForPath(pathname: string): AppPortal | null {
   return "superadmin";
 }
 
+export function canAddUsers(role: string): boolean {
+  const key = role.toLowerCase().replace(/[\s-]+/g, "_");
+  if (key === "hod" || key.includes("head_of_department")) return false;
+  return (
+    key.includes("super_admin") ||
+    key === "superadmin" ||
+    key === "admin" ||
+    key === "manager" ||
+    key === "hr" ||
+    key.includes("human_resource")
+  );
+}
+
 export function pathAllowedForRole(pathname: string, role: string): boolean {
   const pathPortal = portalForPath(pathname);
   if (!pathPortal) return true;

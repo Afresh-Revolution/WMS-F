@@ -3,40 +3,24 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import {
-  Bell,
-  ChevronRight,
+  ArrowRight,
   Clock,
   Gavel,
   Megaphone,
   Search,
 } from "lucide-react";
-import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
-import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useAttendanceMonitor } from "@/hooks/useAttendanceMonitor";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { managerApi } from "@/lib/api";
 import { asAttendanceRecord } from "@/lib/api/attendanceMappers";
-import { num, str } from "@/lib/api/mappers";
+import { num } from "@/lib/api/mappers";
 import styles from "./ManagerHomePage.module.css";
 
-function firstName(name: string) {
-  return name.trim().split(/\s+/)[0] || "there";
-}
-
-function formatTopDate(date: Date) {
-  return date.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
-
 export function ManagerHomePage() {
-  const { user } = useCurrentUser();
   const monitor = useAttendanceMonitor("manager");
-  const today = useMemo(() => new Date(), []);
-  const displayName = user?.name || "Manager";
 
   const { data, loading, error } = useAsyncData(async () => {
     try {
@@ -53,7 +37,16 @@ export function ManagerHomePage() {
   const openCases = num(
     dashboard.openDiscipline ?? dashboard.disciplineOpen ?? dashboard.openCases,
   );
-  const greeting = `Good morning, ${firstName(displayName)}.`;
+  const awaitingDecisions = useMemo(() => {
+    const fromDashboard = num(
+      dashboard.pendingApprovals ??
+        dashboard.awaitingDecisions ??
+        dashboard.pendingDecisions ??
+        dashboard.pendingLeave ??
+        dashboard.leavePending,
+    );
+    return fromDashboard || pendingLeave;
+  }, [dashboard, pendingLeave]);
 
   return (
     <div className={styles.page}>
@@ -62,36 +55,41 @@ export function ManagerHomePage() {
         error={error || monitor.error}
         resource="manager workspace"
       />
-      <header className={styles.topBar}>
-        <p>{formatTopDate(today)}</p>
+
+      <div className={styles.topBar}>
+        <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
           <label className={styles.search}>
-            <Search size={14} />
-            <input aria-label="Search" placeholder="Search" readOnly />
-            <kbd>⌘ K</kbd>
+            <Search size={15} className={styles.searchIcon} />
+            <input
+              type="search"
+              placeholder="Search"
+              className={styles.searchInput}
+            />
           </label>
-          <NotificationsLink className={styles.iconButton}>
-            <span className={styles.notifDot} aria-hidden />
-            <Bell size={16} />
-          </NotificationsLink>
-          <ProfileLink className={styles.profileButton}>
-            {user?.initials || "M"}
-          </ProfileLink>
+          <NotificationsLink className={styles.iconButton} />
+          <ProfileLink className={styles.avatarChip} />
         </div>
-      </header>
+      </div>
 
       <section className={styles.hero}>
-        <div>
-          <p className={styles.eyebrow}>Overview</p>
-          <h1>{greeting}</h1>
-          <p>
-            {str(dashboard.subtitle) ||
-              "Review your team, clock in for the day, and follow up on exceptions."}
+        <div className={styles.heroContent}>
+          <p className={styles.heroEyebrow}>Admin · Operations control</p>
+          <h1 className={styles.heroTitle}>Your workforce is in motion.</h1>
+          <p className={styles.heroSubtitle}>
+            You are the final operational approver. Review decisions, monitor
+            finances and keep every department on track.
           </p>
-          <Link href="/manager/attendance" className={styles.heroButton}>
-            Open my attendance <ChevronRight size={14} />
+          <Link href="/manager/leave" className={styles.heroButton}>
+            Review approvals <ArrowRight size={14} />
           </Link>
         </div>
+        <p className={styles.heroAwaiting}>
+          <span>Awaiting you</span>
+          <strong>
+            {awaitingDecisions} decision{awaitingDecisions === 1 ? "" : "s"}
+          </strong>
+        </p>
       </section>
 
       <section className={styles.stats} aria-label="Manager summary">
@@ -113,7 +111,7 @@ export function ManagerHomePage() {
             <h2>My attendance</h2>
             <p>Clock in, review recent days, and open company attendance.</p>
           </div>
-          <ChevronRight size={16} />
+          <ArrowRight size={16} />
         </Link>
         <Link href="/manager/discipline" className={styles.linkCard}>
           <span className={styles.linkIcon}>
@@ -127,7 +125,7 @@ export function ManagerHomePage() {
                 : "Review active cases for your team."}
             </p>
           </div>
-          <ChevronRight size={16} />
+          <ArrowRight size={16} />
         </Link>
         <Link href="/manager/announcements" className={styles.linkCard}>
           <span className={styles.linkIcon}>
@@ -141,7 +139,7 @@ export function ManagerHomePage() {
                 : "Share updates with your department."}
             </p>
           </div>
-          <ChevronRight size={16} />
+          <ArrowRight size={16} />
         </Link>
       </div>
     </div>

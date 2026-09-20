@@ -11,7 +11,7 @@ import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { usePageActions } from "@/hooks/usePageActions";
-import { lookupsApi, managerApi, nyscInternsManageApi, superAdminApi } from "@/lib/api";
+import { loadManagerLookups, lookupsApi, managerApi, nyscInternsManageApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapDepartment, mapPlacement, str } from "@/lib/api/mappers";
 import { asInternRecord } from "@/lib/api/internMappers";
 import { portalHref } from "@/lib/portalPaths";
@@ -73,6 +73,9 @@ function memberWriteBody(values: Record<string, string>) {
     departmentId: values.departmentId,
     ...(values.email.trim() ? { email: values.email.trim() } : {}),
     ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
+    ...(values.employeeId.trim()
+      ? { supervisorId: values.employeeId.trim(), employeeId: values.employeeId.trim() }
+      : {}),
   };
 }
 
@@ -104,20 +107,38 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     [manager],
   );
 
-  const { data: departmentsPayload } = useAsyncData(
+  const { data: lookupPayload } = useAsyncData(
     () =>
       manager
-        ? lookupsApi.departments().catch(() => managerApi.listDepartments())
-        : superAdminApi.departments.list(),
+        ? loadManagerLookups()
+        : Promise.all([
+            superAdminApi.departments.list(),
+            lookupsApi.employees(),
+          ]).then(([departments, employees]) => ({
+            departments: listFrom(departments),
+            employees: listFrom(employees),
+            locations: [],
+          })),
     [manager],
   );
 
   const departmentOptions = useMemo(() => {
-    return listFrom(departmentsPayload ?? undefined)
+    return listFrom(lookupPayload?.departments ?? undefined)
       .map(mapDepartment)
       .filter((item) => item.id && item.name)
       .map((item) => ({ label: item.name, value: item.id }));
-  }, [departmentsPayload]);
+  }, [lookupPayload]);
+
+  const supervisorOptions = useMemo(() => {
+    return listFrom(lookupPayload?.employees ?? undefined)
+      .map((record) => ({
+        label: str(
+          record.fullName ?? record.name ?? record.label ?? record.email,
+        ),
+        value: str(record.id ?? record.employeeId ?? record._id),
+      }))
+      .filter((item) => item.label && item.value);
+  }, [lookupPayload]);
 
   const addMemberFields = useMemo(
     () => [
@@ -135,19 +156,26 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       },
       { name: "school", label: "School / institution", required: true },
       { name: "courseOfStudy", label: "Course of study", required: true },
-      departmentOptions.length > 0
-        ? {
-            name: "departmentId",
-            label: "Department",
-            type: "select" as const,
-            required: true,
-            options: departmentOptions,
-          }
-        : {
-            name: "departmentId",
-            label: "Department ID",
-            required: true,
-          },
+      {
+        name: "departmentId",
+        label: "Department",
+        type: "select" as const,
+        required: true,
+        options:
+          departmentOptions.length > 0
+            ? departmentOptions
+            : [{ label: "No departments available", value: "" }],
+      },
+      {
+        name: "employeeId",
+        label: "Supervisor",
+        type: "select" as const,
+        required: true,
+        options:
+          supervisorOptions.length > 0
+            ? supervisorOptions
+            : [{ label: "No employees in directory", value: "" }],
+      },
       {
         name: "startDate",
         label: "Start date",
@@ -163,7 +191,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       { name: "email", label: "Email" },
       { name: "phone", label: "Phone" },
     ],
-    [departmentOptions],
+    [departmentOptions, supervisorOptions],
   );
 
   const placementMembers = useMemo(() => {
@@ -264,6 +292,12 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   }
 
   async function handleAddMember(values: Record<string, string>) {
+    if (!values.departmentId.trim()) {
+      throw new Error("Choose a department from the dropdown.");
+    }
+    if (!values.employeeId.trim()) {
+      throw new Error("Choose a supervisor from the directory.");
+    }
     const body = memberWriteBody(values);
     try {
       const created = manager
@@ -467,7 +501,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
         <SimpleModal
           open={addOpen}
           title="Add member"
-          description="Register a new NYSC member or intern. End date must be after start date."
+          description="Register a new NYSC member or intern. Department and supervisor must come from the directory."
           fields={addMemberFields}
           submitLabel="Add member"
           onClose={() => setAddOpen(false)}

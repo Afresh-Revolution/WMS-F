@@ -1,12 +1,35 @@
-import { apiRequest } from "./client";
-import { parseHodOptions, type HodOption } from "./mappers";
+import { ApiError, apiRequest } from "./client";
+import { listFrom, parseHodOptions, type HodOption } from "./mappers";
+import { unwrapRecord } from "./types";
 import { departmentsApi } from "./departments";
+import { managerApi } from "./manager";
 
 export const lookupsApi = {
   hods: () => apiRequest<Record<string, unknown>>("/lookups/hods"),
   employees: () => apiRequest<Record<string, unknown>>("/lookups/employees"),
   departments: () => apiRequest<Record<string, unknown>>("/lookups/departments"),
+  all: () => apiRequest<Record<string, unknown>>("/lookups"),
 };
+
+export function readLookupLists(payload: unknown) {
+  const root = unwrapRecord(payload);
+  return {
+    departments: listFrom((root.departments ?? []) as never),
+    employees: listFrom((root.employees ?? root.hods ?? []) as never),
+    locations: listFrom((root.locations ?? []) as never),
+  };
+}
+
+export async function loadManagerLookups() {
+  try {
+    return readLookupLists(await managerApi.getLookups());
+  } catch (error) {
+    if (!(error instanceof ApiError) || (error.status !== 404 && error.status !== 405)) {
+      throw error;
+    }
+    return readLookupLists(await lookupsApi.all());
+  }
+}
 
 export async function loadHodOptions(): Promise<HodOption[]> {
   const settled = await Promise.allSettled([

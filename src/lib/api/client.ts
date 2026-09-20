@@ -228,6 +228,10 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   INVALID_LEAVE_DURATION:
     "Those dates have no working days. Choose a range that includes a weekday.",
   LEAVE_DATES_OVERLAP: "Those dates overlap an existing leave request.",
+  LEAVE_ALREADY_ACTIVE:
+    "This person already has pending or approved leave. Extend that request instead.",
+  LEAVE_NOT_EXTENDABLE: "Only pending or approved leave can be extended.",
+  LEAVE_EXTENSION_NOT_PENDING: "There is no pending leave extension to review.",
   INSUFFICIENT_LEAVE_BALANCE: "There is not enough leave balance for those dates.",
   NOTICE_REQUIRED: "This leave type needs more notice before the start date.",
   MAXIMUM_LEAVE_EXCEEDED: "That stretch is longer than the leave policy allows.",

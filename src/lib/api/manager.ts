@@ -261,6 +261,10 @@ export const managerApi = {
     return apiRequest<unknown>(managerPath("/reports", query)).then(unwrapData);
   },
 
+  getLookups() {
+    return apiRequest<unknown>(managerPath("/lookups")).then(unwrapData);
+  },
+
   listNotifications(query?: ManagerListParams) {
     return list("/notifications", query);
   },

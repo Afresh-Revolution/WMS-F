@@ -38,7 +38,7 @@ import {
   pinManagerAnnouncement,
   unpinAdminAnnouncement,
   unpinManagerAnnouncement,
-  departmentsApi,
+  loadManagerLookups,
   lookupsApi,
   managerApi,
 } from "@/lib/api";
@@ -98,9 +98,13 @@ export function AnnouncementsPage() {
     [manager],
   );
   const { data: departmentData } = useAsyncData(async () => {
+    if (manager) {
+      const lookups = await loadManagerLookups().catch(() => null);
+      if (lookups?.departments.length) return lookups.departments;
+      return managerApi.listDepartments().catch(() => null);
+    }
     const settled = await Promise.allSettled([
       lookupsApi.departments(),
-      manager ? managerApi.listDepartments() : departmentsApi.list(),
     ]);
     for (const result of settled) {
       if (result.status === "fulfilled") return result.value;

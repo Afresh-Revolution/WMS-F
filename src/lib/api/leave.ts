@@ -68,6 +68,9 @@ export type LeaveApplyInput = {
   note: string;
   durationType?: "FULL_DAY" | "HALF_DAY";
   attachments?: Array<{ name: string; fileUrl: string; type: string }>;
+  employeeName?: string;
+  departmentId?: string;
+  employeeId?: string;
 };
 
 export type LeaveBalanceCard = {
@@ -85,6 +88,9 @@ const BUSINESS_LEAVE_CODES = new Set([
   "LEAVE_REQUEST_NOT_FOUND",
   "INSUFFICIENT_LEAVE_BALANCE",
   "LEAVE_DATES_OVERLAP",
+  "LEAVE_ALREADY_ACTIVE",
+  "LEAVE_NOT_EXTENDABLE",
+  "LEAVE_EXTENSION_NOT_PENDING",
   "INVALID_LEAVE_DURATION",
   "NOTICE_REQUIRED",
   "MAXIMUM_LEAVE_EXCEEDED",
@@ -404,6 +410,16 @@ export async function applyForLeave(input: LeaveApplyInput & { reason?: string }
     durationType,
     note,
   };
+  const employeeName = (input.employeeName ?? "").trim();
+  const departmentId = (input.departmentId ?? "").trim();
+  const employeeId = (input.employeeId ?? "").trim();
+  if (employeeName) {
+    body.employeeName = employeeName;
+    body.fullName = employeeName;
+    body.name = employeeName;
+  }
+  if (departmentId) body.departmentId = departmentId;
+  if (employeeId) body.employeeId = employeeId;
   if (input.attachments?.length) body.attachments = input.attachments;
 
   const kind = accountKind();
@@ -428,6 +444,55 @@ export async function applyForLeave(input: LeaveApplyInput & { reason?: string }
     }
     throw error;
   }
+}
+
+export function leaveRequestIdFromError(error: unknown): string {
+  if (!(error instanceof ApiError)) return "";
+  const body = asObject(error.body);
+  const nested = asObject(body?.error);
+  const details = asObject(nested?.details ?? body?.details);
+  return str(
+    details?.leaveRequestId ??
+      details?.leave_request_id ??
+      details?.requestId ??
+      nested?.leaveRequestId,
+  );
+}
+
+export function isActiveLeaveBlock(error: unknown) {
+  if (!(error instanceof ApiError)) return false;
+  const code = errorCode(error);
+  if (code === "LEAVE_ALREADY_ACTIVE" || code === "LEAVE_DATES_OVERLAP") {
+    return true;
+  }
+  return /already has pending or approved leave|extend that request/i.test(
+    error.message,
+  );
+}
+
+export function extendLeaveRequest(
+  id: string,
+  body: { endDate: string; note?: string },
+) {
+  return postLeave(`${SHARED}/requests/${id}/extend`, {
+    endDate: toLeaveDate(body.endDate),
+    note: (body.note ?? "").trim(),
+  });
+}
+
+export function approveLeaveExtension(id: string, comment = "Approved") {
+  return postLeave(`${SHARED}/requests/${id}/extend/approve`, { comment });
+}
+
+export function rejectLeaveExtension(id: string, reason: string) {
+  const comment = reason.trim();
+  if (!comment) {
+    throw new ApiError(400, "A rejection reason is required.");
+  }
+  return postLeave(`${SHARED}/requests/${id}/extend/reject`, {
+    reason: comment,
+    comment,
+  });
 }
 
 export function withdrawLeaveRequest(id: string, reason: string) {

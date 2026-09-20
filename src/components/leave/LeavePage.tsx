@@ -23,13 +23,21 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import {
   applyForLeave,
+  approveLeaveExtension,
   approveLeaveRequest,
+  extendLeaveRequest,
+  isActiveLeaveBlock,
+  leaveRequestIdFromError,
   listLeaveBalances,
   listLeaveTypes,
   listOrganisationLeave,
+  loadManagerLookups,
+  lookupsApi,
+  rejectLeaveExtension,
   rejectLeaveRequest,
 } from "@/lib/api";
-import { listFrom, mapLeaveBalance, mapLeaveRequest } from "@/lib/api/mappers";
+import { listFrom, mapDepartment, mapLeaveBalance, mapLeaveRequest } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./LeavePage.module.css";
 
 const balanceIcons = {
@@ -59,6 +67,7 @@ const requestLeaveFields = [
 ];
 
 export function LeavePage() {
+  const manager = useManagerPortal();
   const [activeTab, setActiveTab] = useState<LeaveTab>("Requests");
   const [requestOpen, setRequestOpen] = useState(false);
 
@@ -72,6 +81,29 @@ export function LeavePage() {
   const { data: typeData } = useAsyncData(
     () => listLeaveTypes().catch(() => []),
     [],
+  );
+
+  const { data: lookupData } = useAsyncData(
+    () =>
+      manager
+        ? loadManagerLookups().catch(() => ({
+            departments: [],
+            employees: [],
+            locations: [],
+          }))
+        : lookupsApi
+            .departments()
+            .then((payload) => ({
+              departments: listFrom(payload),
+              employees: [],
+              locations: [],
+            }))
+            .catch(() => ({
+              departments: [],
+              employees: [],
+              locations: [],
+            })),
+    [manager],
   );
 
   const { data: balanceData, refetch: refetchBalances } = useAsyncData(
@@ -91,17 +123,37 @@ export function LeavePage() {
     );
   }, [balanceData]);
 
+  const departmentOptions = useMemo(() => {
+    return listFrom(lookupData?.departments ?? undefined)
+      .map(mapDepartment)
+      .filter((item) => item.id && item.name)
+      .map((item) => ({ label: item.name, value: item.id }));
+  }, [lookupData]);
+
   const createFields = useMemo(() => {
     const types = Array.isArray(typeData) ? typeData : [];
-    return requestLeaveFields.map((field) => {
-      if (field.name !== "leaveTypeId") return field;
-      return {
-        ...field,
-        defaultValue: types[0]?.id,
-        options: types.map((item) => ({ label: item.name, value: item.id })),
-      };
-    });
-  }, [typeData]);
+    return [
+      { name: "employeeName", label: "Employee name", required: true },
+      {
+        name: "departmentId",
+        label: "Department",
+        type: "select" as const,
+        required: true,
+        options:
+          departmentOptions.length > 0
+            ? departmentOptions
+            : [{ label: "No departments available", value: "" }],
+      },
+      ...requestLeaveFields.map((field) => {
+        if (field.name !== "leaveTypeId") return field;
+        return {
+          ...field,
+          defaultValue: types[0]?.id,
+          options: types.map((item) => ({ label: item.name, value: item.id })),
+        };
+      }),
+    ];
+  }, [departmentOptions, typeData]);
 
   function approveLeave(id: string, name: string) {
     void runAction(`Approve ${name}'s leave`, async () => {
@@ -117,15 +169,49 @@ export function LeavePage() {
     }).catch(() => undefined);
   }
 
+  function approveExtension(id: string, name: string) {
+    void runAction(`Approve ${name}'s leave extension`, async () => {
+      await approveLeaveExtension(id);
+      await Promise.all([refetch(), refetchBalances()]);
+    }).catch(() => undefined);
+  }
+
+  function rejectExtension(id: string, name: string) {
+    void runAction(`Decline ${name}'s leave extension`, async () => {
+      await rejectLeaveExtension(id, "Coverage is not available for that extension.");
+      await Promise.all([refetch(), refetchBalances()]);
+    }).catch(() => undefined);
+  }
+
   async function handleRequestLeave(values: Record<string, string>) {
     await runAction("Request leave", async () => {
-      await applyForLeave({
+      const input = {
         leaveTypeId: values.leaveTypeId,
         startDate: values.startDate,
         endDate: values.endDate,
-        durationType: "FULL_DAY",
+        durationType: "FULL_DAY" as const,
         note: values.reason,
-      });
+        employeeName: values.employeeName,
+        departmentId: values.departmentId,
+      };
+      try {
+        await applyForLeave(input);
+      } catch (error) {
+        if (!isActiveLeaveBlock(error)) throw error;
+        const existingId =
+          leaveRequestIdFromError(error) ||
+          leaveRequests.find(
+            (request) =>
+              request.name.trim().toLowerCase() ===
+                values.employeeName.trim().toLowerCase() &&
+              (request.status === "Pending" || request.status === "Approved"),
+          )?.id;
+        if (!existingId) throw error;
+        await extendLeaveRequest(existingId, {
+          endDate: values.endDate,
+          note: values.reason,
+        });
+      }
       await Promise.all([refetch(), refetchBalances()]);
     });
   }
@@ -277,6 +363,24 @@ export function LeavePage() {
                         </button>
                       </>
                     )}
+                    {request.extensionStatus.toUpperCase() === "PENDING" && (
+                      <>
+                        <button
+                          type="button"
+                          className={styles.declineButton}
+                          onClick={() => rejectExtension(request.id, request.name)}
+                        >
+                          <X size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.approveButton}
+                          onClick={() => approveExtension(request.id, request.name)}
+                        >
+                          Approve extension
+                        </button>
+                      </>
+                    )}
                   </div>
                 </article>
               ))}
@@ -287,7 +391,7 @@ export function LeavePage() {
         <SimpleModal
           open={requestOpen}
           title="Request leave"
-          description="Submit a new leave request for approval."
+          description="Apply for someone by name and department. If they already have pending or approved leave, this extends that request."
           fields={createFields}
           submitLabel="Submit request"
           onClose={() => setRequestOpen(false)}
