@@ -25,7 +25,7 @@ export type DepartmentFilter = "All" | string;
 
 export const departmentFilters: DepartmentFilter[] = [
   "All",
-  "Software Engineer",
+  "Software Engineering",
   "Media/Photography",
   "Hardware",
   "Fashion",

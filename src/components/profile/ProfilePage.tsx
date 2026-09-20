@@ -2,6 +2,7 @@
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
   BriefcaseBusiness,
@@ -20,14 +21,16 @@ import {
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { usePageActions } from "@/hooks/usePageActions";
-import { secretaryApi, superAdminApi, unwrapRecord } from "@/lib/api";
+import { managerApi, secretaryApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import {
   cacheCurrentUser,
   initialsFromIdentity,
   readCachedOrJwtUser,
 } from "@/lib/currentUser";
 import { initials, listFrom, nestedStr, num, str } from "@/lib/api/mappers";
+import { portalHref } from "@/lib/portalPaths";
 import styles from "./ProfilePage.module.css";
 
 const contactOnlyFields: ModalField[] = [
@@ -67,6 +70,26 @@ function splitName(name: string) {
   };
 }
 
+function formatProfileDate(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const parsed = Date.parse(
+    /^\d{4}-\d{2}-\d{2}/.test(trimmed) ? trimmed.slice(0, 10) : trimmed,
+  );
+  if (!Number.isFinite(parsed)) return trimmed;
+  return new Date(parsed).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function titleCase(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
 type ProfileSection = "Overview" | "Leave" | "Expenses";
 
 export function ProfilePage({
@@ -78,69 +101,132 @@ export function ProfilePage({
 }) {
   const { runAction, showToast } = usePageActions();
   const [editOpen, setEditOpen] = useState(false);
+  const pathname = usePathname();
+  const manager = useManagerPortal();
+  const selfEdit = secretary || manager;
 
-  const { data, loading, error, refetch } = useAsyncData(
-    () =>
-      secretary
-        ? secretaryApi.getEmploymentRecord()
-        : superAdminApi.profile.get(),
-    [secretary],
-  );
+  const { data, loading, error, refetch } = useAsyncData(async () => {
+    if (manager) {
+      const [profile, employment] = await Promise.all([
+        managerApi.getProfile().catch(() => null),
+        managerApi.getEmploymentRecord().catch(() => null),
+      ]);
+      return { profile, employment };
+    }
+    if (secretary) {
+      return { employment: await secretaryApi.getEmploymentRecord() };
+    }
+    return { profile: await superAdminApi.profile.get() };
+  }, [manager, secretary]);
 
   const profile = useMemo(() => {
-    const record = unwrapRecord(data);
-    const employee = unwrapRecord(record.employee ?? record.user ?? record);
-    const personal = unwrapRecord(record.personal ?? employee.personal ?? employee);
+    const root = unwrapRecord(data);
+    const record = unwrapRecord(root.profile ?? root.employment ?? root);
+    const employmentRoot = unwrapRecord(root.employment ?? record);
+    const overview = unwrapRecord(employmentRoot.overview ?? record.overview ?? record);
+    const employee = unwrapRecord(
+      record.employee ?? employmentRoot.employee ?? record.user ?? overview,
+    );
+    const personal = unwrapRecord(
+      employmentRoot.personalInformation ??
+        record.personal ??
+        employee.personal ??
+        employee,
+    );
     const employment = unwrapRecord(
-      record.employment ?? record.employmentRecord ?? employee,
+      employmentRoot.employment ?? record.employment ?? record.employmentRecord ?? employee,
     );
     const name = str(
-      record.name ?? record.fullName ?? employee.name ?? employee.fullName,
+      overview.fullName ??
+        record.name ??
+        record.fullName ??
+        employee.name ??
+        employee.fullName ??
+        personal.fullName,
       "—",
     );
+    const department = nestedStr(
+      overview.department ??
+        record.department ??
+        employee.department ??
+        employment.department ??
+        employment.departmentName,
+      ["name", "title", "label"],
+      "—",
+    );
+    const jobTitle = str(
+      employment.jobTitle ??
+        employment.role ??
+        nestedStr(overview.position, ["title", "name", "label"]) ??
+        record.jobTitle ??
+        employee.jobTitle,
+      "—",
+    );
+    const reportsTo = nestedStr(
+      overview.manager ?? employment.manager ?? employment.reportsTo ?? record.reportsTo,
+      ["name", "fullName", "title", "label"],
+    );
     return {
-      initials: str(record.initials, initials(name === "—" ? "?" : name)),
+      initials: str(record.initials ?? overview.initials, initials(name === "—" ? "?" : name)),
       name,
-      jobTitle: str(
-        record.jobTitle ?? employee.jobTitle ?? employment.role,
-        "—",
-      ),
-      department: nestedStr(
-        record.department ?? employee.department ?? employment.department,
-        ["name", "title", "label"],
-        "—",
-      ),
-      status: str(record.status, "Active") as "Active",
+      jobTitle,
+      department,
+      status: titleCase(str(overview.status ?? record.status ?? employment.status, "Active")),
       employeeId: str(
-        record.employeeId ?? employee.employeeId ?? employee.id ?? record.id,
+        overview.employeeId ??
+          overview.employee_id ??
+          record.employeeId ??
+          employee.employeeId ??
+          employee.employee_id ??
+          employee.id ??
+          record.id,
         "—",
       ),
-      annualLeaveDays: num(record.annualLeaveDays ?? record.leaveBalance),
+      annualLeaveDays: num(
+        record.annualLeaveDays ?? record.leaveBalance ?? overview.annualLeaveDays,
+      ),
       personal: {
         companyEmail: str(
-          personal.companyEmail ?? record.companyEmail ?? employee.email,
+          personal.companyEmail ??
+            overview.email ??
+            record.companyEmail ??
+            employee.email ??
+            personal.email,
         ),
-        personalEmail: str(personal.personalEmail ?? personal.email),
-        phone: str(personal.phone ?? record.phone),
-        location: str(personal.location ?? record.location),
+        personalEmail: str(personal.personalEmail ?? personal.personal_email),
+        phone: str(personal.phone ?? overview.phone ?? record.phone),
+        location: str(
+          personal.location ??
+            personal.address ??
+            employment.workLocation ??
+            record.location,
+        ),
       },
       employment: {
-        role: str(employment.role ?? employment.jobTitle ?? employee.jobTitle),
-        department: nestedStr(
-          employment.department ?? employee.department,
-          ["name", "title", "label"],
+        role: jobTitle === "—" ? "" : jobTitle,
+        department: department === "—" ? "" : department,
+        startDate: formatProfileDate(
+          str(
+            employment.startDate ??
+              employment.start_date ??
+              record.startDate ??
+              employee.hireDate,
+          ),
         ),
-        startDate: str(employment.startDate ?? record.startDate),
-        type: str(employment.type ?? record.employmentType, "Full-time"),
-        reportsTo: str(employment.reportsTo ?? record.reportsTo),
+        type: str(
+          employment.employmentType ?? employment.type ?? record.employmentType,
+          "Full-time",
+        ),
+        reportsTo,
       },
     };
   }, [data]);
 
   const leaveBalances = useMemo((): ProfileLeaveBalance[] => {
-    const record = unwrapRecord(data);
+    const root = unwrapRecord(data);
+    const record = unwrapRecord(root.employment ?? root.profile ?? root);
     return listFrom(
-      (record.leaveBalances ?? record.leave) as never,
+      (record.leaveBalances ?? record.leave ?? root.leaveBalances) as never,
     ).map((balance, index) => ({
       id: str(balance.id, String(index)),
       label: str(balance.label ?? balance.type),
@@ -149,16 +235,30 @@ export function ProfilePage({
     }));
   }, [data]);
 
+  const annualLeaveDays = useMemo(() => {
+    const annual = leaveBalances.find((balance) =>
+      /annual/i.test(balance.label),
+    );
+    return annual?.remaining ?? profile.annualLeaveDays;
+  }, [leaveBalances, profile.annualLeaveDays]);
+
   const leaveHistory = useMemo((): ProfileLeaveHistoryItem[] => {
-    const record = unwrapRecord(data);
+    const root = unwrapRecord(data);
+    const record = unwrapRecord(root.employment ?? root.profile ?? root);
     return listFrom(
       (record.leaveHistory ?? record.leaveRequests) as never,
     ).map((leave, index) => {
       const status = str(leave.status, "Pending");
+      const start = formatProfileDate(str(leave.startDate ?? leave.start_date));
+      const end = formatProfileDate(str(leave.endDate ?? leave.end_date));
+      const dates = str(
+        leave.dates ?? leave.dateRange,
+        start && end && end !== start ? `${start} – ${end}` : start,
+      );
       return {
         id: str(leave.id, String(index)),
         type: str(leave.type ?? leave.leaveType),
-        dates: str(leave.dates ?? leave.dateRange ?? leave.startDate),
+        dates,
         duration: str(leave.duration ?? leave.days),
         status: (status.toLowerCase().includes("approv") ? "Approved" : "Pending") as
           | "Approved"
@@ -168,7 +268,8 @@ export function ProfilePage({
   }, [data]);
 
   const expenseClaims = useMemo((): ProfileExpenseClaim[] => {
-    const record = unwrapRecord(data);
+    const root = unwrapRecord(data);
+    const record = unwrapRecord(root.employment ?? root.profile ?? root);
     return listFrom(
       (record.expenseClaims ?? record.expenses) as never,
     ).map((claim, index) => {
@@ -282,8 +383,8 @@ export function ProfilePage({
 
   async function handleProfileUpdate(values: Record<string, string>) {
     await runAction("Update profile", async () => {
-      if (secretary) {
-        await secretaryApi.updateEmploymentRecord({
+      if (selfEdit) {
+        const body = {
           phone: values.phone,
           personalEmail: values.personalEmail,
           address: values.location,
@@ -293,7 +394,10 @@ export function ProfilePage({
             personalEmail: values.personalEmail,
             location: values.location,
           },
-        });
+        };
+        await (manager
+          ? managerApi.updateEmploymentRecord(body)
+          : secretaryApi.updateEmploymentRecord(body));
         refetch();
         return;
       }
@@ -389,7 +493,7 @@ export function ProfilePage({
           onClick={() => setEditOpen(true)}
         >
           <Pencil size={14} strokeWidth={2.25} />
-          {secretary ? "Edit details" : "Edit profile"}
+          Edit details
         </button>
       </div>
 
@@ -413,14 +517,18 @@ export function ProfilePage({
         <div className={styles.leaveSummary}>
           <p className={styles.leaveSummaryLabel}>Annual leave</p>
           <p className={styles.leaveSummaryValue}>
-            {profile.annualLeaveDays} days
+            {annualLeaveDays || "—"} days
           </p>
         </div>
       </article>
 
       <nav className={styles.tabs} aria-label="Profile sections">
         <Link
-          href={secretary ? "/secretary/profile" : "/profile"}
+          href={
+            secretary
+              ? "/secretary/profile"
+              : portalHref(pathname, "/profile")
+          }
           className={`${styles.tab} ${
             initialSection === "Overview" ? styles.tabActive : ""
           }`}
@@ -428,7 +536,11 @@ export function ProfilePage({
           Overview
         </Link>
         <Link
-          href={secretary ? "/secretary/profile/leave" : "/profile/leave"}
+          href={
+            secretary
+              ? "/secretary/profile/leave"
+              : portalHref(pathname, "/profile/leave")
+          }
           className={`${styles.tab} ${
             initialSection === "Leave" ? styles.tabActive : ""
           }`}
@@ -436,7 +548,11 @@ export function ProfilePage({
           Leave
         </Link>
         <Link
-          href={secretary ? "/secretary/profile/expenses" : "/profile/expenses"}
+          href={
+            secretary
+              ? "/secretary/profile/expenses"
+              : portalHref(pathname, "/profile/expenses")
+          }
           className={`${styles.tab} ${
             initialSection === "Expenses" ? styles.tabActive : ""
           }`}
@@ -529,9 +645,12 @@ export function ProfilePage({
           </div>
         </section>
 
-        <section className={styles.card}>
+        <section className={`${styles.card} ${styles.balanceCard}`}>
           <h2 className={styles.cardTitle}>Leave balance</h2>
           <div className={styles.balanceList}>
+            {leaveBalances.length === 0 ? (
+              <p className={styles.emptyCopy}>No leave balances yet.</p>
+            ) : null}
             {leaveBalances.map((balance) => {
               const remainingPercent = (balance.remaining / balance.total) * 100;
               return (
@@ -567,6 +686,9 @@ export function ProfilePage({
         <section className={styles.historyCard}>
           <h2 className={styles.historyTitle}>Leave history</h2>
           <div className={styles.historyList}>
+            {leaveHistory.length === 0 ? (
+              <p className={styles.emptyCopy}>No leave requests yet.</p>
+            ) : null}
             {leaveHistory.map((leave) => (
               <article key={leave.id} className={styles.historyRow}>
                 <div>
@@ -607,6 +729,9 @@ export function ProfilePage({
         <section className={styles.historyCard}>
           <h2 className={styles.historyTitle}>My expense claims</h2>
           <div className={styles.historyList}>
+            {expenseClaims.length === 0 ? (
+              <p className={styles.emptyCopy}>No expense claims yet.</p>
+            ) : null}
             {expenseClaims.map((claim) => (
               <article key={claim.id} className={styles.historyRow}>
                 <div>
@@ -634,17 +759,17 @@ export function ProfilePage({
       ) : null}
 
       <SimpleModal
-        key={editOpen ? `${secretary ? "contact" : "admin"}-${profile.employeeId}` : "closed"}
+        key={editOpen ? `${selfEdit ? "contact" : "admin"}-${profile.employeeId}` : "closed"}
         open={editOpen}
-        title={secretary ? "Edit personal details" : "Edit profile"}
+        title={selfEdit ? "Edit personal details" : "Edit profile"}
         description={
-          secretary
+          selfEdit
             ? "Update contact information on your profile."
             : "Update your identity, contact, and employment details."
         }
-        wide={!secretary}
+        wide={!selfEdit}
         fields={
-          secretary
+          selfEdit
             ? contactOnlyFields.map((field) => ({
                 ...field,
                 defaultValue:

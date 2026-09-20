@@ -67,6 +67,7 @@
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 400;
+  -webkit-text-stroke: var(--banner-title-stroke) currentColor;
   line-height: 1.05;
   letter-spacing: -0.02em;
   color: var(--afresh-orange);
@@ -168,12 +169,15 @@
 .filterChip {
   padding: 8px 16px;
   border-radius: 999px;
+  border: 1px solid #f0ece8;
+  background: #fff;
   font-size: 14px;
   font-weight: 500;
   color: #78716c;
 }
 
 .filterChipActive {
+  border-color: var(--afresh-orange);
   background: var(--afresh-orange);
   color: #fff;
   font-weight: 600;
@@ -413,6 +417,7 @@
 
   .title {
     font-size: 34px;
+    white-space: normal;
   }
 }
 

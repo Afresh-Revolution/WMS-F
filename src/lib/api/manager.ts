@@ -1,4 +1,4 @@
-import { apiRequest, buildQuery } from "./client";
+import { ApiError, apiRequest, buildQuery } from "./client";
 import { unwrapList, type ApiListResponse, type Id } from "./types";
 
 export type ManagerListParams = Record<string, unknown>;
@@ -16,6 +16,55 @@ function unwrapData<T>(payload: unknown): T {
 
 function list<T>(path: string, query?: ManagerListParams) {
   return apiRequest<ApiListResponse<T>>(managerPath(path, query)).then(unwrapList);
+}
+
+function isMissingRoute(error: unknown) {
+  return error instanceof ApiError && error.status === 404;
+}
+
+async function withSharedFallback<T>(
+  managerCall: () => Promise<T>,
+  sharedCall: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await managerCall();
+  } catch (error) {
+    if (!isMissingRoute(error)) throw error;
+    return sharedCall();
+  }
+}
+
+function isForbidden(error: unknown) {
+  return error instanceof ApiError && error.status === 403;
+}
+
+async function firstNyscRoute<T>(attempts: Array<() => Promise<T>>): Promise<T> {
+  let lastError: unknown;
+  let managerRouteMissing = false;
+  for (const [index, attempt] of attempts.entries()) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
+      if (isMissingRoute(error)) {
+        if (index === 0) managerRouteMissing = true;
+        continue;
+      }
+      if (isForbidden(error) && managerRouteMissing && index < attempts.length - 1) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  if (lastError instanceof ApiError && lastError.status === 403) {
+    throw new ApiError(
+      403,
+      "NYSC create is not enabled for this manager account on the live server yet.",
+      lastError.body,
+    );
+  }
+  if (lastError instanceof Error) throw lastError;
+  throw new ApiError(404, "NYSC API was not found.");
 }
 
 export const managerApi = {
@@ -39,12 +88,48 @@ export const managerApi = {
     return apiRequest<unknown>(managerPath("/employment-record")).then(unwrapData);
   },
 
+  updateProfile(body: unknown) {
+    return apiRequest<unknown>(managerPath("/profile"), {
+      method: "PATCH",
+      body,
+    }).then(unwrapData);
+  },
+
+  updateEmploymentRecord(body: unknown) {
+    return apiRequest<unknown>(managerPath("/employment-record"), {
+      method: "PATCH",
+      body,
+    }).then(unwrapData);
+  },
+
   listEmployees(query?: ManagerListParams) {
     return list("/employees", query);
   },
 
   listAttendance(query?: ManagerListParams) {
     return list("/attendance", query);
+  },
+
+  clockIn(body: unknown = {}) {
+    return withSharedFallback(
+      () =>
+        apiRequest<unknown>(managerPath("/attendance/clock-in"), {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>(managerPath("/attendance"), {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+    );
+  },
+
+  clockOut(body: unknown = {}) {
+    return apiRequest<unknown>(managerPath("/attendance/clock-out"), {
+      method: "POST",
+      body,
+    }).then(unwrapData);
   },
 
   getEmployee(id: Id) {
@@ -174,7 +259,42 @@ export const managerApi = {
   },
 
   createExpense(body: unknown) {
-    return apiRequest<unknown>(managerPath("/expenses"), { method: "POST", body }).then(unwrapData);
+    return withSharedFallback(
+      () =>
+        apiRequest<unknown>(managerPath("/expenses"), {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>("/expenses", { method: "POST", body }).then(
+          unwrapData,
+        ),
+    );
+  },
+
+  listVendors(query?: ManagerListParams) {
+    return list("/vendors", query);
+  },
+
+  createVendor(body: unknown) {
+    return withSharedFallback(
+      () =>
+        apiRequest<unknown>(managerPath("/vendors"), {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>("/vendors", { method: "POST", body }).then(
+          unwrapData,
+        ),
+    );
+  },
+
+  getVendor(id: Id) {
+    return withSharedFallback(
+      () => apiRequest<unknown>(managerPath(`/vendors/${id}`)).then(unwrapData),
+      () => apiRequest<unknown>(`/vendors/${id}`).then(unwrapData),
+    );
   },
 
   approveExpense(id: Id, body?: unknown) {
@@ -231,6 +351,13 @@ export const managerApi = {
     }).then(unwrapData);
   },
 
+  sendEvent(id: Id, body?: unknown) {
+    return apiRequest<unknown>(managerPath(`/events/${id}/send`), {
+      method: "POST",
+      body,
+    }).then(unwrapData);
+  },
+
   listDiscipline(query?: ManagerListParams) {
     return list("/discipline", query);
   },
@@ -280,32 +407,81 @@ export const managerApi = {
   },
 
   listNyscInterns(query?: ManagerListParams) {
-    return list("/nysc-interns", query);
+    return firstNyscRoute([
+      () => list("/nysc-interns", query),
+      () => list("/nysc", query),
+      () =>
+        apiRequest<ApiListResponse<Record<string, unknown>>>(
+          `/nysc-interns${buildQuery(query)}`,
+        ).then(unwrapList),
+    ]);
   },
 
   createNyscIntern(body: unknown) {
-    return apiRequest<unknown>(managerPath("/nysc-interns"), {
-      method: "POST",
-      body,
-    }).then(unwrapData);
+    return firstNyscRoute([
+      () =>
+        apiRequest<unknown>(managerPath("/nysc-interns"), {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>(managerPath("/nysc"), {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>(managerPath("/nysc-interns/members"), {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>("/nysc-interns", {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>("/super-admin/nysc-interns", {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+    ]);
   },
 
   updateNyscIntern(id: Id, body: unknown) {
-    return apiRequest<unknown>(managerPath(`/nysc-interns/${id}`), {
-      method: "PATCH",
-      body,
-    }).then(unwrapData);
+    return withSharedFallback(
+      () =>
+        apiRequest<unknown>(managerPath(`/nysc-interns/${id}`), {
+          method: "PATCH",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>(`/nysc-interns/${id}`, {
+          method: "PATCH",
+          body,
+        }).then(unwrapData),
+    );
   },
 
   assignNyscSupervisor(id: Id, body: unknown) {
-    return apiRequest<unknown>(managerPath(`/nysc-interns/${id}/supervisor`), {
-      method: "POST",
-      body,
-    }).then(unwrapData);
+    return withSharedFallback(
+      () =>
+        apiRequest<unknown>(managerPath(`/nysc-interns/${id}/supervisor`), {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>(`/nysc-interns/${id}/supervisor`, {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+    );
   },
 
   exportNyscInterns(query?: ManagerListParams) {
-    return apiRequest<unknown>(managerPath("/nysc-interns/export", query));
+    return withSharedFallback(
+      () => apiRequest<unknown>(managerPath("/nysc-interns/export", query)),
+      () => apiRequest<unknown>(`/nysc-interns/export${buildQuery(query)}`),
+    );
   },
 };
 

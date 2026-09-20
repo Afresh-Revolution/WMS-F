@@ -12,6 +12,7 @@ import {
   Search,
 } from "lucide-react";
 import {
+  departmentFilters as directoryDepartments,
   type DepartmentFilter,
   type EmployeeStatus,
 } from "@/data/employees";
@@ -23,10 +24,15 @@ import {
   createStaffEmployee,
   departmentsApi,
   listStaffEmployees,
+  managerApi,
+  loadManagerLookups,
   lookupsApi,
 } from "@/lib/api";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
 import { listFrom, mapEmployee, readTemporaryPassword, str, type MappedEmployee } from "@/lib/api/mappers";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { canAddUsers } from "@/lib/auth/portals";
 import { portalHref } from "@/lib/portalPaths";
 import styles from "./EmployeesPage.module.css";
 
@@ -36,6 +42,16 @@ const statusClass: Record<EmployeeStatus, string> = {
   Active: styles.statusActive,
   "On leave": styles.statusLeave,
 };
+
+function sameDepartment(employeeDepartment: string, filter: string) {
+  const left = employeeDepartment.trim().toLowerCase();
+  const right = filter.trim().toLowerCase();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.includes(right) || right.includes(left)) return true;
+  if (right === "hr" && /(^|\b)(hr|human resources)(\b|$)/.test(left)) return true;
+  return false;
+}
 
 const roleOptions = [
   { label: "Employee", value: "employee" },
@@ -52,6 +68,9 @@ export function EmployeesPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { user } = useCurrentUser();
+  const manager = useManagerPortal();
+  const allowAddUsers = canAddUsers(user?.role ?? "");
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<DepartmentFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -72,6 +91,11 @@ export function EmployeesPage() {
     [],
   );
   const { data: departmentData } = useAsyncData(async () => {
+    if (manager) {
+      const lookups = await loadManagerLookups().catch(() => null);
+      if (lookups?.departments.length) return lookups.departments;
+      return managerApi.listDepartments().catch(() => null);
+    }
     const settled = await Promise.allSettled([
       lookupsApi.departments(),
       departmentsApi.list(),
@@ -80,7 +104,7 @@ export function EmployeesPage() {
       if (result.status === "fulfilled") return result.value;
     }
     return null;
-  }, []);
+  }, [manager]);
 
   const employees = useMemo(
     () => (data ?? []).map((record) => mapEmployee(record)),
@@ -118,7 +142,22 @@ export function EmployeesPage() {
               }))
             : [{ label: "Loading departments…", value: "" }],
       },
-      { name: "location", label: "Location", placeholder: "Remote" },
+      {
+        name: "locationType",
+        label: "Work location",
+        type: "select" as const,
+        required: true,
+        defaultValue: "onsite",
+        options: [
+          { label: "Onsite", value: "onsite" },
+          { label: "Remote", value: "remote" },
+        ],
+      },
+      {
+        name: "location",
+        label: "Place",
+        placeholder: "Office or city when onsite",
+      },
       {
         name: "role",
         label: "Role",
@@ -132,14 +171,26 @@ export function EmployeesPage() {
   );
 
   const departmentFilters = useMemo((): DepartmentFilter[] => {
-    const departments = new Set(employees.map((e) => e.department).filter(Boolean));
-    return ["All", ...Array.from(departments)] as DepartmentFilter[];
-  }, [employees]);
+    const names: string[] = [];
+    const seen = new Set<string>();
+    const add = (name: string) => {
+      const trimmed = name.trim();
+      const key = trimmed.toLowerCase();
+      if (!trimmed || trimmed === "All" || seen.has(key)) return;
+      seen.add(key);
+      names.push(trimmed);
+    };
+    for (const name of directoryDepartments) add(name);
+    for (const department of departmentOptions) add(department.name);
+    for (const employee of employees) add(employee.department);
+    return ["All", ...names] as DepartmentFilter[];
+  }, [departmentOptions, employees]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
       const matchesFilter =
-        activeFilter === "All" || employee.department === activeFilter;
+        activeFilter === "All" ||
+        sameDepartment(employee.department, activeFilter);
       const haystack =
         `${employee.name} ${employee.title} ${employee.location} ${employee.department} ${employee.email}`.toLowerCase();
       return (
@@ -233,14 +284,16 @@ export function EmployeesPage() {
             </p>
           </div>
           <div className={styles.headerActions}>
-            <button
-              type="button"
-              className={styles.addButton}
-              onClick={() => setAddOpen(true)}
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              Add person
-            </button>
+            {allowAddUsers ? (
+              <button
+                type="button"
+                className={styles.addButton}
+                onClick={() => setAddOpen(true)}
+              >
+                <Plus size={16} strokeWidth={2.5} />
+                Add person
+              </button>
+            ) : null}
             <div className={styles.viewToggle}>
               <button
                 type="button"

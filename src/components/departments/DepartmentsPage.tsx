@@ -192,7 +192,7 @@ export function DepartmentsPage() {
         <div className={styles.headerRow}>
           <div>
             <p className={styles.eyebrow}>Departments &amp; how they work</p>
-            <h1 className={styles.title}>AfrESH is organised</h1>
+            <h1 className={styles.title}>How Afresh is organised</h1>
             <PageDateLabel className={styles.dateLabel} />
           </div>
           <div className={styles.headerActions}>

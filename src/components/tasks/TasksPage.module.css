@@ -101,13 +101,14 @@
 
 .title {
   margin: 0;
-  max-width: 16ch;
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 400;
+  -webkit-text-stroke: var(--banner-title-stroke) currentColor;
   line-height: 1.05;
   letter-spacing: -0.02em;
   color: var(--afresh-orange);
+  white-space: nowrap;
 }
 
 .subtitle {
@@ -222,41 +223,37 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .card {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
-  padding: 18px 20px;
-  border: 1px solid #ebe6e1;
-  border-radius: 16px;
+  padding: 20px 22px;
+  border: 1px solid #f0ece8;
+  border-radius: 22px;
   background: #fff;
-  transition: box-shadow 0.15s ease;
-}
-
-.card:hover {
-  box-shadow: 0 4px 16px rgba(28, 25, 23, 0.06);
 }
 
 .checkbox {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
-  margin-top: 2px;
-  border: 2px solid #d6d3d1;
+  align-self: flex-start;
+  margin-top: 3px;
+  border: 1.5px solid #e7e5e4;
   border-radius: 999px;
   background: #fff;
   color: #fff;
 }
 
 .checkboxChecked {
-  border-color: var(--afresh-green-text);
-  background: var(--afresh-green-text);
+  border-color: #16a34a;
+  background: #16a34a;
 }
 
 .cardBody {
@@ -266,29 +263,21 @@
 
 .cardTitleRow {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 6px;
 }
 
 .cardTitle {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 650;
   color: var(--afresh-ink);
 }
 
 .cardTitleCompleted {
   color: #a8a29e;
-  text-decoration: line-through;
-}
-
-.tags {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
 }
 
 .priorityHigh,
@@ -300,54 +289,25 @@
 .statusCompleted {
   display: inline-flex;
   align-items: center;
-  padding: 4px 8px;
-  border-radius: 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fff7ed;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9a3412;
   white-space: nowrap;
 }
 
-.priorityHigh {
-  background: var(--afresh-pink-soft);
-  color: var(--afresh-pink-text);
-}
-
-.priorityMedium {
-  background: var(--afresh-upcoming-bg);
-  color: var(--afresh-upcoming-text);
-}
-
-.priorityLow {
-  background: #f5f5f4;
-  color: #78716c;
-}
-
-.statusInProgress {
-  background: var(--afresh-orange-soft);
-  color: var(--afresh-orange);
-}
-
-.statusNotStarted {
-  background: #f5f5f4;
-  color: #78716c;
-}
-
-.statusOverdue {
-  background: var(--afresh-pink-soft);
-  color: var(--afresh-pink-text);
-}
-
 .statusCompleted {
-  background: var(--afresh-green-soft);
-  color: var(--afresh-green-text);
+  background: #dcfce7;
+  color: #166534;
 }
 
 .cardDescription {
   margin: 0 0 12px;
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.5;
   color: #78716c;
 }
 
@@ -355,7 +315,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 18px;
   font-size: 12px;
   color: #a8a29e;
 }
@@ -370,12 +330,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 700;
   color: #44403c;
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: #d6d3d1;
 }
 
 .empty {
@@ -394,7 +359,6 @@
   }
 
   .cardTitleRow {
-    flex-direction: column;
     align-items: flex-start;
   }
 }
@@ -414,6 +378,7 @@
 
   .title {
     font-size: 34px;
+    white-space: normal;
   }
 
   .card {

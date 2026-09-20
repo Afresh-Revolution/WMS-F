@@ -159,8 +159,10 @@ export async function apiRequest<T>(
 }
 
 const ERROR_CODE_MESSAGES: Record<string, string> = {
+  DEPARTMENT_NOT_FOUND:
+    "That department was not found or is inactive. Pick a department from the list.",
   OUTSIDE_ATTENDANCE_LOCATION:
-    "You are outside the approved attendance location.",
+    "You are outside the approved work location.",
   STALE_LOCATION_READING: "Your GPS reading is too old. Try check-in again.",
   LOW_LOCATION_ACCURACY:
     "GPS accuracy is too low. Move to an open area and try again.",
@@ -241,6 +243,13 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   REJECTION_REASON_REQUIRED: "A rejection reason is required.",
   ACTIVE_PLACEMENT_EXISTS:
     "This person already has an active NYSC or intern placement.",
+  VENDOR_NAME_REQUIRED: "Enter a vendor name.",
+  FULL_NAME_REQUIRED: "Enter the member's full name.",
+  CATEGORY_NOT_FOUND: "Pick a category from the list.",
+  SUPERVISOR_NOT_FOUND:
+    "That supervisor was not found. Choose someone from the directory.",
+  INVALID_PLACEMENT_DATES: "End date must be after the start date.",
+  EXPENSE_LIMIT_EXCEEDED: "This claim is over the allowed expense limit.",
 };
 
 const GENERIC_ERROR_MESSAGES = new Set([
@@ -271,6 +280,12 @@ function rewriteKnownApiMessage(value: string, code = ""): string {
     /no active employee profile/i.test(trimmed)
   ) {
     return "Your employee profile is still being set up. Wait a few seconds and try again.";
+  }
+  if (/^not founded?\.?$/i.test(trimmed)) {
+    return (
+      (code && ERROR_CODE_MESSAGES[code]) ||
+      "That record was not found. Pick a department, supervisor, or category from the list."
+    );
   }
   const mapped = code ? ERROR_CODE_MESSAGES[code] : undefined;
   const isAllCaps =
@@ -393,6 +408,10 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
     fallback.toLowerCase() === "internal server error"
   ) {
     return "The sign-in service returned an error. If this continues, redeploy the frontend on Render.";
+  }
+
+  if (/^not founded?\.?$/i.test(fallback.trim())) {
+    return "That record was not found. Pick a department, supervisor, or category from the list.";
   }
 
   const lowerFallback = fallback.trim().toLowerCase();

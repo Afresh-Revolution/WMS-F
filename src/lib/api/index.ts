@@ -30,7 +30,7 @@ export { securityApi } from "./security";
 export { emailConfigApi, notificationConfigApi, notificationsApi } from "./notifications";
 export { usersApi, rolesApi, permissionsApi } from "./users";
 export { departmentsApi, hrApi } from "./departments";
-export { lookupsApi, loadHodOptions } from "./lookups";
+export { lookupsApi, loadHodOptions, loadManagerLookups, readLookupLists } from "./lookups";
 export { reportsApi, auditLogsApi } from "./reports";
 export { superAdminApi, saRequest } from "./superAdmin";
 
@@ -99,6 +99,11 @@ export {
   listLeaveBalances,
   listOrganisationLeave,
   applyForLeave,
+  approveLeaveExtension,
+  extendLeaveRequest,
+  isActiveLeaveBlock,
+  leaveRequestIdFromError,
+  rejectLeaveExtension,
   getEmployeeLeave,
   approveLeaveRequest,
   rejectLeaveRequest,

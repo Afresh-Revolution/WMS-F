@@ -169,7 +169,7 @@ export function AnnouncementsPage() {
 
   const createFields = useMemo(
     () => [
-      { name: "title", label: "Title", required: true, fullWidth: true },
+      { name: "title", label: "Title", fullWidth: true },
       {
         name: "message",
         label: "Message",

@@ -3,7 +3,7 @@
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { CalendarDays, Check, Plus, RefreshCw, Search, Send } from "lucide-react";
+import { CalendarDays, Check, Plus, Search, Send } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import {
@@ -12,11 +12,17 @@ import {
 } from "@/data/events";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { managerApi, superAdminApi } from "@/lib/api";
+import { managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapEvent } from "@/lib/api/mappers";
 import { portalHref } from "@/lib/portalPaths";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./EventsPage.module.css";
+
+function countLabel(value: unknown, fallback: number, empty = String(fallback)): string {
+  if (value === null || value === undefined || value === "") return empty;
+  const n = Number(value);
+  return Number.isFinite(n) ? String(n) : empty;
+}
 
 const filters: EventFilter[] = ["All", "Upcoming", "Sponsorship", "Completed"];
 
@@ -72,7 +78,7 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
   const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
-  const { runAction, exportRows } = usePageActions();
+  const { runAction } = usePageActions();
   const manager = useManagerPortal();
 
   useEffect(() => {
@@ -99,48 +105,47 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
   }, [data]);
 
   const currentStats = useMemo(() => {
-    const filtered =
-      activeFilter === "All"
-        ? events
-        : events.filter((event) => event.category === activeFilter);
-    const sent = filtered.filter((event) => event.action === "sent").length;
+    const summary = unwrapRecord(data);
+    const upcoming = events.filter(
+      (event) =>
+        event.category === "Upcoming" ||
+        event.tags.some((tag) => tag.tone === "upcoming"),
+    ).length;
+    const draft = events.filter((event) =>
+      event.tags.some((tag) => tag.tone === "draft" || tag.label.toLowerCase() === "draft"),
+    ).length;
+    const notified = events.reduce(
+      (sum, event) => sum + Number(event.notifiedStaff || 0),
+      0,
+    );
     return [
       {
-        id: "total",
-        label: "Events",
-        value: String(filtered.length),
-        badge: activeFilter === "All" ? "All" : activeFilter,
-        badgeTone: "meta" as const,
-      },
-      {
         id: "upcoming",
-        label: "Upcoming",
-        value: String(
-          filtered.filter((event) => event.category === "Upcoming").length,
-        ),
-        badge: "Scheduled",
-        badgeTone: "confirmed" as const,
-      },
-      {
-        id: "sent",
-        label: "Sent to HODs",
-        value: String(sent),
-        badge: "Delivered",
+        label: "Upcoming Events",
+        value: countLabel(summary.upcomingEvents ?? summary.upcomingCount, upcoming),
+        badge: "Confirmed",
         badgeTone: "confirmed" as const,
       },
       {
         id: "draft",
-        label: "Draft",
-        value: String(
-          filtered.filter((event) =>
-            event.tags.some((tag) => tag.label.toLowerCase() === "draft"),
-          ).length,
-        ),
-        badge: "Pending",
+        label: "Draft Events",
+        value: countLabel(summary.draftEvents ?? summary.drafts, draft),
+        badge: "Not sent",
         badgeTone: "draft" as const,
       },
+      {
+        id: "notified",
+        label: "Total Notified Staff",
+        value: countLabel(
+          summary.notifiedStaff ?? summary.totalNotified ?? summary.staffNotified,
+          notified,
+          notified ? String(notified) : "—",
+        ),
+        badge: "This month",
+        badgeTone: "meta" as const,
+      },
     ];
-  }, [activeFilter, events]);
+  }, [data, events]);
 
   const filteredEvents = useMemo(() => {
     return events.filter((event) => {
@@ -156,25 +161,6 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
   function handleFilterChange(filter: EventFilter) {
     setActiveFilter(filter);
     router.push(portalHref(pathname, filterRoutes[filter]));
-  }
-
-  function handleRefresh() {
-    void runAction("Refresh", async () => {
-      refetch();
-    });
-  }
-
-  function handleExport() {
-    exportRows(
-      filteredEvents.map((event) => ({
-        title: event.title,
-        date: event.date,
-        audience: event.audience,
-        category: event.category,
-        description: event.description,
-      })),
-      "events.csv",
-    );
   }
 
   async function handleSave(values: Record<string, string>) {
@@ -197,7 +183,9 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
 
   async function sendEvent(event: EventItem) {
     await runAction("Send event", async () => {
-      await superAdminApi.events.action(event.id, "send");
+      await (manager
+        ? managerApi.sendEvent(event.id)
+        : superAdminApi.events.action(event.id, "send"));
       refetch();
     });
   }
@@ -258,14 +246,6 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
               <kbd className={styles.searchShortcut}>⌘K</kbd>
             </label>
             <NotificationsLink className={styles.iconButton} />
-            <button
-              type="button"
-              aria-label="Refresh"
-              className={styles.iconButton}
-              onClick={handleRefresh}
-            >
-              <RefreshCw size={16} />
-            </button>
             <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
@@ -280,9 +260,6 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
             </p>
           </div>
           <div className={styles.headerActions}>
-            <button type="button" className={styles.exportButton} onClick={handleExport}>
-              Export
-            </button>
             <button type="button" className={styles.createButton} onClick={openCreate}>
               <Plus size={16} strokeWidth={2.5} />
               Create event
@@ -293,19 +270,13 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
         <div className={styles.stats}>
           {currentStats.map((stat) => (
             <article key={stat.id} className={styles.statCard}>
-              <div className={styles.statTop}>
+              <div className={styles.statCopy}>
                 <p className={styles.statLabel}>{stat.label}</p>
-                <span
-                  className={`${styles.badge} ${
-                    stat.badgeTone === "meta"
-                      ? styles.badgeMetaPill
-                      : badgeClass[stat.badgeTone]
-                  }`}
-                >
-                  {stat.badge}
-                </span>
+                <p className={styles.statValue}>{stat.value}</p>
               </div>
-              <p className={styles.statValue}>{stat.value}</p>
+              <span className={`${styles.badge} ${badgeClass[stat.badgeTone]}`}>
+                {stat.badge}
+              </span>
             </article>
           ))}
         </div>
@@ -339,7 +310,7 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
                   {event.tags.map((tag) => (
                     <span
                       key={`${event.id}-${tag.label}`}
-                      className={`${styles.tag} ${tagClass[tag.tone]}`}
+                      className={`${styles.tag} ${tagClass[tag.tone] ?? styles.tagUpcoming}`}
                     >
                       {tag.label}
                     </span>

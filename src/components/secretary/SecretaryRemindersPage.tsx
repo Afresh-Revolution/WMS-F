@@ -19,11 +19,10 @@ import { usePageActions } from "@/hooks/usePageActions";
 import { secretaryApi } from "@/lib/api";
 import { listFrom, str } from "@/lib/api/mappers";
 import {
-  PROTOTYPE_TODAY,
-  managedReminders as fallbackReminders,
   reminderFilterFromPath,
   reminderFilterHrefs,
   reminderFilters,
+  todayKey,
   type ManagedReminder,
   type ReminderChannel,
   type ReminderFilter,
@@ -37,7 +36,7 @@ function parseDay(value: string): Date {
 
 function whenFromDate(date: string): string {
   const event = parseDay(date);
-  const today = parseDay(PROTOTYPE_TODAY);
+  const today = parseDay(todayKey());
   const diff = Math.round(
     (event.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
   );
@@ -78,7 +77,7 @@ function mapReminder(
 ): ManagedReminder {
   const scheduledAt =
     record.scheduledAt ?? record.scheduled_at ?? record.date ?? record.day;
-  const date = str(scheduledAt, PROTOTYPE_TODAY).slice(0, 10);
+  const date = str(scheduledAt, todayKey()).slice(0, 10);
   const link = str(
     record.link ??
       record.relatedTitle ??
@@ -129,12 +128,15 @@ const channelClass: Record<ReminderChannel, string> = {
   Email: styles.channelEmail,
 };
 
-const emptyForm = {
-  title: "",
-  when: "",
-  link: "",
-  channel: "In-app",
-};
+function defaultReminderForm() {
+  return {
+    title: "",
+    date: todayKey(),
+    time: "09:00",
+    link: "",
+    channel: "In-app",
+  };
+}
 
 export function SecretaryRemindersPage() {
   const { runAction } = usePageActions();
@@ -142,7 +144,7 @@ export function SecretaryRemindersPage() {
   const searchRef = useRef<HTMLInputElement>(null);
   const activeFilter = reminderFilterFromPath(pathname);
   const [createOpen, setCreateOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState(defaultReminderForm);
   const [created, setCreated] = useState<ManagedReminder[]>([]);
   const [doneIds, setDoneIds] = useState<Record<string, boolean>>({});
 
@@ -175,10 +177,7 @@ export function SecretaryRemindersPage() {
     const records = Array.isArray(data)
       ? data
       : listFrom((data ?? undefined) as never);
-    const mapped =
-      data === null
-        ? fallbackReminders
-        : records.map((record, index) => mapReminder(record, index));
+    const mapped = records.map((record, index) => mapReminder(record, index));
     return [...mapped, ...created].map((reminder) =>
       doneIds[reminder.id]
         ? { ...reminder, done: true, due: false }
@@ -222,20 +221,24 @@ export function SecretaryRemindersPage() {
 
   function closeCreate() {
     setCreateOpen(false);
-    setForm(emptyForm);
+    setForm(defaultReminderForm());
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const [datePart = PROTOTYPE_TODAY, timePart = ""] = form.when.split("T");
-    const date = datePart.slice(0, 10);
-    const today = parseDay(PROTOTYPE_TODAY);
+    const date = form.date || todayKey();
+    const time = form.time || "09:00";
+    const scheduledAt = new Date(`${date}T${time}:00`);
+    if (Number.isNaN(scheduledAt.getTime())) {
+      throw new Error("Choose a valid date and time.");
+    }
+    const today = parseDay(todayKey());
     const due = parseDay(date).getTime() <= today.getTime();
     const next: ManagedReminder = {
       id: `new-${Date.now()}`,
       title: form.title.trim(),
       date,
-      time: formatTime(timePart),
+      time: formatTime(time),
       when: whenFromDate(date),
       dateLabel: formatDateLabel(date),
       channel: mapChannel(form.channel),
@@ -245,7 +248,8 @@ export function SecretaryRemindersPage() {
     await runAction("Set reminder", async () => {
       await secretaryApi.createReminder({
         title: next.title,
-        scheduledAt: new Date(form.when).toISOString(),
+        scheduledAt: scheduledAt.toISOString(),
+        remindAt: scheduledAt.toISOString(),
         channel: form.channel.toUpperCase().replace("-", "_"),
         relatedType: form.link.trim() ? "OTHER" : undefined,
         relatedTitle: form.link.trim() || undefined,
@@ -270,7 +274,7 @@ export function SecretaryRemindersPage() {
         {loading ? <p className={styles.dateLabel}>Loading reminders…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
-            Using cached reminders — {error}
+            {error}
           </p>
         ) : null}
         <div className={styles.topActions}>
@@ -304,7 +308,7 @@ export function SecretaryRemindersPage() {
           type="button"
           className={styles.createButton}
           onClick={() => {
-            setForm(emptyForm);
+            setForm(defaultReminderForm());
             setCreateOpen(true);
           }}
         >
@@ -453,22 +457,41 @@ export function SecretaryRemindersPage() {
                   required
                 />
               </label>
-              <label className={styles.modalField}>
-                <span>
-                  When <em>*</em>
-                </span>
-                <input
-                  type="datetime-local"
-                  value={form.when}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      when: event.target.value,
-                    }))
-                  }
-                  required
-                />
-              </label>
+              <div className={styles.modalPair}>
+                <label className={styles.modalField}>
+                  <span>
+                    Date <em>*</em>
+                  </span>
+                  <input
+                    type="date"
+                    value={form.date}
+                    min={todayKey()}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        date: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className={styles.modalField}>
+                  <span>
+                    Time <em>*</em>
+                  </span>
+                  <input
+                    type="time"
+                    value={form.time}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        time: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+              </div>
               <label className={styles.modalField}>
                 <span>Linked to (optional)</span>
                 <input

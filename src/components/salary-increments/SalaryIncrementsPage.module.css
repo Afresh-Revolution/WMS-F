@@ -88,13 +88,14 @@
 
 .title {
   margin: 0;
-  max-width: 14ch;
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 400;
+  -webkit-text-stroke: var(--banner-title-stroke) currentColor;
   line-height: 1.05;
   letter-spacing: -0.02em;
   color: var(--afresh-orange);
+  white-space: nowrap;
 }
 
 .subtitle {
@@ -205,7 +206,8 @@
 }
 
 .sectionTitle {
-  margin: 0 0 14px;
+  margin: 0;
+  padding: 22px 22px 8px;
   font-family: var(--font-display);
   font-size: 22px;
   font-weight: 400;
@@ -214,7 +216,7 @@
 
 .listSection {
   border: 1px solid #ebe6e1;
-  border-radius: 16px;
+  border-radius: 20px;
   background: #fff;
   overflow: hidden;
 }
@@ -375,6 +377,7 @@
 
   .title {
     font-size: 34px;
+    white-space: normal;
   }
 
   .listRow {

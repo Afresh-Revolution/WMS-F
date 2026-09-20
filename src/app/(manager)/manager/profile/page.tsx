@@ -1,5 +1,5 @@
-import { EmployeeProfilePage } from "@/components/employee/EmployeeProfilePage";
+import { ProfilePage } from "@/components/profile/ProfilePage";
 
 export default function ManagerProfileRoute() {
-  return <EmployeeProfilePage />;
+  return <ProfilePage />;
 }

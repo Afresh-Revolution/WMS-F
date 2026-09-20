@@ -3,8 +3,10 @@
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
-  CalendarDays,
+  AlertTriangle,
   Check,
+  ChevronRight,
+  Clock,
   Download,
   Plus,
   RefreshCw,
@@ -251,7 +253,7 @@ export function TasksPage() {
                   className={`${styles.checkbox} ${completed ? styles.checkboxChecked : ""}`}
                   onClick={() => void toggleComplete(task)}
                 >
-                  {completed && <Check size={12} strokeWidth={3} />}
+                  {completed ? <Check size={11} strokeWidth={3} /> : null}
                 </button>
 
                 <div className={styles.cardBody}>
@@ -261,17 +263,20 @@ export function TasksPage() {
                     >
                       {task.title}
                     </h2>
-                    <div className={styles.tags}>
-                      <span className={priorityClass[task.priority]}>
-                        {task.priority}
-                      </span>
-                      <span className={statusClass[task.status]}>
-                        {task.status}
-                      </span>
-                    </div>
+                    <span className={priorityClass[task.priority]}>
+                      {task.priority}
+                    </span>
+                    <span className={statusClass[task.status]}>
+                      {task.status === "Overdue" ? (
+                        <AlertTriangle size={11} strokeWidth={2.25} />
+                      ) : null}
+                      {task.status}
+                    </span>
                   </div>
 
-                  <p className={styles.cardDescription}>{task.description}</p>
+                  {task.description ? (
+                    <p className={styles.cardDescription}>{task.description}</p>
+                  ) : null}
 
                   <div className={styles.cardMeta}>
                     <span className={styles.metaItem}>
@@ -284,12 +289,13 @@ export function TasksPage() {
                       {task.assignee}
                     </span>
                     <span className={styles.metaItem}>
-                      <CalendarDays size={14} />
+                      <Clock size={13} />
                       Due {task.dueDate}
                     </span>
                     <span className={styles.metaItem}>{task.department}</span>
                   </div>
                 </div>
+                <ChevronRight size={18} className={styles.chevron} />
               </article>
             );
           })}

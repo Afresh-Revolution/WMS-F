@@ -9,8 +9,7 @@ import { ConfirmClockInModal } from "@/components/manager/ConfirmClockInModal";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { attendanceApi, attendanceSettled, profileApi } from "@/lib/api";
-import type { GpsCheckInBody } from "@/lib/api/attendance";
+import { attendanceApi, attendanceSettled, managerApi, profileApi } from "@/lib/api";
 import {
   asAttendanceRecord,
   formatExpectedClock,
@@ -124,32 +123,6 @@ function statsFromDays(days: PersonalAttendanceDay[]): PersonalAttendanceStat[] 
   ];
 }
 
-function readGps(): Promise<Pick<
-  GpsCheckInBody,
-  "latitude" | "longitude" | "accuracyMeters" | "locationTimestamp"
->> {
-  return new Promise((resolve, reject) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
-      reject(new Error("Location is not available in this browser."));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracyMeters: position.coords.accuracy,
-          locationTimestamp: new Date(position.timestamp).toISOString(),
-        });
-      },
-      (error) => {
-        reject(new Error(error.message || "Could not read your location."));
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-    );
-  });
-}
-
 export function ManagerAttendancePage({
   confirmClockIn = false,
 }: {
@@ -218,29 +191,7 @@ export function ManagerAttendancePage({
       await runAction(
         "Clock in",
         async () => {
-          const gps = await readGps();
-          const idempotencyKey =
-            typeof crypto !== "undefined" && "randomUUID" in crypto
-              ? crypto.randomUUID()
-              : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-          await attendanceApi.manager.checkIn(
-            {
-              ...gps,
-              clientTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              scheduleId: checkInWindow?.scheduleId || undefined,
-              locationId: checkInWindow?.locationId || undefined,
-              idempotencyKey,
-              device: {
-                browser: navigator.userAgent.includes("Edg")
-                  ? "Edge"
-                  : navigator.userAgent.includes("Chrome")
-                    ? "Chromium"
-                    : "Browser",
-                platform: navigator.platform,
-              },
-            },
-            idempotencyKey,
-          );
+          await managerApi.clockIn({});
           refetch();
         },
         "Clock-in recorded",

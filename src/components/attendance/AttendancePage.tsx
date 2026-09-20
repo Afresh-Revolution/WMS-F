@@ -24,7 +24,10 @@ import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLi
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { usePageActions } from "@/hooks/usePageActions";
 import { useAttendanceMonitor } from "@/hooks/useAttendanceMonitor";
-import { attendanceApi } from "@/lib/api";
+import { AttendanceOfficePanel } from "@/components/attendance/AttendanceOfficePanel";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { attendanceApi, departmentsApi, lookupsApi } from "@/lib/api";
+import { listFrom, str } from "@/lib/api/mappers";
 import {
   addMinutesToTime,
   graceFromSchedule,
@@ -155,7 +158,7 @@ const sectionCopy: Record<
   settings: {
     title: "Attendance settings",
     subtitle:
-      "Configure the company attendance policy. Every value is configurable and each change is audited.",
+      "Pin office GPS locations, attach them to a weekday schedule, then staff check-in sends coordinates for the server to measure.",
   },
   "audit-logs": {
     title: "Attendance audit logs",
@@ -286,9 +289,32 @@ export function AttendancePage({
   const [earlyDepartureMinutes, setEarlyDepartureMinutes] = useState(
     defaultAttendancePolicy.earlyDepartureMinutes,
   );
+  const [scheduleName, setScheduleName] = useState("Weekday office check-in");
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+  const [scheduleDepartmentId, setScheduleDepartmentId] = useState("");
   const { exportRows, runAction, showToast } = usePageActions();
   const { user } = useCurrentUser();
   const monitor = useAttendanceMonitor(variant);
+  const { data: departmentData } = useAsyncData(async () => {
+    const settled = await Promise.allSettled([
+      lookupsApi.departments(),
+      departmentsApi.list(),
+    ]);
+    for (const result of settled) {
+      if (result.status === "fulfilled") return result.value;
+    }
+    return null;
+  }, []);
+  const departmentOptions = useMemo(
+    () =>
+      listFrom(departmentData ?? undefined)
+        .map((record) => ({
+          id: str(record.id ?? record._id),
+          name: str(record.name ?? record.title ?? record.label),
+        }))
+        .filter((item) => item.id && item.name),
+    [departmentData],
+  );
   const today = useMemo(() => new Date(), []);
   const copy = sectionCopy[section];
   const subtitle = copy.subtitle.replace("{date}", formatLongDate(today));
@@ -315,6 +341,9 @@ export function AttendancePage({
     setClockOut(monitor.schedule.closingTime);
     setWorkingDays(workingDaysFromNumbers(monitor.schedule.daysOfWeek));
     setGraceMinutes(graceFromSchedule(monitor.schedule));
+    setScheduleName(monitor.schedule.name || "Weekday office check-in");
+    setSelectedLocationIds(monitor.schedule.locationIds);
+    setScheduleDepartmentId(monitor.schedule.departmentId);
   }, [monitor.schedule]);
 
   const rows = useMemo(() => {
@@ -380,22 +409,26 @@ export function AttendancePage({
     await runAction(
       "Save attendance policy",
       async () => {
+        if (selectedLocationIds.length === 0) {
+          throw new Error(
+            "Attach at least one office location so check-in can measure GPS against a pin.",
+          );
+        }
         const body = {
+          name: scheduleName.trim() || "Weekday office check-in",
           openingTime: clockIn,
           closingTime: clockOut,
           lateAfterTime: addMinutesToTime(clockIn, graceMinutes),
           daysOfWeek: numbersFromWorkingDays(workingDays),
+          locationIds: selectedLocationIds,
           timezone: "Africa/Lagos",
           active: true,
+          ...(scheduleDepartmentId ? { departmentId: scheduleDepartmentId } : {}),
         };
         if (monitor.schedule?.id) {
           await attendanceApi.schedules.patch(monitor.schedule.id, body);
         } else {
-          await attendanceApi.schedules.create({
-            name: "Company schedule",
-            locationIds: monitor.locations.map((location) => location.id),
-            ...body,
-          });
+          await attendanceApi.schedules.create(body);
         }
         monitor.refetch();
       },
@@ -985,6 +1018,16 @@ export function AttendancePage({
                 <h2 className={styles.panelTitle}>Work schedule</h2>
               </div>
               <div className={styles.settingsFields}>
+                <label className={`${styles.settingsField} ${styles.settingsFieldFull}`}>
+                  <span className={styles.settingsLabel}>Schedule name</span>
+                  <input
+                    type="text"
+                    className={styles.settingsInput}
+                    value={scheduleName}
+                    onChange={(event) => setScheduleName(event.target.value)}
+                    placeholder="Weekday office check-in"
+                  />
+                </label>
                 <label className={styles.settingsField}>
                   <span className={styles.settingsLabel}>Expected clock-in</span>
                   <input
@@ -1016,6 +1059,56 @@ export function AttendancePage({
                     }
                   />
                 </label>
+                <label className={`${styles.settingsField} ${styles.settingsFieldFull}`}>
+                  <span className={styles.settingsLabel}>
+                    Department (optional)
+                  </span>
+                  <select
+                    className={styles.settingsInput}
+                    value={scheduleDepartmentId}
+                    onChange={(event) => setScheduleDepartmentId(event.target.value)}
+                  >
+                    <option value="">Company-wide</option>
+                    {departmentOptions.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className={`${styles.settingsField} ${styles.settingsFieldFull}`}>
+                  <span className={styles.settingsLabel}>Attached offices</span>
+                  {monitor.locations.length === 0 ? (
+                    <p className={styles.settingsNote}>
+                      Add an office pin below, then attach it here.
+                    </p>
+                  ) : (
+                    <div className={styles.dayRow}>
+                      {monitor.locations.map((location) => {
+                        const active = selectedLocationIds.includes(location.id);
+                        return (
+                          <button
+                            key={location.id}
+                            type="button"
+                            className={`${styles.dayChip} ${
+                              active ? styles.dayChipActive : ""
+                            }`}
+                            aria-pressed={active}
+                            onClick={() =>
+                              setSelectedLocationIds((current) =>
+                                current.includes(location.id)
+                                  ? current.filter((id) => id !== location.id)
+                                  : [...current, location.id],
+                              )
+                            }
+                          >
+                            {location.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
                 <div className={`${styles.settingsField} ${styles.settingsFieldFull}`}>
                   <span className={styles.settingsLabel}>Working days</span>
                   <div className={styles.dayRow}>
@@ -1104,40 +1197,11 @@ export function AttendancePage({
             </section>
           </div>
 
-          <section className={styles.panel}>
-            <div className={styles.panelHead}>
-              <h2 className={styles.panelTitle}>Check-in locations</h2>
-            </div>
-            {monitor.locations.length === 0 ? (
-              <p className={styles.emptyCopy}>
-                No GPS locations yet. Create an active location with coordinates,
-                then a schedule that points at it, before staff can check in.
-              </p>
-            ) : (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Address</th>
-                      <th>Radius</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {monitor.locations.map((location) => (
-                      <tr key={location.id}>
-                        <td>{location.name}</td>
-                        <td className={styles.muted}>{location.address || "—"}</td>
-                        <td>{location.radiusMeters} m</td>
-                        <td>{location.active ? "Active" : "Disabled"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+          <AttendanceOfficePanel
+            locations={monitor.locations}
+            departments={departmentOptions}
+            onChanged={monitor.refetch}
+          />
 
           <p className={styles.policyBanner}>
             Current effective policy: clock in by{" "}

@@ -21,14 +21,33 @@ export function readLookupLists(payload: unknown) {
 }
 
 export async function loadManagerLookups() {
-  try {
-    return readLookupLists(await managerApi.getLookups());
-  } catch (error) {
-    if (!(error instanceof ApiError) || (error.status !== 404 && error.status !== 405)) {
+  const [lookups, employees, departments] = await Promise.all([
+    managerApi.getLookups().catch((error) => {
+      if (
+        error instanceof ApiError &&
+        (error.status === 404 || error.status === 405)
+      ) {
+        return lookupsApi.all();
+      }
       throw error;
-    }
-    return readLookupLists(await lookupsApi.all());
+    }),
+    managerApi.listEmployees({ limit: 200 }).catch(() => []),
+    managerApi.listDepartments().catch(() => []),
+  ]);
+  const lists = readLookupLists(lookups);
+  const directory = Array.isArray(employees)
+    ? employees
+    : listFrom(employees as never);
+  const departmentRows = Array.isArray(departments)
+    ? departments
+    : listFrom(departments as never);
+  if (directory.length) {
+    lists.employees = directory;
   }
+  if (departmentRows.length) {
+    lists.departments = departmentRows;
+  }
+  return lists;
 }
 
 export async function loadHodOptions(): Promise<HodOption[]> {

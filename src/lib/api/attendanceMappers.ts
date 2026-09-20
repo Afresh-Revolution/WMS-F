@@ -530,6 +530,7 @@ export type MappedAttendanceSchedule = {
   closingTime: string;
   daysOfWeek: number[];
   locationIds: string[];
+  departmentId: string;
   timezone: string;
   active: boolean;
 };
@@ -552,6 +553,7 @@ export function mapAttendanceSchedule(
     locationIds: Array.isArray(record.locationIds)
       ? record.locationIds.map((id) => str(id))
       : [],
+    departmentId: str(record.departmentId ?? asAttendanceRecord(record.department).id),
     timezone: str(record.timezone, "Africa/Lagos"),
     active: record.active !== false,
   };
@@ -604,21 +606,29 @@ export type MappedAttendanceLocation = {
   active: boolean;
   latitude?: number;
   longitude?: number;
+  departmentId: string;
+  timezone: string;
 };
 
 export function mapAttendanceLocation(
   record: Record<string, unknown>,
 ): MappedAttendanceLocation {
+  const latitude =
+    record.latitude == null ? undefined : num(record.latitude, Number.NaN);
+  const longitude =
+    record.longitude == null ? undefined : num(record.longitude, Number.NaN);
   return {
     id: str(record.id ?? record._id),
     name: str(record.name, "Location"),
     address: str(record.address ?? record.description),
     radiusMeters: num(record.radiusMeters, 3000),
     active: record.active !== false,
-    latitude:
-      record.latitude == null ? undefined : num(record.latitude, Number.NaN),
-    longitude:
-      record.longitude == null ? undefined : num(record.longitude, Number.NaN),
+    latitude: Number.isFinite(latitude) ? latitude : undefined,
+    longitude: Number.isFinite(longitude) ? longitude : undefined,
+    departmentId: str(
+      record.departmentId ?? asAttendanceRecord(record.department).id,
+    ),
+    timezone: str(record.timezone, "Africa/Lagos"),
   };
 }
 

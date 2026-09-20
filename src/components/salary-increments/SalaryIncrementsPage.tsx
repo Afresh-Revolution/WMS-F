@@ -199,9 +199,8 @@ export function SalaryIncrementsPage() {
           })}
         </div>
 
-        <h2 className={styles.sectionTitle}>Increment recommendations</h2>
-
         <section className={styles.listSection}>
+          <h2 className={styles.sectionTitle}>Increment recommendations</h2>
           <div className={styles.list}>
             {filteredIncrements.map((increment) => (
               <article

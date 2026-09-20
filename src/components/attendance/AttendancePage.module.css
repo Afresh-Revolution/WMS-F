@@ -161,6 +161,7 @@
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 400;
+  -webkit-text-stroke: var(--banner-title-stroke) currentColor;
   line-height: 1.05;
   letter-spacing: -0.02em;
   color: var(--afresh-orange);
@@ -241,6 +242,36 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
+}
+
+.ghostButton,
+.textButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.ghostButton {
+  margin-left: auto;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #ebe6e1;
+  background: #fff;
+  color: #44403c;
+  font-size: 13px;
+}
+
+.inlineActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.textButton {
+  color: var(--afresh-orange);
+  font-size: 13px;
 }
 
 .panelIcon {

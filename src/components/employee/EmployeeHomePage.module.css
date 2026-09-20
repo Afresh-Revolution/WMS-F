@@ -102,6 +102,7 @@
   font-family: var(--font-display);
   font-size: 31px;
   font-weight: 400;
+  -webkit-text-stroke: var(--banner-title-stroke) currentColor;
 }
 
 .hero p:not(.eyebrow) {

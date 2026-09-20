@@ -20,7 +20,7 @@ export function MobileHeader({ open, onToggle }: MobileHeaderProps) {
       >
         {open ? <X size={20} /> : <Menu size={20} />}
       </button>
-      <p className={styles.title}>Afresh WMS</p>
+      <p className={styles.title}>Afresh</p>
     </header>
   );
 }

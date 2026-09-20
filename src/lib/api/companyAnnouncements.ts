@@ -65,28 +65,41 @@ export function announcementWriteBody(values: Record<string, string>) {
   const audienceRaw = (values.audienceType ?? values.audience ?? "").trim();
   const audienceType = AUDIENCE_TYPES.has(audienceRaw)
     ? audienceRaw
-    : "all_staff";
+    : /department/i.test(audienceRaw)
+      ? "department"
+      : "all_staff";
   const isPinned =
     values.isPinned === "true" ||
     values.pinned === "true" ||
-    values.isPinned === "1";
+    values.isPinned === "1" ||
+    /^yes$/i.test(values.pinToTop ?? "");
   const notify = values.notify !== "false";
-  const status = values.status === "draft" ? "draft" : "published";
+  const status =
+    values.status === "draft" ||
+    /save as draft|later/i.test(values.whenToSend ?? "")
+      ? "draft"
+      : "published";
 
   const body: Record<string, unknown> = {
-    title,
     message,
+    body: message,
     category: categoryRaw.toLowerCase() === "urgent" ? "General" : categoryRaw,
     priority,
     audienceType,
+    audience: audienceType === "all_staff" ? "All staff" : audienceRaw || "department",
     isPinned,
+    pinToTop: isPinned ? "Yes" : "No",
     notify,
     status,
+    whenToSend: status === "published" ? "Publish now" : "Save as draft",
   };
+  if (title) body.title = title;
 
   if (audienceType === "department") {
     const departmentId = (values.departmentId ?? "").trim();
+    const department = (values.department ?? "").trim();
     if (departmentId) body.departmentId = departmentId;
+    if (department) body.department = department;
   }
   if (audienceType === "multiple_departments") {
     const departmentIds = (values.departmentIds ?? "")
@@ -163,13 +176,21 @@ export function publishManagerAnnouncement(values: Record<string, string>) {
       [
         () => apiRequest(`${MANAGER}/drafts`, { method: "POST", body }),
         () => apiRequest(MANAGER, { method: "POST", body }),
-        () => apiRequest(`${HOD}/drafts`, { method: "POST", body }),
-        () => apiRequest(HOD, { method: "POST", body }),
+        () => apiRequest(`${STAFF}/admin`, { method: "POST", body }),
+        () => apiRequest(STAFF, { method: "POST", body }),
       ],
       "Could not save that announcement draft.",
     );
   }
-  return managerRequest<unknown>("", { method: "POST", body });
+  return firstSuccessful(
+    [
+      () => apiRequest(MANAGER, { method: "POST", body }),
+      () => apiRequest(`${MANAGER.replace(/s$/, "")}`, { method: "POST", body }),
+      () => apiRequest(STAFF, { method: "POST", body }),
+      () => apiRequest(`${STAFF}/admin`, { method: "POST", body }),
+    ],
+    "Could not publish that announcement.",
+  );
 }
 
 export function publishAdminAnnouncement(id: string, notify = true) {

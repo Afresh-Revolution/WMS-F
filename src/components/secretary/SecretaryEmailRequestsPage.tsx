@@ -16,8 +16,7 @@ import {
 } from "@/lib/api/mappers";
 import {
   emailRequestFilters,
-  emailRequestStats as fallbackStats,
-  emailQueueRequests as fallbackRequests,
+  emailRequestStatCards,
   type EmailQueueRequest,
   type EmailRequestFilter,
   type EmailRequestStat,
@@ -107,7 +106,6 @@ export function SecretaryEmailRequestsPage({
     const records = Array.isArray(data)
       ? data
       : listFrom((data ?? undefined) as never);
-    if (data === null) return fallbackRequests;
     return records.map((record) => mapRequest(record));
   }, [data]);
 
@@ -119,7 +117,7 @@ export function SecretaryEmailRequestsPage({
       Cancelled: requests.filter((item) => item.status === "Cancelled").length,
       All: requests.length,
     };
-    return fallbackStats.map((stat) => ({
+    return emailRequestStatCards.map((stat) => ({
       ...stat,
       value: String(counts[stat.filter]),
     }));
@@ -143,7 +141,7 @@ export function SecretaryEmailRequestsPage({
         {loading ? <p className={styles.dateLabel}>Loading requests…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
-            Using cached requests — {error}
+            {error}
           </p>
         ) : null}
         <div className={styles.topActions}>

@@ -118,13 +118,14 @@
 
 .title {
   margin: 0;
-  max-width: 16ch;
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 400;
+  -webkit-text-stroke: var(--banner-title-stroke) currentColor;
   line-height: 1.05;
   letter-spacing: -0.02em;
   color: var(--afresh-orange);
+  white-space: nowrap;
 }
 
 .subtitle {
@@ -179,17 +180,21 @@
 }
 
 .statCard {
-  padding: 18px 20px;
-  border-radius: 16px;
-  border: 1px solid #ebe6e1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 112px;
+  padding: 22px 24px;
+  border-radius: 22px;
   background: #fff;
 }
 
-.statTop {
+.statCopy {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
 }
 
 .statLabel {
@@ -198,11 +203,11 @@
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: #a8a29e;
+  color: var(--afresh-orange);
 }
 
 .statValue {
-  margin: 14px 0 0;
+  margin: 0;
   font-family: var(--font-display);
   font-size: 48px;
   line-height: 1;
@@ -213,26 +218,19 @@
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 9px;
+  flex-shrink: 0;
+  padding: 6px 12px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.badgeCurrent {
-  background: var(--afresh-orange);
-  color: #fff;
-}
-
-.badgeActive {
+.badgeCurrent,
+.badgeActive,
+.badgeAlert {
   background: var(--afresh-orange-soft);
   color: var(--afresh-orange);
-}
-
-.badgeAlert {
-  background: #fee2e2;
-  color: #b91c1c;
 }
 
 .filters {
@@ -438,7 +436,7 @@
 
   .title {
     font-size: 34px;
-    max-width: none;
+    white-space: normal;
   }
 }
 
