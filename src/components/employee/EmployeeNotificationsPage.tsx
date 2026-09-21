@@ -7,7 +7,7 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { notificationsApi } from "@/lib/api";
+import { employeeApi, notificationsApi } from "@/lib/api";
 import { bool, listFrom, str } from "@/lib/api/mappers";
 import styles from "./EmployeeNotificationsPage.module.css";
 
@@ -36,9 +36,13 @@ export function EmployeeNotificationsPage() {
   const [localRead, setLocalRead] = useState<Set<string>>(new Set());
   const { data } = useAsyncData(async () => {
     try {
-      return await notificationsApi.list();
+      return await employeeApi.notifications.list();
     } catch {
-      return null;
+      try {
+        return await notificationsApi.list();
+      } catch {
+        return null;
+      }
     }
   }, []);
 

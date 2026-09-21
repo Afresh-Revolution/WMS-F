@@ -9,7 +9,7 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { profileApi } from "@/lib/api";
+import { employeeApi, profileApi } from "@/lib/api";
 import { unwrapRecord, str } from "@/lib/api/mappers";
 import styles from "./EmployeeSettingsPage.module.css";
 
@@ -45,9 +45,17 @@ export function EmployeeSettingsPage() {
   const [newPassword, setNewPassword] = useState("");
   const { data: profile } = useAsyncData(async () => {
     try {
-      return await profileApi.get();
+      return await employeeApi.settings.get();
     } catch {
-      return null;
+      try {
+        return await employeeApi.profile.get();
+      } catch {
+        try {
+          return await profileApi.get();
+        } catch {
+          return null;
+        }
+      }
     }
   }, []);
   const companyEmail =
@@ -89,12 +97,17 @@ export function EmployeeSettingsPage() {
       await runAction(
         "Save account",
         async () => {
-          await profileApi.patch({
+          const body = {
             personalEmail: personalEmail.trim(),
             phone: phone.trim(),
             emergencyContact: emergencyContact.trim(),
             address: address.trim(),
-          });
+          };
+          try {
+            await employeeApi.settings.patch(body);
+          } catch {
+            await employeeApi.profile.patch(body);
+          }
         },
         "Contact details saved",
       );

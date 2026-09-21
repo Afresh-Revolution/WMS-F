@@ -8,6 +8,7 @@ export const lookupsApi = {
   hods: () => apiRequest<Record<string, unknown>>("/lookups/hods"),
   employees: () => apiRequest<Record<string, unknown>>("/lookups/employees"),
   departments: () => apiRequest<Record<string, unknown>>("/lookups/departments"),
+  leaveTypes: () => apiRequest<Record<string, unknown>>("/lookups/leave-types"),
   all: () => apiRequest<Record<string, unknown>>("/lookups"),
 };
 

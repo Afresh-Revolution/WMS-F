@@ -6,7 +6,9 @@ import { CalendarDays, Search, UserRound, X } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { usePageActions } from "@/hooks/usePageActions";
 import { employeeProfile, employeeTasks } from "@/data/employeeHome";
-import { tasksApi } from "@/lib/api";
+import { employeeApi } from "@/lib/api";
+import { listFrom, num, str } from "@/lib/api/mappers";
+import { useAsyncData } from "@/hooks/useAsyncData";
 import styles from "./EmployeeTasksPage.module.css";
 
 type TaskFilter = "All" | "In Progress" | "In Review" | "Overdue" | "Completed";
@@ -45,6 +47,10 @@ export function EmployeeTasksPage({
   const [draftStatus, setDraftStatus] = useState("In Progress");
   const [draftProgress, setDraftProgress] = useState(0);
   const { runAction } = usePageActions();
+  const { data: liveTasks } = useAsyncData(
+    () => employeeApi.tasks.list({ limit: 50 }).catch(() => []),
+    [],
+  );
 
   useEffect(() => {
     if (!selectedTask) return;
@@ -59,10 +65,25 @@ export function EmployeeTasksPage({
     };
   }, [selectedTask]);
 
+  const catalog = useMemo(() => {
+    const rows = listFrom(liveTasks ?? undefined);
+    if (!rows.length) return employeeTasks;
+    return rows.map((row, index) => ({
+      id: str(row.id, `task-${index}`),
+      title: str(row.title ?? row.name, "Task"),
+      priority: str(row.priority, "Medium"),
+      status: str(row.status, "Not Started"),
+      description: str(row.description ?? row.notes),
+      assignedBy: str(row.assignedByName ?? row.assignedBy ?? row.createdByName, "—"),
+      due: str(row.dueDate ?? row.due_date ?? row.due, "—"),
+      timing: str(row.timing ?? row.dueLabel, ""),
+      progress: num(row.progress ?? row.progressPercent, 0),
+    }));
+  }, [liveTasks]);
+
   const tasks = useMemo(
-    () =>
-      employeeTasks.filter((task) => filter === "All" || task.status === filter),
-    [filter],
+    () => catalog.filter((task) => filter === "All" || task.status === filter),
+    [catalog, filter],
   );
 
   async function updateProgress(values: Record<string, string>) {
@@ -70,7 +91,7 @@ export function EmployeeTasksPage({
     await runAction(
       "Update task",
       async () => {
-        await tasksApi.patch(selectedTask.id, {
+        await employeeApi.tasks.update(selectedTask.id, {
           status: values.status,
           progress: Number(values.progress),
         });
