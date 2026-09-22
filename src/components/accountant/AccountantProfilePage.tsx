@@ -17,15 +17,25 @@ import {
   X,
 } from "lucide-react";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { accountantApi, accountantSettled } from "@/lib/api";
-import { mapAccountantProfile } from "@/lib/api/accountantMappers";
 import {
-  accountantLeaveBalances as initialBalances,
-  accountantProfile as fallbackProfile,
-  accountantProfileExpenses,
-  accountantProfileLeaveHistory,
+  accountantApi,
+  accountantSettled,
+  listLeaveBalances,
+  listMyLeave,
+} from "@/lib/api";
+import {
+  mapAccountantExpense,
+  mapAccountantProfile,
+  unwrapAccountantList,
+} from "@/lib/api/accountantMappers";
+import {
+  mapEmployeeLeaveRequest,
+  mapLeaveBalance,
+} from "@/lib/api/mappers";
+import {
   accountantProfileTabs,
   type AccountantProfileTab,
 } from "@/data/accountantProfile";
@@ -34,19 +44,44 @@ import styles from "./AccountantProfilePage.module.css";
 export function AccountantProfilePage() {
   const [tab, setTab] = useState<AccountantProfileTab>("Overview");
   const [editOpen, setEditOpen] = useState(false);
+  const { user } = useCurrentUser();
   const { runAction } = usePageActions();
   const titleId = useId();
   const { data, loading, error, refetch } = useAsyncData(async () => {
-    const [profile, employment, documents] = await Promise.all([
+    const [profile, employment, leave, balances, expenses] = await Promise.all([
       accountantApi.profile.get(),
       accountantSettled(accountantApi.employmentRecord.get()),
-      accountantSettled(accountantApi.employmentRecord.documents()),
+      accountantSettled(listMyLeave()),
+      accountantSettled(listLeaveBalances()),
+      accountantSettled(accountantApi.expenses.list()),
     ]);
-    return { profile, employment, documents };
+    return { profile, employment, leave, balances, expenses };
   }, []);
 
   const profile = useMemo(
-    () => mapAccountantProfile(data?.profile, data?.employment, fallbackProfile),
+    () =>
+      mapAccountantProfile(data?.profile, data?.employment, {
+        initials: user?.initials || "—",
+        name: user?.name || "",
+        personal: {
+          companyEmail: user?.email || "",
+          personalEmail: "",
+          phone: "",
+          location: "",
+        },
+      }),
+    [data, user],
+  );
+  const leaveBalances = useMemo(
+    () => unwrapAccountantList(data?.balances).map(mapLeaveBalance),
+    [data],
+  );
+  const leaveHistory = useMemo(
+    () => unwrapAccountantList(data?.leave).map(mapEmployeeLeaveRequest),
+    [data],
+  );
+  const expenses = useMemo(
+    () => unwrapAccountantList(data?.expenses).map(mapAccountantExpense),
     [data],
   );
 
@@ -251,24 +286,31 @@ export function AccountantProfilePage() {
           <article className={`${styles.card} ${styles.leaveCard}`}>
             <h3 className={styles.cardTitle}>Leave balance</h3>
             <div className={styles.balanceList}>
-              {initialBalances.map((balance) => (
-                <div key={balance.id} className={styles.balanceRow}>
-                  <div className={styles.balanceTop}>
-                    <span>{balance.label}</span>
-                    <strong>
-                      {balance.remaining} of {balance.total} left
-                    </strong>
+              {leaveBalances.length === 0 ? (
+                <p className={styles.empty}>No leave balances yet.</p>
+              ) : (
+                leaveBalances.map((balance) => (
+                  <div key={balance.id} className={styles.balanceRow}>
+                    <div className={styles.balanceTop}>
+                      <span>{balance.label}</span>
+                      <strong>
+                        {balance.remaining} of {balance.total} left
+                      </strong>
+                    </div>
+                    <div className={styles.balanceTrack}>
+                      <div
+                        className={styles.balanceBar}
+                        style={{
+                          width: `${
+                            (balance.remaining / Math.max(balance.total, 1)) *
+                            100
+                          }%`,
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div className={styles.balanceTrack}>
-                    <div
-                      className={styles.balanceBar}
-                      style={{
-                        width: `${(balance.remaining / balance.total) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </article>
         </div>
@@ -276,38 +318,46 @@ export function AccountantProfilePage() {
 
       {tab === "Leave" ? (
         <div className={styles.listCard}>
-          {accountantProfileLeaveHistory.map((item) => (
-            <article key={item.id} className={styles.listRow}>
-              <div>
-                <h3 className={styles.listTitle}>{item.type}</h3>
-                <p className={styles.listMeta}>
-                  {item.dates} · {item.days}
-                </p>
-              </div>
-              <span className={styles.listStatus}>{item.status}</span>
-            </article>
-          ))}
+          {leaveHistory.length === 0 ? (
+            <p className={styles.empty}>No leave requests yet.</p>
+          ) : (
+            leaveHistory.map((item) => (
+              <article key={item.id} className={styles.listRow}>
+                <div>
+                  <h3 className={styles.listTitle}>{item.type}</h3>
+                  <p className={styles.listMeta}>
+                    {item.dates} · {item.days} days
+                  </p>
+                </div>
+                <span className={styles.listStatus}>{item.status}</span>
+              </article>
+            ))
+          )}
         </div>
       ) : null}
 
       {tab === "Expenses" ? (
         <div className={styles.listCard}>
-          {accountantProfileExpenses.map((item) => (
-            <article key={item.id} className={styles.listRow}>
-              <div>
-                <h3 className={styles.listTitle}>
-                  {item.ref} · {item.category}
-                </h3>
-                <p className={styles.listMeta}>
-                  {item.note} · {item.date}
-                </p>
-              </div>
-              <div className={styles.listAside}>
-                <strong>{item.amount}</strong>
-                <span className={styles.listStatus}>{item.status}</span>
-              </div>
-            </article>
-          ))}
+          {expenses.length === 0 ? (
+            <p className={styles.empty}>No expense claims yet.</p>
+          ) : (
+            expenses.map((item) => (
+              <article key={item.id} className={styles.listRow}>
+                <div>
+                  <h3 className={styles.listTitle}>
+                    {item.ref} · {item.category}
+                  </h3>
+                  <p className={styles.listMeta}>
+                    {item.note} · {item.date}
+                  </p>
+                </div>
+                <div className={styles.listAside}>
+                  <strong>{item.amountLabel}</strong>
+                  <span className={styles.listStatus}>{item.status}</span>
+                </div>
+              </article>
+            ))
+          )}
         </div>
       ) : null}
 

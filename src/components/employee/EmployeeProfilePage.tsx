@@ -20,7 +20,7 @@ import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { formatRoleLabel } from "@/lib/currentUser";
-import { apiRequest, asRecord, managerApi, profileApi, unwrapRecord } from "@/lib/api";
+import { asRecord, employeeApi, managerApi, profileApi, unwrapRecord } from "@/lib/api";
 import { initials, nestedStr, str } from "@/lib/api/mappers";
 import styles from "./EmployeeProfilePage.module.css";
 
@@ -87,9 +87,9 @@ export function EmployeeProfilePage() {
       return { profile, employment };
     }
     const [profile, employment] = await Promise.all([
-      profileApi.get().catch(() => null),
-      apiRequest<unknown>("/employee/employment-record").catch(() =>
-        apiRequest<unknown>("/employee/profile").catch(() => null),
+      employeeApi.profile.get().catch(() => profileApi.get().catch(() => null)),
+      employeeApi.employmentRecord.get().catch(() =>
+        employeeApi.profile.get().catch(() => null),
       ),
     ]);
     return { profile, employment };

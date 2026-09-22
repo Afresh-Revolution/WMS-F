@@ -70,14 +70,15 @@ export function EmployeeReimbursementsPage() {
   const { user } = useCurrentUser();
   const [filter, setFilter] = useState<ReimbursementFilter>("All");
   const { data, loading, error } = useAsyncData(
-    () => employeeApi.listExpenses(),
+    () =>
+      employeeApi.reimbursements.list({ limit: 50 }).catch(() =>
+        employeeApi.expenses.list({ limit: 50 }),
+      ),
     [],
   );
 
   const reimbursements = useMemo(() => {
-    const records = Array.isArray(data)
-      ? data
-      : listFrom((data ?? undefined) as never);
+    const records = listFrom((data ?? undefined) as never);
     return records
       .map((record, index) => mapReimbursement(record, index))
       .filter((item): item is EmployeeReimbursement => Boolean(item));

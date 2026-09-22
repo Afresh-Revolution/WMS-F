@@ -70,7 +70,7 @@ export function EmployeeRecordsPage() {
   const [filter, setFilter] = useState<RecordFilter>("All");
   const { showToast } = usePageActions();
   const { data, loading, error } = useAsyncData(
-    () => employeeApi.listRecords(),
+    () => employeeApi.records(),
     [],
   );
 

@@ -10,6 +10,7 @@ import {
   Search,
   Wallet,
 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { CreatePayrollPeriodModal } from "@/components/accountant/CreatePayrollPeriodModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -18,10 +19,8 @@ import { accountantApi, accountantSettled } from "@/lib/api";
 import {
   mapAccountantPayrollPeriod,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
-  accountantPayrollPeriods as fallbackPeriods,
   type AccountantPayrollPeriod,
   type AccountantPayrollStatus,
 } from "@/data/accountantPayroll";
@@ -48,14 +47,11 @@ export function AccountantPayrollPage() {
   }, []);
 
   const periods = useMemo(() => {
-    const mapped = withFallback(
-      [
-        ...unwrapAccountantList(data?.runs),
-        ...unwrapAccountantList(data?.payroll),
-        ...unwrapAccountantList(data?.periods),
-      ].map(mapAccountantPayrollPeriod),
-      fallbackPeriods,
-    );
+    const mapped = [
+      ...unwrapAccountantList(data?.runs),
+      ...unwrapAccountantList(data?.payroll),
+      ...unwrapAccountantList(data?.periods),
+    ].map(mapAccountantPayrollPeriod);
     const merged = [...localPeriods, ...mapped];
     const seen = new Set<string>();
     return merged.filter((period) => {
@@ -76,7 +72,7 @@ export function AccountantPayrollPage() {
           month: values.month,
           year: values.year,
           status: "In Preparation",
-          staff: 12,
+          staff: 0,
           net: "₦ 0",
           readiness: "0% ready",
         };
@@ -114,13 +110,7 @@ export function AccountantPayrollPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 
@@ -144,6 +134,9 @@ export function AccountantPayrollPage() {
       </div>
 
       <div className={styles.list}>
+        {periods.length === 0 ? (
+          <p className={styles.empty}>No payroll periods yet.</p>
+        ) : null}
         {periods.map((period) => (
           <Link
             key={period.id}

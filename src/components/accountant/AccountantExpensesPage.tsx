@@ -4,6 +4,7 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Bell, Check, Plus, Search, Undo2, Wallet } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import {
   RecordExpenseModal,
@@ -15,12 +16,9 @@ import { accountantApi } from "@/lib/api";
 import {
   mapAccountantExpense,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
-  accountantExpenseEmployees,
   accountantExpenseFilters,
-  accountantExpenses as fallbackExpenses,
   formatExpenseNaira,
   matchesExpenseFilter,
   type AccountantExpense,
@@ -57,10 +55,7 @@ export function AccountantExpensesPage() {
   );
 
   const expenses = useMemo(() => {
-    const mapped = withFallback(
-      unwrapAccountantList(data).map(mapAccountantExpense),
-      fallbackExpenses,
-    );
+    const mapped = unwrapAccountantList(data).map(mapAccountantExpense);
     const merged = [...localExpenses, ...mapped];
     const seen = new Set<string>();
     return merged.filter((item) => {
@@ -89,9 +84,13 @@ export function AccountantExpensesPage() {
   );
 
   async function handleRecord(values: RecordExpenseValues) {
-    const employee = accountantExpenseEmployees.find(
-      (item) => item.id === values.employeeId,
-    );
+    const employee = {
+      id: values.employeeId,
+      name: values.employeeName,
+      department: values.department,
+      initials: values.initials,
+      avatarColor: values.avatarColor,
+    };
     const amount = Number(values.amount);
     if (!employee || !Number.isFinite(amount) || amount <= 0) {
       throw new Error("Enter a valid employee and amount");
@@ -190,13 +189,7 @@ export function AccountantExpensesPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 

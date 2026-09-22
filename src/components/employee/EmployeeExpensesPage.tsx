@@ -130,14 +130,12 @@ export function EmployeeExpensesPage({
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const { data, loading, error, refetch } = useAsyncData(
-    () => employeeApi.listExpenses(),
+    () => employeeApi.expenses.list({ limit: 50 }),
     [],
   );
 
   const expenseItems = useMemo(() => {
-    const records = Array.isArray(data)
-      ? data
-      : listFrom((data ?? undefined) as never);
+    const records = listFrom((data ?? undefined) as never);
     return records
       .filter((record) => {
         const status = str(record.status).toLowerCase();
@@ -167,36 +165,40 @@ export function EmployeeExpensesPage({
     if (submitting) return;
     setSubmitting(true);
     try {
-      await runAction("Submit expense", async () => {
-        const amount = Number(form.amount);
-        if (!Number.isFinite(amount) || amount <= 0) {
-          throw new Error("Enter a valid amount.");
-        }
-        const receiptFile = form.receiptFile;
-        if (!receiptFile) {
-          throw new Error("Attach a receipt. Most categories require one.");
-        }
-        if (receiptFile.size > MAX_RECEIPT_BYTES) {
-          throw new Error("Receipt files must be 700 KB or smaller.");
-        }
-        await employeeApi.createExpense({
-          description: form.description.trim(),
-          category: form.category,
-          amount,
-          expenseDate: todayKey(),
-          currency: "NGN",
-          receipts: [
-            {
-              fileName: receiptFile.name,
-              fileUrl: await fileToDataUrl(receiptFile),
-              fileType: receiptFile.type || "application/octet-stream",
-              fileSize: receiptFile.size,
-              receiptDate: todayKey(),
-            },
-          ],
-        });
-        refetch();
-      });
+      await runAction(
+        "Submit expense",
+        async () => {
+          const amount = Number(form.amount);
+          if (!Number.isFinite(amount) || amount <= 0) {
+            throw new Error("Enter a valid amount.");
+          }
+          const receiptFile = form.receiptFile;
+          if (!receiptFile) {
+            throw new Error("Attach a receipt. Most categories require one.");
+          }
+          if (receiptFile.size > MAX_RECEIPT_BYTES) {
+            throw new Error("Receipt files must be 700 KB or smaller.");
+          }
+          await employeeApi.expenses.create({
+            description: form.description.trim(),
+            category: form.category,
+            amount,
+            expenseDate: todayKey(),
+            currency: "NGN",
+            receipts: [
+              {
+                fileName: receiptFile.name,
+                fileUrl: await fileToDataUrl(receiptFile),
+                fileType: receiptFile.type || "application/octet-stream",
+                fileSize: receiptFile.size,
+                receiptDate: todayKey(),
+              },
+            ],
+          });
+          await refetch();
+        },
+        "Expense claim submitted",
+      );
       setFilter("All");
       closeCreate();
     } catch {

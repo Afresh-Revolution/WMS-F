@@ -38,6 +38,31 @@ function isForbidden(error: unknown) {
   return error instanceof ApiError && error.status === 403;
 }
 
+async function firstWorkingRoute<T>(
+  attempts: Array<() => Promise<T>>,
+  notFoundMessage: string,
+): Promise<T> {
+  let lastError: unknown;
+  let managerRouteMissing = false;
+  for (const [index, attempt] of attempts.entries()) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
+      if (isMissingRoute(error)) {
+        if (index === 0) managerRouteMissing = true;
+        continue;
+      }
+      if (isForbidden(error) && managerRouteMissing && index < attempts.length - 1) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  if (lastError instanceof Error) throw lastError;
+  throw new ApiError(404, notFoundMessage);
+}
+
 async function firstNyscRoute<T>(attempts: Array<() => Promise<T>>): Promise<T> {
   let lastError: unknown;
   let managerRouteMissing = false;
@@ -111,17 +136,35 @@ export const managerApi = {
   },
 
   clockIn(body: unknown = {}) {
-    return withSharedFallback(
-      () =>
-        apiRequest<unknown>(managerPath("/attendance/clock-in"), {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>(managerPath("/attendance"), {
-          method: "POST",
-          body,
-        }).then(unwrapData),
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(managerPath("/attendance/clock-in"), {
+            method: "POST",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(managerPath("/attendance/check-in"), {
+            method: "POST",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(managerPath("/attendance"), {
+            method: "POST",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>("/employee/attendance/clock-in", {
+            method: "POST",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>("/attendance/clock-in", {
+            method: "POST",
+            body,
+          }).then(unwrapData),
+      ],
+      "Clock-in API was not found.",
     );
   },
 
@@ -414,6 +457,10 @@ export const managerApi = {
         apiRequest<ApiListResponse<Record<string, unknown>>>(
           `/nysc-interns${buildQuery(query)}`,
         ).then(unwrapList),
+      () =>
+        apiRequest<ApiListResponse<Record<string, unknown>>>(
+          `/hr/nysc-interns${buildQuery(query)}`,
+        ).then(unwrapList),
     ]);
   },
 
@@ -436,6 +483,11 @@ export const managerApi = {
         }).then(unwrapData),
       () =>
         apiRequest<unknown>("/nysc-interns", {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>("/hr/nysc-interns", {
           method: "POST",
           body,
         }).then(unwrapData),

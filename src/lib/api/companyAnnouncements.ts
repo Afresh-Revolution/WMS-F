@@ -173,18 +173,21 @@ export function publishManagerAnnouncement(values: Record<string, string>) {
   const body = announcementWriteBody(values);
   if (body.status === "draft") {
     return firstSuccessful(
-      [
-        () => apiRequest(`${MANAGER}/drafts`, { method: "POST", body }),
-        () => apiRequest(MANAGER, { method: "POST", body }),
-        () => apiRequest(`${STAFF}/admin`, { method: "POST", body }),
-        () => apiRequest(STAFF, { method: "POST", body }),
-      ],
-      "Could not save that announcement draft.",
-    );
+    [
+      () => apiRequest(`${MANAGER}/drafts`, { method: "POST", body }),
+      () => apiRequest(`${HOD}/drafts`, { method: "POST", body }),
+      () => apiRequest(MANAGER, { method: "POST", body }),
+      () => apiRequest(HOD, { method: "POST", body }),
+      () => apiRequest(`${STAFF}/admin`, { method: "POST", body }),
+      () => apiRequest(STAFF, { method: "POST", body }),
+    ],
+    "Could not save that announcement draft.",
+  );
   }
   return firstSuccessful(
     [
       () => apiRequest(MANAGER, { method: "POST", body }),
+      () => apiRequest(HOD, { method: "POST", body }),
       () => apiRequest(`${MANAGER.replace(/s$/, "")}`, { method: "POST", body }),
       () => apiRequest(STAFF, { method: "POST", body }),
       () => apiRequest(`${STAFF}/admin`, { method: "POST", body }),

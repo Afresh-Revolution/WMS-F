@@ -4,6 +4,7 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Bell, MinusCircle, Plus, Search, Trash2 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import {
   RecordDeductionModal,
@@ -15,12 +16,8 @@ import { accountantApi } from "@/lib/api";
 import {
   mapAccountantDeduction,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
-  accountantDeductionEmployees,
-  accountantDeductions as fallbackDeductions,
-  accountantDeductionsPeriod,
   formatNaira,
   type AccountantDeduction,
 } from "@/data/accountantDeductions";
@@ -35,11 +32,7 @@ export function AccountantDeductionsPage() {
   );
 
   const deductions = useMemo(
-    () =>
-      withFallback(
-        unwrapAccountantList(data).map(mapAccountantDeduction),
-        fallbackDeductions,
-      ),
+    () => unwrapAccountantList(data).map(mapAccountantDeduction),
     [data],
   );
 
@@ -49,11 +42,12 @@ export function AccountantDeductionsPage() {
   );
 
   async function handleRecordDeduction(values: RecordDeductionValues) {
-    const employee = accountantDeductionEmployees.find(
-      (item) => item.id === values.employeeId,
-    );
+    const employee = {
+      id: values.employeeId,
+      name: values.employeeName,
+    };
     const amount = Number(values.amount);
-    if (!employee || !Number.isFinite(amount) || amount <= 0) {
+    if (!employee.id || !employee.name || !Number.isFinite(amount) || amount <= 0) {
       throw new Error("Enter a valid employee and amount");
     }
 
@@ -111,13 +105,7 @@ export function AccountantDeductionsPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 
@@ -126,8 +114,7 @@ export function AccountantDeductionsPage() {
           <p className={styles.eyebrow}>Accountant · Deductions</p>
           <h1 className={styles.title}>Deductions</h1>
           <p className={styles.subtitle}>
-            Record statutory and other deductions for the{" "}
-            {accountantDeductionsPeriod} payroll run.
+            Record statutory and other deductions for the current payroll run.
           </p>
         </div>
         <button
@@ -149,7 +136,7 @@ export function AccountantDeductionsPage() {
             <MinusCircle size={18} />
           </span>
           <p className={styles.totalLabel}>
-            Total deductions · {accountantDeductionsPeriod}
+            Total deductions
           </p>
         </div>
         <p className={styles.totalValue}>{formatNaira(total)}</p>

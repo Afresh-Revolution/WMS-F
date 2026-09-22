@@ -4,6 +4,7 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Bell, FileText, Paperclip, Search, Wallet } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
@@ -11,11 +12,9 @@ import { accountantApi } from "@/lib/api";
 import {
   mapAccountantPaymentRecord,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
   accountantPaymentFilters,
-  accountantPaymentRecords as fallbackPayments,
   formatPaymentNaira,
   matchesPaymentFilter,
   type AccountantPaymentCategory,
@@ -47,11 +46,7 @@ export function AccountantPaymentsPage() {
   );
 
   const payments = useMemo(
-    () =>
-      withFallback(
-        unwrapAccountantList(data).map(mapAccountantPaymentRecord),
-        fallbackPayments,
-      ),
+    () => unwrapAccountantList(data).map(mapAccountantPaymentRecord),
     [data],
   );
 
@@ -102,13 +97,7 @@ export function AccountantPaymentsPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 

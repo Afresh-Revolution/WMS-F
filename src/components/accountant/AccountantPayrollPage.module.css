@@ -270,6 +270,14 @@
   color: var(--afresh-orange);
 }
 
+.empty {
+  margin: 0;
+  padding: 28px 20px;
+  text-align: center;
+  color: #a8a29e;
+  font-size: 14px;
+}
+
 @media (max-width: 768px) {
   .page {
     padding: 20px 16px 48px;

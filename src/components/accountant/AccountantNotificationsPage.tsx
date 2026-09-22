@@ -9,6 +9,7 @@ import {
   FileText,
   Search,
 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
@@ -16,11 +17,9 @@ import { accountantApi } from "@/lib/api";
 import {
   mapAccountantNotification,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
   accountantNotificationFilters,
-  accountantNotifications as fallbackNotifications,
   matchesNotificationFilter,
   type AccountantNotification,
   type AccountantNotificationFilter,
@@ -42,11 +41,7 @@ export function AccountantNotificationsPage() {
   );
 
   const notifications = useMemo(
-    () =>
-      withFallback(
-        unwrapAccountantList(data).map(mapAccountantNotification),
-        fallbackNotifications,
-      ),
+    () => unwrapAccountantList(data).map(mapAccountantNotification),
     [data],
   );
 
@@ -115,13 +110,7 @@ export function AccountantNotificationsPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 

@@ -1,166 +1,204 @@
 import { apiRequest, buildQuery } from "./client";
-import type { Id } from "./types";
+import type { GpsCheckInBody } from "./attendance";
+import { unwrapList, unwrapData, type ApiListResponse, type Id } from "./types";
 
-export type EmployeeListParams = Record<string, unknown>;
-export type EmployeeRecord = Record<string, unknown>;
-export type EmployeeMutationBody = Record<string, unknown>;
+const BASE = "/employee";
 
-function employeePath(path: string, query?: EmployeeListParams) {
-  return `/employee${path}${buildQuery(query)}`;
-}
-
-function unwrapData<T>(payload: unknown): T {
-  if (payload && typeof payload === "object" && "data" in payload) {
-    return (payload as { data: T }).data;
-  }
-  return payload as T;
-}
-
-function unwrapCollection(
-  payload: unknown,
-  keys: string[],
-): EmployeeRecord[] {
-  const value = unwrapData<unknown>(payload);
-  if (Array.isArray(value)) return value as EmployeeRecord[];
-  if (!value || typeof value !== "object") return [];
-  const record = value as EmployeeRecord;
-  for (const key of keys) {
-    const collection = record[key];
-    if (Array.isArray(collection)) return collection as EmployeeRecord[];
-  }
-  return [];
-}
-
-function get(path: string, query?: EmployeeListParams) {
-  return apiRequest<unknown>(employeePath(path, query)).then(unwrapData);
-}
-
-function list(
-  path: string,
-  keys: string[],
-  query?: EmployeeListParams,
-) {
-  return apiRequest<unknown>(employeePath(path, query)).then((payload) =>
-    unwrapCollection(payload, keys),
-  );
-}
-
-function mutate(
-  path: string,
-  method: "POST" | "PUT" | "PATCH" | "DELETE",
-  body?: EmployeeMutationBody,
-) {
-  return apiRequest<unknown>(employeePath(path), { method, body }).then(
-    unwrapData,
-  );
+function path(suffix: string, query?: Record<string, unknown>) {
+  return `${BASE}${suffix}${buildQuery(query)}`;
 }
 
 export const employeeApi = {
-  getScope() {
-    return get("/scope");
+  scope: () => apiRequest<unknown>(path("/scope")).then(unwrapData),
+
+  dashboard: (query?: Record<string, unknown>) =>
+    apiRequest<unknown>(path("/dashboard", query)).then(unwrapData),
+
+  home: (query?: Record<string, unknown>) =>
+    apiRequest<unknown>(path("/home", query)).then(unwrapData),
+
+  profile: {
+    get: () => apiRequest<unknown>(path("/profile")).then(unwrapData),
+    patch: (body: Record<string, unknown>) =>
+      apiRequest<unknown>(path("/profile"), { method: "PATCH", body }).then(
+        unwrapData,
+      ),
   },
 
-  getDashboard(query?: EmployeeListParams) {
-    return get("/dashboard", query);
+  employmentRecord: {
+    get: () => apiRequest<unknown>(path("/employment-record")).then(unwrapData),
+    patch: (body: Record<string, unknown>) =>
+      apiRequest<unknown>(path("/employment-record"), {
+        method: "PATCH",
+        body,
+      }).then(unwrapData),
   },
 
-  getEmploymentRecord() {
-    return get("/employment-record");
+  settings: {
+    get: () => apiRequest<unknown>(path("/settings")).then(unwrapData),
+    patch: (body: Record<string, unknown>) =>
+      apiRequest<unknown>(path("/settings"), { method: "PATCH", body }).then(
+        unwrapData,
+      ),
   },
 
-  getProfile() {
-    return get("/profile");
+  leave: {
+    list: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/leave", query),
+      ).then(unwrapList),
+    types: () =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/leave/types"),
+      ).then(unwrapList),
+    balances: () =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/leave/balances"),
+      ).then(unwrapList),
+    requests: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/leave/requests", query),
+      ).then(unwrapList),
+    create: (body: Record<string, unknown>) =>
+      apiRequest<unknown>(path("/leave"), { method: "POST", body }).then(
+        unwrapData,
+      ),
+    get: (id: Id) => apiRequest<unknown>(path(`/leave/${id}`)).then(unwrapData),
+    extend: (id: Id, body: Record<string, unknown>) =>
+      apiRequest<unknown>(path(`/leave/${id}/extend`), {
+        method: "POST",
+        body,
+      }).then(unwrapData),
   },
 
-  updateProfile(body: EmployeeMutationBody) {
-    return mutate("/profile", "PATCH", body);
+  tasks: {
+    list: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/tasks", query),
+      ).then(unwrapList),
+    assigned: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/assigned-to-me", query),
+      ).then(unwrapList),
+    get: (id: Id) => apiRequest<unknown>(path(`/tasks/${id}`)).then(unwrapData),
+    update: (id: Id, body: Record<string, unknown>) =>
+      apiRequest<unknown>(path(`/tasks/${id}`), { method: "PATCH", body }).then(
+        unwrapData,
+      ),
+    updateProgress: (id: Id, body: Record<string, unknown>) =>
+      apiRequest<unknown>(path(`/tasks/${id}/progress`), {
+        method: "PATCH",
+        body,
+      }).then(unwrapData),
   },
 
-  getSettings() {
-    return get("/settings");
+  targets: {
+    list: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/targets", query),
+      ).then(unwrapList),
+    get: (id: Id) =>
+      apiRequest<unknown>(path(`/targets/${id}`)).then(unwrapData),
+    updateProgress: (id: Id, body: Record<string, unknown>) =>
+      apiRequest<unknown>(path(`/targets/${id}/progress`), {
+        method: "PATCH",
+        body,
+      }).then(unwrapData),
   },
 
-  updateSettings(body: EmployeeMutationBody) {
-    return mutate("/settings", "PATCH", body);
+  meetings: {
+    list: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/meetings", query),
+      ).then(unwrapList),
+    schedule: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/schedule", query),
+      ).then(unwrapList),
+    get: (id: Id) =>
+      apiRequest<unknown>(path(`/meetings/${id}`)).then(unwrapData),
   },
 
-  listTasks(query?: EmployeeListParams) {
-    return list("/tasks", ["tasks", "items", "records"], query);
+  attendance: {
+    locations: () =>
+      apiRequest<unknown>(path("/attendance/locations")).then(unwrapData),
+    status: () =>
+      apiRequest<unknown>(path("/attendance/status")).then(unwrapData),
+    history: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/attendance/history", query),
+      ).then(unwrapList),
+    checkIn: (body: GpsCheckInBody, idempotencyKey?: string) =>
+      apiRequest<unknown>(path("/attendance/check-in"), {
+        method: "POST",
+        body,
+        headers: idempotencyKey
+          ? { "Idempotency-Key": idempotencyKey }
+          : undefined,
+      }).then(unwrapData),
+    clockIn: (body: Record<string, unknown> = {}) =>
+      apiRequest<unknown>(path("/attendance/clock-in"), {
+        method: "POST",
+        body,
+      }).then(unwrapData),
   },
 
-  getTask(id: Id) {
-    return get(`/tasks/${id}`);
+  expenses: {
+    list: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/expenses", query),
+      ).then(unwrapList),
+    claims: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/expense-claims", query),
+      ).then(unwrapList),
+    create: (body: Record<string, unknown>) =>
+      apiRequest<unknown>(path("/expenses"), { method: "POST", body }).then(
+        unwrapData,
+      ),
+    get: (id: Id) =>
+      apiRequest<unknown>(path(`/expenses/${id}`)).then(unwrapData),
+    update: (id: Id, body: Record<string, unknown>) =>
+      apiRequest<unknown>(path(`/expenses/${id}`), {
+        method: "PATCH",
+        body,
+      }).then(unwrapData),
+    submit: (id: Id, body?: Record<string, unknown>) =>
+      apiRequest<unknown>(path(`/expenses/${id}/submit`), {
+        method: "POST",
+        body,
+      }).then(unwrapData),
+    cancel: (id: Id, body?: Record<string, unknown>) =>
+      apiRequest<unknown>(path(`/expenses/${id}/cancel`), {
+        method: "POST",
+        body,
+      }).then(unwrapData),
   },
 
-  updateTask(id: Id, body: EmployeeMutationBody) {
-    return mutate(`/tasks/${id}`, "PATCH", body);
+  reimbursements: {
+    list: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/reimbursements", query),
+      ).then(unwrapList),
   },
 
-  updateTaskProgress(id: Id, body: EmployeeMutationBody) {
-    return mutate(`/tasks/${id}/progress`, "PATCH", body);
-  },
+  performance: (query?: Record<string, unknown>) =>
+    apiRequest<ApiListResponse<Record<string, unknown>>>(
+      path("/performance", query),
+    ).then(unwrapList),
 
-  listMeetings(query?: EmployeeListParams) {
-    return list("/meetings", ["meetings", "items", "records"], query);
-  },
+  records: () => apiRequest<unknown>(path("/records")).then(unwrapData),
 
-  getMeeting(id: Id) {
-    return get(`/meetings/${id}`);
-  },
-
-  listExpenses(query?: EmployeeListParams) {
-    return list("/expenses", ["expenses", "claims", "items", "records"], query);
-  },
-
-  createExpense(body: EmployeeMutationBody) {
-    return mutate("/expenses", "POST", body);
-  },
-
-  getExpense(id: Id) {
-    return get(`/expenses/${id}`);
-  },
-
-  updateExpense(id: Id, body: EmployeeMutationBody) {
-    return mutate(`/expenses/${id}`, "PATCH", body);
-  },
-
-  submitExpense(id: Id, body: EmployeeMutationBody = {}) {
-    return mutate(`/expenses/${id}/submit`, "POST", body);
-  },
-
-  cancelExpense(id: Id, body: EmployeeMutationBody = {}) {
-    return mutate(`/expenses/${id}/cancel`, "POST", body);
-  },
-
-  listLeave(query?: EmployeeListParams) {
-    return list("/leave", ["requests", "items", "records"], query);
-  },
-
-  listLeaveBalances(query?: EmployeeListParams) {
-    return list("/leave/balances", ["balances", "items", "records"], query);
-  },
-
-  listNotifications(query?: EmployeeListParams) {
-    return list(
-      "/notifications",
-      ["notifications", "items", "records"],
-      query,
-    );
-  },
-
-  markNotificationRead(id: Id) {
-    return mutate(`/notifications/${id}/read`, "PATCH");
-  },
-
-  listRecords() {
-    return get("/records");
-  },
-
-  listPerformance(query?: EmployeeListParams) {
-    return list(
-      "/performance",
-      ["reviews", "items", "records"],
-      query,
-    );
+  notifications: {
+    list: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/notifications", query),
+      ).then(unwrapList),
+    markRead: (id: Id) =>
+      apiRequest<unknown>(path(`/notifications/${id}/read`), {
+        method: "PATCH",
+      }).then(unwrapData),
   },
 };
+
+export type EmployeeApi = typeof employeeApi;

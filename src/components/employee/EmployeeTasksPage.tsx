@@ -105,7 +105,7 @@ export function EmployeeTasksPage({
   const [draftProgress, setDraftProgress] = useState(0);
   const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
-    () => employeeApi.listTasks(),
+    () => employeeApi.tasks.list({ limit: 50 }),
     [],
   );
 
@@ -123,9 +123,7 @@ export function EmployeeTasksPage({
   }, [selectedTask]);
 
   const tasks = useMemo(() => {
-    const records = Array.isArray(data)
-      ? data
-      : listFrom((data ?? undefined) as never);
+    const records = listFrom((data ?? undefined) as never);
     return records
       .map((record, index) => mapTask(record, index))
       .filter((task) => filter === "All" || task.status === filter);
@@ -136,7 +134,7 @@ export function EmployeeTasksPage({
     await runAction(
       "Update task",
       async () => {
-        await employeeApi.updateTaskProgress(selectedTask.id, {
+        await employeeApi.tasks.updateProgress(selectedTask.id, {
           status: values.status,
           progress: Number(values.progress),
         });

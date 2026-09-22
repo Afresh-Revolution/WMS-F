@@ -162,7 +162,11 @@ export const attendanceApi = {
     checkIn: (body: GpsCheckInBody, idempotencyKey?: string) =>
       firstAttendanceRoute([
         () => postCheckIn(`/manager/attendance/check-in`, body, idempotencyKey),
+        () => postCheckIn(`/manager/attendance/clock-in`, body, idempotencyKey),
         () => postCheckIn(`/hod/attendance/check-in`, body, idempotencyKey),
+        () => postCheckIn(`/hod/attendance/clock-in`, body, idempotencyKey),
+        () => postCheckIn(`/employee/attendance/clock-in`, body, idempotencyKey),
+        () => postCheckIn(`/attendance/clock-in`, body, idempotencyKey),
       ]),
   },
 };

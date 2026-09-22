@@ -144,10 +144,6 @@ function firstValue(
   return undefined;
 }
 
-export function withFallback<T>(items: T[], fallback: T[]): T[] {
-  return items.length > 0 ? items : fallback;
-}
-
 function mapPayrollStatus(value: unknown): AccountantPayrollStatus {
   const raw = str(value).toLowerCase();
   if (raw.includes("paid") || raw.includes("complete")) return "Paid";
@@ -223,12 +219,12 @@ export function mapAccountantSalaryLine(
 export function mapAccountantPayrollDetail(
   runPayload: unknown,
   itemsPayload: unknown,
-  fallback: AccountantPayrollDetail | null,
+  fallback: AccountantPayrollDetail | null = null,
 ): AccountantPayrollDetail | null {
   const run = asRecord(unwrapAccountantData(runPayload));
   const hasRun = Object.keys(run).length > 0;
   const items = unwrapAccountantList(itemsPayload).map(mapAccountantSalaryLine);
-  if (!hasRun && items.length === 0) return fallback;
+  if (!hasRun && items.length === 0) return null;
 
   const mappedPeriod = hasRun ? mapAccountantPayrollPeriod(run, 0) : null;
   if (!mappedPeriod && !fallback) return fallback;
@@ -659,23 +655,23 @@ export function mapAccountantNotification(
 }
 
 export function overlayAccountantStats(
-  fallback: AccountantStat[],
+  templates: AccountantStat[],
   payload: unknown,
 ): AccountantStat[] {
   const data = asRecord(unwrapAccountantData(payload));
   const metrics = asRecord(data.metrics ?? data.stats ?? data);
-  if (Object.keys(metrics).length === 0) return fallback;
-
   const list = unwrapAccountantList(payload);
   if (list.length > 0 && str(list[0]?.label) && str(list[0]?.value)) {
     return list.map((record, index) => ({
-      id: str(record.id, fallback[index]?.id ?? `stat-${index + 1}`),
-      label: str(record.label ?? record.name, fallback[index]?.label ?? "Metric"),
-      value: str(record.value ?? record.count ?? record.total, fallback[index]?.value ?? "0"),
-      meta: str(record.meta ?? record.subtitle ?? fallback[index]?.meta ?? ""),
-      tone: fallback[index]?.tone,
+      id: str(record.id, templates[index]?.id ?? `stat-${index + 1}`),
+      label: str(record.label ?? record.name, templates[index]?.label ?? "Metric"),
+      value: str(record.value ?? record.count ?? record.total, "0"),
+      meta: str(record.meta ?? record.subtitle ?? templates[index]?.meta ?? ""),
+      tone: templates[index]?.tone,
     }));
   }
+
+  if (Object.keys(metrics).length === 0) return templates;
 
   const keyMap: Record<string, string[]> = {
     period: ["currentPayrollPeriod", "payrollPeriod", "period", "payPeriod"],
@@ -696,7 +692,7 @@ export function overlayAccountantStats(
     invoices: ["missingInvoices"],
   };
 
-  return fallback.map((stat) => {
+  return templates.map((stat) => {
     const keys = keyMap[stat.id] ?? [];
     const raw = firstValue(metrics, keys);
     if (raw === undefined) return stat;
@@ -761,11 +757,46 @@ export type AccountantMappedProfile = {
   };
 };
 
+const emptyAccountantProfile: AccountantMappedProfile = {
+  initials: "—",
+  name: "",
+  jobTitle: "",
+  department: "",
+  status: "Active",
+  employeeId: "",
+  annualLeaveDays: 0,
+  personal: {
+    companyEmail: "",
+    personalEmail: "",
+    phone: "",
+    location: "",
+  },
+  employment: {
+    role: "",
+    department: "",
+    startDate: "",
+    type: "",
+    reportsTo: "",
+  },
+};
+
 export function mapAccountantProfile(
   profilePayload: unknown,
   employmentPayload: unknown,
-  fallback: AccountantMappedProfile,
+  seed: Partial<AccountantMappedProfile> = {},
 ): AccountantMappedProfile {
+  const fallback: AccountantMappedProfile = {
+    ...emptyAccountantProfile,
+    ...seed,
+    personal: {
+      ...emptyAccountantProfile.personal,
+      ...seed.personal,
+    },
+    employment: {
+      ...emptyAccountantProfile.employment,
+      ...seed.employment,
+    },
+  };
   const profile = asRecord(unwrapAccountantData(profilePayload));
   const employmentRoot = asRecord(unwrapAccountantData(employmentPayload));
   const employee = asRecord(profile.employee ?? profile.linkedEmployee ?? profile);
@@ -778,9 +809,6 @@ export function mapAccountantProfile(
     fallback.name,
   );
   const merged = { ...profile, ...employee, ...employment };
-  if (Object.keys(profile).length === 0 && Object.keys(employmentRoot).length === 0) {
-    return fallback;
-  }
 
   return {
     initials: str(merged.initials, initials(name) || fallback.initials),
@@ -854,7 +882,11 @@ export type AccountantSettingsRecord = {
 
 export function mapAccountantSettings(
   payload: unknown,
-  fallback: AccountantSettingsRecord,
+  fallback: AccountantSettingsRecord = {
+    emailAlerts: true,
+    payrollReminders: true,
+    digest: "weekly",
+  },
 ): AccountantSettingsRecord {
   const data = asRecord(unwrapAccountantData(payload));
   if (Object.keys(data).length === 0) return fallback;
@@ -872,20 +904,35 @@ export type AccountantReportView = {
   expensesByCategory: { label: string; value: number }[];
 };
 
+const emptyReportSummary: AccountantReportView["summary"] = [
+  { id: "payroll", label: "Current Net Payroll", value: "₦ 0", icon: "payroll" },
+  { id: "paid", label: "Total Paid To Date", value: "₦ 0", icon: "paid" },
+  { id: "bills", label: "Outstanding Bills", value: "₦ 0", icon: "bills" },
+  { id: "expenses", label: "Monthly Expenses", value: "₦ 0", icon: "expenses" },
+];
+
+const spendColors = ["#ed5a28", "#c2410c", "#fdba74", "#f97316"];
+
 export function mapAccountantReports(
   reportsPayload: unknown,
   summaryPayload: unknown,
-  fallback: AccountantReportView,
 ): AccountantReportView {
   const reports = asRecord(unwrapAccountantData(reportsPayload));
   const summaryRoot = asRecord(unwrapAccountantData(summaryPayload));
   const merged = { ...reports, ...summaryRoot };
-  if (Object.keys(merged).length === 0) return fallback;
+  if (Object.keys(merged).length === 0) {
+    return {
+      summary: emptyReportSummary,
+      trend: [],
+      spendMix: [],
+      expensesByCategory: [],
+    };
+  }
 
   const summaryList = unwrapAccountantList(merged.summary ?? merged.totals ?? summaryRoot);
   const summary =
     summaryList.length > 0
-      ? fallback.summary.map((item, index) => ({
+      ? emptyReportSummary.map((item, index) => ({
           ...item,
           value: formatAccountantNaira(
             summaryList[index]?.value ??
@@ -896,7 +943,7 @@ export function mapAccountantReports(
           ),
           label: str(summaryList[index]?.label, item.label),
         }))
-      : fallback.summary.map((item) => {
+      : emptyReportSummary.map((item) => {
           const raw = firstValue(merged, [
             item.id,
             `${item.id}Total`,
@@ -914,7 +961,7 @@ export function mapAccountantReports(
   const spendMix = unwrapAccountantList(merged.spendMix ?? merged.mix).map((row, index) => ({
     label: str(row.label ?? row.category),
     value: amountValue(row.value ?? row.amount),
-    color: str(row.color, fallback.spendMix[index]?.color ?? "#ed5a28"),
+    color: str(row.color, spendColors[index % spendColors.length]),
   }));
   const expensesByCategory = unwrapAccountantList(
     merged.expensesByCategory ?? merged.expenseCategories,
@@ -925,9 +972,8 @@ export function mapAccountantReports(
 
   return {
     summary,
-    trend: trend.length > 0 ? trend : fallback.trend,
-    spendMix: spendMix.length > 0 ? spendMix : fallback.spendMix,
-    expensesByCategory:
-      expensesByCategory.length > 0 ? expensesByCategory : fallback.expensesByCategory,
+    trend,
+    spendMix,
+    expensesByCategory,
   };
 }

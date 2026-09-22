@@ -19,7 +19,7 @@ export { secretaryApi } from "./secretary";
 export type { SecretaryListParams } from "./secretary";
 
 export { employeeApi } from "./employee";
-export type { EmployeeListParams } from "./employee";
+export type { EmployeeApi } from "./employee";
 
 export { authApi, dashboardApi, healthApi, searchApi, DEFAULT_LOGIN_OPTIONS } from "./auth";
 export type { AuthUser, LoginPayload, LoginOptions, LoginResponse, BootstrapPayload, BootstrapStatus } from "./auth";

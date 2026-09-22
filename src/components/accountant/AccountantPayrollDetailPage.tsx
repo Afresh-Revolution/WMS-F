@@ -11,15 +11,13 @@ import {
   Search,
   Send,
 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { accountantApi, accountantSettled } from "@/lib/api";
 import { mapAccountantPayrollDetail } from "@/lib/api/accountantMappers";
-import {
-  getAccountantPayrollDetail,
-  type AccountantPayrollStatus,
-} from "@/data/accountantPayroll";
+import { type AccountantPayrollStatus } from "@/data/accountantPayroll";
 import styles from "./AccountantPayrollDetailPage.module.css";
 
 const statusClass: Record<AccountantPayrollStatus, string> = {
@@ -35,7 +33,6 @@ type AccountantPayrollDetailPageProps = {
 export function AccountantPayrollDetailPage({
   periodId,
 }: AccountantPayrollDetailPageProps) {
-  const fallback = getAccountantPayrollDetail(periodId);
   const [status, setStatus] = useState<AccountantPayrollStatus | null>(null);
   const { runAction, showToast } = usePageActions();
   const { data, loading, error } = useAsyncData(async () => {
@@ -48,8 +45,8 @@ export function AccountantPayrollDetailPage({
   }, [periodId]);
 
   const mapped = useMemo(
-    () => mapAccountantPayrollDetail(data?.run, data?.items, fallback),
-    [data, fallback],
+    () => mapAccountantPayrollDetail(data?.run, data?.items),
+    [data],
   );
   const detail = mapped
     ? { ...mapped, status: status ?? mapped.status }
@@ -106,13 +103,7 @@ export function AccountantPayrollDetailPage({
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 
@@ -193,6 +184,13 @@ export function AccountantPayrollDetailPage({
               </tr>
             </thead>
             <tbody>
+              {detail.schedule.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className={styles.empty}>
+                    No salary lines recorded for this period.
+                  </td>
+                </tr>
+              ) : null}
               {detail.schedule.map((row) => (
                 <tr key={row.id}>
                   <td>

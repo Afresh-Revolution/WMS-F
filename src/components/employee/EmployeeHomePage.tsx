@@ -94,7 +94,7 @@ export function EmployeeHomePage() {
   const { data, loading, error } = useAsyncData(
     () =>
       Promise.all([
-        employeeApi.getDashboard(),
+        employeeApi.dashboard({ previewLimit: 5 }),
         listStaffAnnouncements().catch(() => []),
       ]),
     [],

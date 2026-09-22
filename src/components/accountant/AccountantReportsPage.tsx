@@ -12,17 +12,12 @@ import {
   TrendingUp,
   Wallet,
 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { accountantApi, accountantSettled } from "@/lib/api";
 import { mapAccountantReports } from "@/lib/api/accountantMappers";
-import {
-  accountantExpensesByCategory,
-  accountantPayrollTrend,
-  accountantReportSummary,
-  accountantSpendMix,
-} from "@/data/accountantReports";
 import styles from "./AccountantReportsPage.module.css";
 
 function PayrollTrendChart({
@@ -169,13 +164,7 @@ export function AccountantReportsPage() {
   }, []);
 
   const view = useMemo(
-    () =>
-      mapAccountantReports(data?.reports, data?.summary, {
-        summary: accountantReportSummary,
-        trend: accountantPayrollTrend,
-        spendMix: accountantSpendMix,
-        expensesByCategory: accountantExpensesByCategory,
-      }),
+    () => mapAccountantReports(data?.reports, data?.summary),
     [data],
   );
 
@@ -209,13 +198,7 @@ export function AccountantReportsPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 
@@ -258,11 +241,19 @@ export function AccountantReportsPage() {
       <div className={styles.chartsRow}>
         <section className={styles.chartCard}>
           <h2 className={styles.chartTitle}>Net payroll trend</h2>
-          <PayrollTrendChart items={view.trend} />
+          {view.trend.length === 0 ? (
+            <p className={styles.empty}>No payroll trend data yet.</p>
+          ) : (
+            <PayrollTrendChart items={view.trend} />
+          )}
         </section>
         <section className={styles.chartCard}>
           <h2 className={styles.chartTitle}>Spend mix</h2>
-          <SpendMixDonut items={view.spendMix} />
+          {view.spendMix.length === 0 ? (
+            <p className={styles.empty}>No spend mix data yet.</p>
+          ) : (
+            <SpendMixDonut items={view.spendMix} />
+          )}
         </section>
       </div>
 
@@ -273,7 +264,11 @@ export function AccountantReportsPage() {
           </span>
           <h2 className={styles.chartTitle}>Expenses by category</h2>
         </div>
-        <ExpensesCategoryChart items={view.expensesByCategory} />
+        {view.expensesByCategory.length === 0 ? (
+          <p className={styles.empty}>No expense category data yet.</p>
+        ) : (
+          <ExpensesCategoryChart items={view.expensesByCategory} />
+        )}
       </section>
     </div>
   );

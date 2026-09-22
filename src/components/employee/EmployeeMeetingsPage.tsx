@@ -78,14 +78,12 @@ function mapMeeting(
 export function EmployeeMeetingsPage() {
   const { user } = useCurrentUser();
   const { data, loading, error } = useAsyncData(
-    () => employeeApi.listMeetings(),
+    () => employeeApi.meetings.list({ limit: 50 }),
     [],
   );
 
   const meetings = useMemo(() => {
-    const records = Array.isArray(data)
-      ? data
-      : listFrom((data ?? undefined) as never);
+    const records = listFrom((data ?? undefined) as never);
     return records.map((record, index) => mapMeeting(record, index));
   }, [data]);
 

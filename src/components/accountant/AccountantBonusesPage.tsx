@@ -4,6 +4,7 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Bell, Gift, Plus, Search, Trash2 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import {
   RecordBonusModal,
@@ -15,12 +16,8 @@ import { accountantApi, accountantSettled } from "@/lib/api";
 import {
   mapAccountantBonus,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
-  accountantBonusEmployees,
-  accountantBonuses as fallbackBonuses,
-  accountantBonusesPeriod,
   formatNaira,
   type AccountantBonus,
   type AccountantBonusType,
@@ -54,7 +51,7 @@ export function AccountantBonusesPage() {
         return haystack.includes("bonus") || Number(record.bonus ?? record.bonusAmount ?? 0) > 0;
       })
       .map(mapAccountantBonus);
-    const merged = [...localBonuses, ...withFallback(mapped, fallbackBonuses)];
+    const merged = [...localBonuses, ...mapped];
     const seen = new Set<string>();
     return merged.filter((item) => {
       if (seen.has(item.id)) return false;
@@ -69,11 +66,15 @@ export function AccountantBonusesPage() {
   );
 
   async function handleRecordBonus(values: RecordBonusValues) {
-    const employee = accountantBonusEmployees.find(
-      (item) => item.id === values.employeeId,
-    );
+    const employee = {
+      id: values.employeeId,
+      name: values.employeeName,
+      department: values.department,
+      initials: values.initials,
+      avatarColor: values.avatarColor,
+    };
     const amount = Number(values.amount);
-    if (!employee || !Number.isFinite(amount) || amount <= 0) {
+    if (!employee.id || !employee.name || !Number.isFinite(amount) || amount <= 0) {
       throw new Error("Enter a valid employee and amount");
     }
 
@@ -134,13 +135,7 @@ export function AccountantBonusesPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 
@@ -149,8 +144,8 @@ export function AccountantBonusesPage() {
           <p className={styles.eyebrow}>Accountant · Bonuses</p>
           <h1 className={styles.title}>Bonuses</h1>
           <p className={styles.subtitle}>
-            Record bonuses for the {accountantBonusesPeriod} payroll run. Bonuses
-            feed directly into the payroll schedule.
+            Record bonuses for the current payroll run. Bonuses feed directly
+            into the payroll schedule.
           </p>
         </div>
         <button
@@ -169,7 +164,7 @@ export function AccountantBonusesPage() {
             <Gift size={18} />
           </span>
           <p className={styles.totalLabel}>
-            Total bonuses · {accountantBonusesPeriod}
+            Total bonuses
           </p>
         </div>
         <p className={styles.totalValue}>{formatNaira(total)}</p>

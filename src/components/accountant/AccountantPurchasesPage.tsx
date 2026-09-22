@@ -10,6 +10,7 @@ import {
   Undo2,
   Wallet,
 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { AddPurchaseRecommendationModal } from "@/components/accountant/AddPurchaseRecommendationModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -18,11 +19,9 @@ import { accountantApi, accountantSettled } from "@/lib/api";
 import {
   mapAccountantPurchase,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
   accountantPurchaseFilters,
-  accountantPurchases as fallbackPurchases,
   type AccountantPurchase,
   type AccountantPurchaseFilter,
   type AccountantPurchaseStatus,
@@ -52,13 +51,10 @@ export function AccountantPurchasesPage() {
   }, []);
 
   const purchases = useMemo(() => {
-    const mapped = withFallback(
-      [
-        ...unwrapAccountantList(data?.requests),
-        ...unwrapAccountantList(data?.orders),
-      ].map(mapAccountantPurchase),
-      fallbackPurchases,
-    );
+    const mapped = [
+      ...unwrapAccountantList(data?.requests),
+      ...unwrapAccountantList(data?.orders),
+    ].map(mapAccountantPurchase);
     const merged = [...localPurchases, ...mapped];
     const seen = new Set<string>();
     return merged.filter((item) => {
@@ -145,13 +141,7 @@ export function AccountantPurchasesPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 

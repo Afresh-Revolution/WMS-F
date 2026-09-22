@@ -10,6 +10,7 @@ import {
   Search,
   TrendingUp,
 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
@@ -17,12 +18,8 @@ import { accountantApi } from "@/lib/api";
 import {
   mapAccountantSalaryIncrement,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
-import {
-  accountantSalaryIncrements as fallbackIncrements,
-  type AccountantSalaryIncrement,
-} from "@/data/accountantSalaryIncrements";
+import { type AccountantSalaryIncrement } from "@/data/accountantSalaryIncrements";
 import styles from "./AccountantSalaryIncrementsPage.module.css";
 
 export function AccountantSalaryIncrementsPage() {
@@ -33,11 +30,7 @@ export function AccountantSalaryIncrementsPage() {
   );
 
   const increments = useMemo(
-    () =>
-      withFallback(
-        unwrapAccountantList(data).map(mapAccountantSalaryIncrement),
-        fallbackIncrements,
-      ),
+    () => unwrapAccountantList(data).map(mapAccountantSalaryIncrement),
     [data],
   );
 
@@ -89,13 +82,7 @@ export function AccountantSalaryIncrementsPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 

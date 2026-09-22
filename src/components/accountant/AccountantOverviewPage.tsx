@@ -5,14 +5,11 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { Bell, Search } from "lucide-react";
 import {
-  accountantBills as fallbackBills,
-  accountantPayrollSummary as fallbackPayroll,
-  accountantPurchaseReviews as fallbackPurchases,
-  accountantRecentPayments as fallbackPayments,
-  accountantStats as fallbackStats,
+  accountantStats as statTemplates,
   type AccountantStatTone,
 } from "@/data/accountantOverview";
 import { GpsCheckInCard } from "@/components/attendance/GpsCheckInCard";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { accountantApi, accountantSettled } from "@/lib/api";
@@ -25,7 +22,6 @@ import {
   overlayAccountantStats,
   unwrapAccountantData,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import styles from "./AccountantOverviewPage.module.css";
 
@@ -48,38 +44,33 @@ export function AccountantOverviewPage() {
   }, []);
 
   const dashboard = asRecord(unwrapAccountantData(data?.dashboard));
-  const stats = overlayAccountantStats(fallbackStats, data?.stats ?? dashboard);
-  const bills = withFallback(
-    unwrapAccountantList(dashboard.bills ?? dashboard.unpaidBills).map(mapOverviewBill),
-    fallbackBills,
-  );
-  const purchases = withFallback(
-    unwrapAccountantList(
-      dashboard.purchases ?? dashboard.purchaseReviews ?? dashboard.queue,
-    ).map(mapOverviewPurchase),
-    fallbackPurchases,
-  );
+  const stats = overlayAccountantStats(statTemplates, data?.stats ?? dashboard);
+  const bills = unwrapAccountantList(
+    dashboard.bills ?? dashboard.unpaidBills,
+  ).map(mapOverviewBill);
+  const purchases = unwrapAccountantList(
+    dashboard.purchases ?? dashboard.purchaseReviews ?? dashboard.queue,
+  ).map(mapOverviewPurchase);
   const mappedPayroll = mapDashboardPayrollSummary(dashboard.payroll ?? dashboard);
   const payrollSummary = {
-    period: mappedPayroll.period || fallbackPayroll.period,
-    status: mappedPayroll.status || fallbackPayroll.status,
-    staff: mappedPayroll.staff || fallbackPayroll.staff,
-    lines:
-      mappedPayroll.lines.length > 0 ? mappedPayroll.lines : fallbackPayroll.lines,
+    period: mappedPayroll.period,
+    status: mappedPayroll.status,
+    staff: mappedPayroll.staff,
+    lines: mappedPayroll.lines,
   };
-  const payments = withFallback(
-    unwrapAccountantList(dashboard.payments ?? dashboard.recentPayments).map(
-      mapOverviewPayment,
-    ),
-    fallbackPayments,
-  );
+  const payments = unwrapAccountantList(
+    dashboard.payments ?? dashboard.recentPayments,
+  ).map(mapOverviewPayment);
 
   const heroSubtitle = useMemo(() => {
     const overdue = stats.find((item) => item.id === "overdue")?.value ?? "0";
     const increments = stats.find((item) => item.id === "increments")?.value ?? "0";
     const prep = stats.find((item) => item.id === "prep")?.value ?? "0";
+    if (!mappedPayroll.period && overdue === "0" && increments === "0") {
+      return "Review bills, purchases and payroll as they come in from the workspace.";
+    }
     return `Payroll is ${prep} prepared. ${overdue} overdue bills and ${increments} approved increments need action.`;
-  }, [stats]);
+  }, [mappedPayroll.period, stats]);
 
   return (
     <div className={styles.page}>
@@ -104,13 +95,7 @@ export function AccountantOverviewPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 
@@ -118,7 +103,9 @@ export function AccountantOverviewPage() {
         <div className={styles.heroContent}>
           <p className={styles.heroEyebrow}>Accountant — Finance Desk</p>
           <h1 className={styles.heroTitle}>
-            The August 2026 pay cycle is in progress.
+            {payrollSummary.period
+              ? `${payrollSummary.period} is in progress.`
+              : "Your finance desk is ready."}
           </h1>
           <p className={styles.heroSubtitle}>
             {heroSubtitle}
@@ -160,6 +147,9 @@ export function AccountantOverviewPage() {
               </Link>
             </div>
             <ul className={styles.list}>
+              {bills.length === 0 ? (
+                <li className={styles.empty}>No bills to review.</li>
+              ) : null}
               {bills.map((bill) => (
                 <li key={bill.id} className={styles.listRow}>
                   <div className={styles.listMain}>
@@ -191,6 +181,9 @@ export function AccountantOverviewPage() {
               </Link>
             </div>
             <ul className={styles.list}>
+              {purchases.length === 0 ? (
+                <li className={styles.empty}>No purchase reviews waiting.</li>
+              ) : null}
               {purchases.map((item) => (
                 <li key={item.id} className={styles.listRow}>
                   <div className={styles.listMain}>
@@ -222,15 +215,20 @@ export function AccountantOverviewPage() {
             <div className={styles.payrollHeader}>
               <div>
                 <h2 className={styles.cardTitle}>
-                  {payrollSummary.period}
+                  {payrollSummary.period || "Payroll"}
                 </h2>
                 <p className={styles.payrollMeta}>
-                  {payrollSummary.status} ·{" "}
-                  {payrollSummary.staff} staff
+                  {payrollSummary.status || "No period"}
+                  {payrollSummary.staff
+                    ? ` · ${payrollSummary.staff} staff`
+                    : ""}
                 </p>
               </div>
             </div>
             <ul className={styles.payrollLines}>
+              {payrollSummary.lines.length === 0 ? (
+                <li className={styles.empty}>No payroll figures yet.</li>
+              ) : null}
               {payrollSummary.lines.map((line) => (
                 <li
                   key={line.label}
@@ -253,6 +251,9 @@ export function AccountantOverviewPage() {
               <h2 className={styles.cardTitle}>Recent payments</h2>
             </div>
             <ul className={styles.list}>
+              {payments.length === 0 ? (
+                <li className={styles.empty}>No recent payments.</li>
+              ) : null}
               {payments.map((payment) => (
                 <li key={payment.id} className={styles.listRow}>
                   <div className={styles.listMain}>

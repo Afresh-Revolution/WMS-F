@@ -13,6 +13,7 @@ import {
   Search,
   UserRound,
 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import {
   AddVendorModal,
@@ -24,11 +25,9 @@ import { accountantApi } from "@/lib/api";
 import {
   mapAccountantVendor,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
   accountantVendorFilters,
-  accountantVendors as fallbackVendors,
   type AccountantVendor,
   type AccountantVendorCategory,
   type AccountantVendorFilter,
@@ -47,10 +46,7 @@ export function AccountantVendorsPage() {
   );
 
   const vendors = useMemo(() => {
-    const mapped = withFallback(
-      unwrapAccountantList(data).map(mapAccountantVendor),
-      fallbackVendors,
-    );
+    const mapped = unwrapAccountantList(data).map(mapAccountantVendor);
     const merged = [...localVendors, ...mapped];
     const seen = new Set<string>();
     return merged.filter((item) => {
@@ -130,13 +126,7 @@ export function AccountantVendorsPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 

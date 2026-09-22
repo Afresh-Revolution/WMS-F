@@ -23,6 +23,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { AfreshLogo } from "@/components/layout/AfreshLogo";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { accountantApi } from "@/lib/api";
 import { asRecord, unwrapAccountantData } from "@/lib/api/accountantMappers";
@@ -65,7 +66,6 @@ const primaryNav: NavItem[] = [
     href: "/accountant/notifications",
     label: "Notifications",
     icon: Bell,
-    badge: "4",
   },
   { href: "/accountant/profile", label: "Profile", icon: UserRound },
 ];
@@ -91,11 +91,18 @@ export function AccountantSidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const { user: currentUser } = useCurrentUser();
   const { data: scopePayload } = useAsyncData(() => accountantApi.scope(), []);
   const scope = asRecord(unwrapAccountantData(scopePayload));
   const user = asRecord(scope.user ?? scope.profile ?? scope);
-  const displayName = str(user.name ?? user.fullName, "Ravi Kapoor");
-  const displayInitials = str(user.initials, initials(displayName) || "RK");
+  const displayName = str(
+    user.name ?? user.fullName ?? currentUser?.name,
+    currentUser?.name || "Accountant",
+  );
+  const displayInitials = str(
+    user.initials ?? currentUser?.initials,
+    initials(displayName) || "—",
+  );
   const unread = str(
     asRecord(scope.notifications).unread ?? user.unreadNotifications,
   );
@@ -132,14 +139,10 @@ export function AccountantSidebar({
             >
               <Icon size={18} strokeWidth={active ? 2.25 : 1.75} />
               <span className={styles.navLabel}>{label}</span>
-              {badge ? (
-                <span
-                  className={
-                    label === "Notifications" ? styles.badgeAlert : styles.badge
-                  }
-                >
-                  {label === "Notifications" && unread ? unread : badge}
-                </span>
+              {label === "Notifications" && unread ? (
+                <span className={styles.badgeAlert}>{unread}</span>
+              ) : badge ? (
+                <span className={styles.badge}>{badge}</span>
               ) : null}
             </Link>
           );
