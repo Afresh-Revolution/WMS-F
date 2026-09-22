@@ -159,8 +159,10 @@ export async function apiRequest<T>(
 }
 
 const ERROR_CODE_MESSAGES: Record<string, string> = {
+  DEPARTMENT_NOT_FOUND:
+    "That department was not found or is inactive. Pick a department from the list.",
   OUTSIDE_ATTENDANCE_LOCATION:
-    "You are outside the approved attendance location.",
+    "You are outside the approved work location.",
   STALE_LOCATION_READING: "Your GPS reading is too old. Try check-in again.",
   LOW_LOCATION_ACCURACY:
     "GPS accuracy is too low. Move to an open area and try again.",
@@ -183,9 +185,9 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   EMPLOYEE_CHECK_IN_ROLE_REQUIRED: "This account cannot GPS check in.",
   ATTENDANCE_CHECK_IN_FORBIDDEN: "You do not have permission to check in.",
   NO_ACTIVE_EMPLOYEE_PROFILE:
-    "This login is not linked to an employee profile. Ask an admin to add you on the Employees page.",
+    "Your employee profile is still being set up. Wait a few seconds and try again.",
   EMPLOYEE_PROFILE_REQUIRED:
-    "This login is not linked to an employee profile. Ask an admin to add you on the Employees page.",
+    "Your employee profile is still being set up. Wait a few seconds and try again.",
   CHECK_IN_ACCOUNT_INACTIVE: "This account is not eligible to check in.",
   ATTENDANCE_MONITOR_FORBIDDEN: "You cannot monitor attendance records.",
   ATTENDANCE_MANAGE_FORBIDDEN:
@@ -228,6 +230,10 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   INVALID_LEAVE_DURATION:
     "Those dates have no working days. Choose a range that includes a weekday.",
   LEAVE_DATES_OVERLAP: "Those dates overlap an existing leave request.",
+  LEAVE_ALREADY_ACTIVE:
+    "This person already has pending or approved leave. Extend that request instead.",
+  LEAVE_NOT_EXTENDABLE: "Only pending or approved leave can be extended.",
+  LEAVE_EXTENSION_NOT_PENDING: "There is no pending leave extension to review.",
   INSUFFICIENT_LEAVE_BALANCE: "There is not enough leave balance for those dates.",
   NOTICE_REQUIRED: "This leave type needs more notice before the start date.",
   MAXIMUM_LEAVE_EXCEEDED: "That stretch is longer than the leave policy allows.",
@@ -237,6 +243,13 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   REJECTION_REASON_REQUIRED: "A rejection reason is required.",
   ACTIVE_PLACEMENT_EXISTS:
     "This person already has an active NYSC or intern placement.",
+  VENDOR_NAME_REQUIRED: "Enter a vendor name.",
+  FULL_NAME_REQUIRED: "Enter the member's full name.",
+  CATEGORY_NOT_FOUND: "Pick a category from the list.",
+  SUPERVISOR_NOT_FOUND:
+    "That supervisor was not found. Choose someone from the directory.",
+  INVALID_PLACEMENT_DATES: "End date must be after the start date.",
+  EXPENSE_LIMIT_EXCEEDED: "This claim is over the allowed expense limit.",
 };
 
 const GENERIC_ERROR_MESSAGES = new Set([
@@ -260,13 +273,38 @@ function friendlyForbiddenMessage(value: string): string | null {
   return null;
 }
 
+function rewriteKnownApiMessage(value: string, code = ""): string {
+  const trimmed = value.trim();
+  if (
+    /not linked to an employee/i.test(trimmed) ||
+    /no active employee profile/i.test(trimmed)
+  ) {
+    return "Your employee profile is still being set up. Wait a few seconds and try again.";
+  }
+  if (/^not founded?\.?$/i.test(trimmed)) {
+    return (
+      (code && ERROR_CODE_MESSAGES[code]) ||
+      "That record was not found. Pick a department, supervisor, or category from the list."
+    );
+  }
+  const mapped = code ? ERROR_CODE_MESSAGES[code] : undefined;
+  const isAllCaps =
+    trimmed === trimmed.toUpperCase() &&
+    /[A-Z]/.test(trimmed) &&
+    trimmed.length > 20;
+  if (mapped && (isAllCaps || GENERIC_ERROR_MESSAGES.has(trimmed.toLowerCase()))) {
+    return mapped;
+  }
+  return friendlyForbiddenMessage(trimmed) ?? trimmed;
+}
+
 /** Parse API error payloads (superadmin + /api/v1/auth formats). */
 export function extractErrorMessage(payload: unknown, fallback: string): string {
   if (typeof payload === "string" && payload.trim()) {
     if (payload.toLowerCase().includes("internal server error")) {
       return "The API returned an internal server error. Check that the backend is running and configured correctly.";
     }
-    return friendlyForbiddenMessage(payload) ?? payload;
+    return rewriteKnownApiMessage(payload);
   }
 
   if (typeof payload === "object" && payload !== null) {
@@ -301,43 +339,47 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
         if (typeof details === "object" && details !== null) {
           const detailMessage = (details as Record<string, unknown>).message;
           if (isUsefulErrorMessage(detailMessage)) {
-            return detailMessage;
+            return rewriteKnownApiMessage(detailMessage, code);
           }
         }
         return "Access denied. You do not have permission to do that.";
       }
 
+      if (code && ERROR_CODE_MESSAGES[code]) {
+        if (typeof details === "object" && details !== null) {
+          const detailMessage = (details as Record<string, unknown>).message;
+          if (
+            isUsefulErrorMessage(detailMessage) &&
+            detailMessage !== detailMessage.toUpperCase()
+          ) {
+            return rewriteKnownApiMessage(detailMessage, code);
+          }
+        }
+        return ERROR_CODE_MESSAGES[code];
+      }
+
       if (typeof details === "object" && details !== null) {
         const detailMessage = (details as Record<string, unknown>).message;
         if (isUsefulErrorMessage(detailMessage)) {
-          return detailMessage;
+          return rewriteKnownApiMessage(detailMessage, code);
         }
       }
       if (isUsefulErrorMessage(errObj.message)) {
-        return errObj.message;
-      }
-      if (code && ERROR_CODE_MESSAGES[code]) {
-        return ERROR_CODE_MESSAGES[code];
+        return rewriteKnownApiMessage(errObj.message, code);
       }
     }
 
     if (isUsefulErrorMessage(nestedError)) {
-      if (/^forbidden\.?$/i.test(nestedError.trim())) {
-        return "Access denied. You do not have permission to do that.";
-      }
       if (/unable to reach the backend api/i.test(nestedError)) {
         return "The backend could not be reached. Wait a few seconds and try again.";
       }
-      return nestedError;
+      return rewriteKnownApiMessage(nestedError);
     }
 
     const candidates = [record.detail, record.title, record.message];
     for (const candidate of candidates) {
       if (isUsefulErrorMessage(candidate)) {
-        if (/^forbidden\.?$/i.test(candidate.trim())) {
-          return "Access denied. You do not have permission to do that.";
-        }
-        return candidate;
+        return rewriteKnownApiMessage(candidate);
       }
     }
   }
@@ -366,6 +408,10 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
     fallback.toLowerCase() === "internal server error"
   ) {
     return "The sign-in service returned an error. If this continues, redeploy the frontend on Render.";
+  }
+
+  if (/^not founded?\.?$/i.test(fallback.trim())) {
+    return "That record was not found. Pick a department, supervisor, or category from the list.";
   }
 
   const lowerFallback = fallback.trim().toLowerCase();

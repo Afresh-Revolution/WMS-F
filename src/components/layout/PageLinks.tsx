@@ -18,7 +18,9 @@ export function NotificationsLink({ className, children }: LinkButtonProps) {
     ? "/secretary/notifications"
     : pathname.startsWith("/employee")
       ? "/employee/notifications"
-      : "/notifications";
+      : pathname.startsWith("/manager")
+        ? "/manager/notifications"
+        : "/notifications";
   return (
     <Link
       href={href}
@@ -41,7 +43,9 @@ export function ProfileLink({
     ? "/secretary/profile"
     : pathname.startsWith("/employee")
       ? "/employee/profile"
-      : "/profile";
+      : pathname.startsWith("/manager")
+        ? "/manager/profile"
+        : "/profile";
   return (
     <Link href={href} className={className} aria-label="Profile" style={linkStyle}>
       {user?.initials || (ready ? children : null)}

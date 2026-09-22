@@ -14,6 +14,9 @@ import {
 } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { employeeHome } from "@/data/employeeHome";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { asRecord, employeeApi } from "@/lib/api";
+import { listFrom, num, str } from "@/lib/api/mappers";
 import styles from "./EmployeeHomePage.module.css";
 
 function statusClass(status: string) {
@@ -46,7 +49,50 @@ function SectionTitle({
 }
 
 export function EmployeeHomePage() {
-  const data = employeeHome;
+  const { data: dashboard } = useAsyncData(
+    () => employeeApi.dashboard({ previewLimit: 5 }).catch(() => null),
+    [],
+  );
+  const live = asRecord(dashboard);
+  const metrics = asRecord(live.metrics);
+  const profile = asRecord(live.profile);
+  const data = {
+    ...employeeHome,
+    employee: {
+      ...employeeHome.employee,
+      name: str(profile.fullName ?? profile.name, employeeHome.employee.name),
+      firstName: str(
+        profile.firstName ?? String(profile.fullName ?? "").split(" ")[0],
+        employeeHome.employee.firstName,
+      ),
+      role: str(profile.jobTitle ?? profile.role, employeeHome.employee.role),
+      email: str(profile.email ?? profile.companyEmail, employeeHome.employee.email),
+      initials: str(profile.initials, employeeHome.employee.initials),
+    },
+    stats: metrics.assignedTasks == null
+      ? employeeHome.stats
+      : [
+          { value: String(num(metrics.leaveDaysRemaining)), label: "leave days remaining", hint: "Current balance" },
+          { value: String(num(metrics.assignedTasks)), label: "assigned tasks", hint: "Currently open" },
+          { value: String(num(metrics.overdueTasks)), label: "overdue tasks", hint: "Needs attention" },
+          { value: String(num(metrics.upcomingMeetings)), label: "upcoming meetings", hint: "Next 7 days" },
+          { value: String(num(metrics.pendingExpenseClaims)), label: "expenses in progress", hint: "Awaiting attention" },
+          { value: String(num(metrics.reimbursementsWaiting)), label: "open reimbursements", hint: "Being processed" },
+        ],
+    tasks: listFrom(live.myWork).length
+      ? listFrom(live.myWork).map((row) => ({
+          title: str(row.title, "Task"),
+          meta: str(row.dueDate ?? row.assignedByName, ""),
+          status: str(row.status, "Pending"),
+        }))
+      : employeeHome.tasks,
+    meetings: listFrom(live.upcomingMeetings).length
+      ? listFrom(live.upcomingMeetings).map((row) => ({
+          title: str(row.title, "Meeting"),
+          meta: str(row.startAt ?? row.location, ""),
+        }))
+      : employeeHome.meetings,
+  };
 
   return (
     <div className={styles.page}>

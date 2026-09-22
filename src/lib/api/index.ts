@@ -18,6 +18,9 @@ export type { ManagerApi, ManagerListParams } from "./manager";
 export { secretaryApi } from "./secretary";
 export type { SecretaryListParams } from "./secretary";
 
+export { employeeApi } from "./employee";
+export type { EmployeeApi } from "./employee";
+
 export { authApi, dashboardApi, healthApi, searchApi, DEFAULT_LOGIN_OPTIONS } from "./auth";
 export type { AuthUser, LoginPayload, LoginOptions, LoginResponse, BootstrapPayload, BootstrapStatus } from "./auth";
 
@@ -30,7 +33,7 @@ export { securityApi } from "./security";
 export { emailConfigApi, notificationConfigApi, notificationsApi } from "./notifications";
 export { usersApi, rolesApi, permissionsApi } from "./users";
 export { departmentsApi, hrApi } from "./departments";
-export { lookupsApi, loadHodOptions } from "./lookups";
+export { lookupsApi, loadHodOptions, loadManagerLookups, readLookupLists } from "./lookups";
 export { reportsApi, auditLogsApi } from "./reports";
 export { superAdminApi, saRequest } from "./superAdmin";
 
@@ -76,11 +79,17 @@ export {
 } from "./resources";
 export {
   listCompanyAnnouncements,
+  listManagerAnnouncements,
   publishCompanyAnnouncement,
+  publishManagerAnnouncement,
   getAdminAnnouncementDashboard,
+  getManagerAnnouncementDashboard,
   publishAdminAnnouncement,
+  publishManagerDraft,
   pinAdminAnnouncement,
+  pinManagerAnnouncement,
   unpinAdminAnnouncement,
+  unpinManagerAnnouncement,
   listStaffAnnouncements,
   getStaffUnreadCount,
   getStaffAnnouncement,
@@ -93,6 +102,11 @@ export {
   listLeaveBalances,
   listOrganisationLeave,
   applyForLeave,
+  approveLeaveExtension,
+  extendLeaveRequest,
+  isActiveLeaveBlock,
+  leaveRequestIdFromError,
+  rejectLeaveExtension,
   getEmployeeLeave,
   approveLeaveRequest,
   rejectLeaveRequest,

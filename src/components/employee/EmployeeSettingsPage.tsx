@@ -1,13 +1,16 @@
 "use client";
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
-import { FormEvent, useRef, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { employeeProfile } from "@/data/employeeHome";
-import { profileApi } from "@/lib/api";
+import { employeeApi, profileApi } from "@/lib/api";
+import { unwrapRecord, str } from "@/lib/api/mappers";
 import styles from "./EmployeeSettingsPage.module.css";
 
 function isPasswordChangeRequired(error: unknown) {
@@ -16,20 +19,69 @@ function isPasswordChangeRequired(error: unknown) {
   );
 }
 
+function readProfileField(payload: unknown, keys: string[]) {
+  const root = unwrapRecord(payload);
+  const profile = unwrapRecord(root.profile ?? root.employee ?? root);
+  const personal = unwrapRecord(profile.personal ?? profile.contact);
+  const merged = { ...root, ...profile, ...personal };
+  for (const key of keys) {
+    const value = str(merged[key]).trim();
+    if (value) return value;
+  }
+  return "";
+}
+
 export function EmployeeSettingsPage() {
+  const pathname = usePathname();
+  const { user } = useCurrentUser();
   const { runAction } = usePageActions();
   const passwordFormRef = useRef<HTMLFormElement>(null);
   const [passwordRequired, setPasswordRequired] = useState(false);
-  const [personalEmail, setPersonalEmail] = useState<string>(
-    employeeProfile.personalEmail,
-  );
-  const [phone, setPhone] = useState<string>(employeeProfile.phone);
-  const [emergencyContact, setEmergencyContact] = useState<string>(
-    employeeProfile.emergencyContact,
-  );
-  const [address, setAddress] = useState<string>(employeeProfile.address);
+  const [personalEmail, setPersonalEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [emergencyContact, setEmergencyContact] = useState("");
+  const [address, setAddress] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const { data: profile } = useAsyncData(async () => {
+    try {
+      return await employeeApi.settings.get();
+    } catch {
+      try {
+        return await employeeApi.profile.get();
+      } catch {
+        try {
+          return await profileApi.get();
+        } catch {
+          return null;
+        }
+      }
+    }
+  }, []);
+  const companyEmail =
+    readProfileField(profile, ["companyEmail", "workEmail", "email"]) ||
+    user?.email ||
+    "";
+
+  useEffect(() => {
+    if (!profile) return;
+    setPersonalEmail(
+      readProfileField(profile, [
+        "personalEmail",
+        "personal_email",
+        "alternateEmail",
+      ]),
+    );
+    setPhone(readProfileField(profile, ["phone", "mobile", "phoneNumber"]));
+    setEmergencyContact(
+      readProfileField(profile, [
+        "emergencyContact",
+        "emergency_contact",
+        "nextOfKin",
+      ]),
+    );
+    setAddress(readProfileField(profile, ["address", "homeAddress"]));
+  }, [profile]);
 
   function requirePasswordChange() {
     setPasswordRequired(true);
@@ -45,12 +97,17 @@ export function EmployeeSettingsPage() {
       await runAction(
         "Save account",
         async () => {
-          await profileApi.patch({
+          const body = {
             personalEmail: personalEmail.trim(),
             phone: phone.trim(),
             emergencyContact: emergencyContact.trim(),
             address: address.trim(),
-          });
+          };
+          try {
+            await employeeApi.settings.patch(body);
+          } catch {
+            await employeeApi.profile.patch(body);
+          }
         },
         "Contact details saved",
       );
@@ -89,7 +146,8 @@ export function EmployeeSettingsPage() {
       <h2>Password</h2>
       {passwordRequired ? (
         <p className={styles.notice}>
-          Change your temporary password before saving other account details.
+          Your first login password is your first name. Change it before
+          saving other account details.
         </p>
       ) : null}
       <label className={styles.field}>
@@ -126,7 +184,7 @@ export function EmployeeSettingsPage() {
     >
       <label className={styles.field}>
         <span>Company email</span>
-        <input value={employeeProfile.companyEmail} readOnly disabled />
+        <input value={companyEmail} readOnly disabled />
       </label>
       <label className={styles.field}>
         <span>Personal email</span>
@@ -183,7 +241,7 @@ export function EmployeeSettingsPage() {
           </label>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.profileButton}>
-            {employeeProfile.initials}
+            {user?.initials || "—"}
           </ProfileLink>
         </div>
       </header>
@@ -194,7 +252,14 @@ export function EmployeeSettingsPage() {
         <span>
           Update the personal fields you can change from self-service. Role,
           department, and company email stay with HR.{" "}
-          <Link href="/employee/profile" className={styles.inlineLink}>
+          <Link
+            href={
+              pathname.startsWith("/manager")
+                ? "/manager/profile"
+                : "/employee/profile"
+            }
+            className={styles.inlineLink}
+          >
             View profile
           </Link>
         </span>

@@ -1,0 +1,586 @@
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px 36px 64px;
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.dateLabel {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a8a29e;
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 220px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #a8a29e;
+}
+
+.searchIcon {
+  flex-shrink: 0;
+  color: #a8a29e;
+}
+
+.searchInput {
+  width: 100%;
+  background: transparent;
+  color: #44403c;
+}
+
+.searchInput::placeholder {
+  color: #a8a29e;
+}
+
+.iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #78716c;
+}
+
+.avatarChip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff8a65, var(--afresh-orange));
+  border: 2px solid #fff;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 0 0 1px #ebe6e1;
+}
+
+.heroButton,
+.cardLink,
+.queueItem {
+  display: flex;
+  align-items: center;
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 24px;
+  padding: 28px 36px 24px;
+  border-radius: 24px;
+  background: var(--afresh-orange);
+  color: #fff;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 620px;
+  height: 620px;
+  transform: translate(36%, -50%);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.13);
+  pointer-events: none;
+}
+
+.heroContent {
+  position: relative;
+  z-index: 1;
+  max-width: 540px;
+}
+
+.heroEyebrow {
+  margin: 0 0 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.heroTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 400;
+  -webkit-text-stroke: var(--banner-title-stroke) currentColor;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.heroSubtitle {
+  margin: 10px 0 0;
+  max-width: 52ch;
+  font-size: 13px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.heroButton {
+  gap: 6px;
+  width: fit-content;
+  margin-top: 18px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: #ffe7c2;
+  color: #1c1917;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.heroButton:hover {
+  background: #fff0d6;
+}
+
+.heroAwaiting {
+  position: absolute;
+  right: 32px;
+  bottom: 22px;
+  z-index: 1;
+  margin: 0;
+  text-align: right;
+}
+
+.heroAwaiting span,
+.heroAwaiting strong {
+  display: block;
+}
+
+.heroAwaiting span {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.heroAwaiting strong {
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stats,
+.awaiting,
+.chartsRow,
+.threeCol {
+  display: grid;
+  gap: 12px;
+}
+
+.stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 28px;
+}
+
+.statCard,
+.awaitingCard,
+.card {
+  border-radius: 20px;
+  background: #fff;
+  border: 1px solid #f0ece8;
+}
+
+.statCard,
+.awaitingCard {
+  padding: 18px 20px 16px;
+}
+
+.statLabel,
+.sectionEyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a8a29e;
+}
+
+.statBody,
+.billRow,
+.monthList li,
+.riskList li,
+.exitRow,
+.activityList li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.statBody {
+  margin-top: 10px;
+}
+
+.statCard strong,
+.awaitingCard strong {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--afresh-orange);
+}
+
+.statMeta,
+.statMetaUrgent {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.statMeta {
+  color: #a8a29e;
+}
+
+.statMetaUrgent {
+  color: var(--afresh-orange);
+}
+
+.sectionEyebrow {
+  margin-bottom: 10px;
+}
+
+.awaiting {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 20px;
+}
+
+.awaitingCard p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #78716c;
+}
+
+.queueRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.9fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.card {
+  padding: 20px 22px;
+}
+
+.card h2,
+.cardTitleInline,
+.monthTitle,
+.riskBlock h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--afresh-ink);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.cardHead p,
+.empty,
+.queueMeta,
+.plainList span,
+.riskList span,
+.activityList span {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #78716c;
+}
+
+.empty {
+  padding: 12px 0;
+}
+
+.countBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: var(--afresh-orange);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.queueList,
+.billList,
+.monthList,
+.plainList,
+.riskList,
+.activityList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.queueItem {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #f5f5f4;
+  color: inherit;
+  text-decoration: none;
+}
+
+.queueItem:hover {
+  opacity: 0.85;
+}
+
+.queueList li:last-child .queueItem,
+.billList li:last-child,
+.plainList li:last-child,
+.activityList li:last-child {
+  border-bottom: none;
+}
+
+.queueItem svg {
+  color: #d6d3d1;
+  flex-shrink: 0;
+}
+
+.queueTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--afresh-ink);
+}
+
+.queueTitle span,
+.queueTitle em {
+  margin-right: 8px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.queueTitle span {
+  color: #a8a29e;
+}
+
+.queueTitle em {
+  color: var(--afresh-orange);
+}
+
+.sideStack {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.billRow,
+.plainList li,
+.activityList li {
+  padding: 12px 0;
+  border-bottom: 1px solid #f5f5f4;
+}
+
+.billRow p,
+.plainList p,
+.riskList p,
+.activityList p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--afresh-ink);
+}
+
+.billRow strong,
+.monthList strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #44403c;
+}
+
+.billRow span,
+.exitRow em,
+.riskList em {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.cardLink {
+  gap: 4px;
+  width: fit-content;
+  margin-top: 12px;
+  color: var(--afresh-orange);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.monthTitle,
+.cardTitleInline,
+.riskBlock h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.monthTitle,
+.cardTitleInline {
+  margin-bottom: 14px;
+}
+
+.monthTitle {
+  color: var(--afresh-orange);
+}
+
+.monthList li {
+  padding: 8px 0;
+}
+
+.monthList span {
+  color: #78716c;
+  font-size: 13px;
+}
+
+.chartsRow {
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 12px;
+}
+
+.chartList {
+  display: grid;
+  gap: 14px;
+}
+
+.chartRow {
+  display: grid;
+  grid-template-columns: minmax(88px, 140px) 1fr 36px;
+  align-items: center;
+  gap: 12px;
+}
+
+.chartLabel {
+  font-size: 12px;
+  color: #57534e;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chartTrack {
+  height: 8px;
+  border-radius: 999px;
+  background: #f5f5f4;
+  overflow: hidden;
+}
+
+.chartFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--afresh-orange);
+}
+
+.chartValue {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  color: #57534e;
+}
+
+.riskBlock {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid #f5f5f4;
+}
+
+.riskList li {
+  padding: 10px 0 0;
+}
+
+.threeCol {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 12px;
+}
+
+.activityList em {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-style: normal;
+  color: #a8a29e;
+}
+
+@media (max-width: 960px) {
+  .queueRow,
+  .chartsRow,
+  .threeCol {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 800px) {
+  .page {
+    padding: 16px 20px 48px;
+  }
+
+  .topBar {
+    flex-wrap: wrap;
+  }
+
+  .hero {
+    padding: 24px 22px 72px;
+  }
+
+  .hero::after {
+    width: 320px;
+    height: 320px;
+    transform: translate(30%, -50%);
+  }
+
+  .heroTitle {
+    font-size: 26px;
+  }
+
+  .heroAwaiting {
+    right: 22px;
+    bottom: 18px;
+  }
+
+  .stats,
+  .awaiting {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -7,7 +7,14 @@ export type Workspace = {
 };
 
 /** Role landing routes that exist in this app. */
-const APP_HOME_PATHS = new Set(["/dashboard", "/employee", "/secretary"]);
+const APP_HOME_PATHS = new Set([
+  "/dashboard",
+  "/employee",
+  "/secretary",
+  "/manager",
+  "/accountant",
+  "/nysc",
+]);
 
 const DEFAULT_HOME_PATH = "/dashboard";
 
@@ -17,8 +24,8 @@ const ROLE_HOME_PATHS: Record<string, string> = {
   superadmin: "/dashboard",
   admin: "/dashboard",
   hr: "/dashboard",
-  hod: "/dashboard",
-  manager: "/dashboard",
+  hod: "/manager",
+  manager: "/manager",
   accountant: "/dashboard",
   secretary: "/secretary",
   employee: "/employee",

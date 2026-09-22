@@ -161,6 +161,7 @@
   font-family: var(--font-display);
   font-size: 44px;
   font-weight: 400;
+  -webkit-text-stroke: var(--banner-title-stroke) currentColor;
   line-height: 1.05;
   letter-spacing: -0.02em;
   color: var(--afresh-orange);
@@ -179,6 +180,10 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   margin-bottom: 22px;
+}
+
+.statsManager {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .statCard {
@@ -237,6 +242,36 @@
   align-items: center;
   gap: 10px;
   margin-bottom: 16px;
+}
+
+.ghostButton,
+.textButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.ghostButton {
+  margin-left: auto;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #ebe6e1;
+  background: #fff;
+  color: #44403c;
+  font-size: 13px;
+}
+
+.inlineActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.textButton {
+  color: var(--afresh-orange);
+  font-size: 13px;
 }
 
 .panelIcon {
@@ -480,13 +515,20 @@
 }
 
 .exceptionChip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: 36px;
   padding: 0 16px;
+  border: 0;
   border-radius: 999px;
   background: transparent;
   color: #a8a29e;
   font-size: 13px;
   font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
 .exceptionChipActive {
@@ -496,7 +538,6 @@
 
 .exceptionName {
   margin: 0;
-  max-width: 6.5rem;
   font-size: 14px;
   font-weight: 700;
   line-height: 1.3;
@@ -504,7 +545,6 @@
 }
 
 .exceptionDept {
-  max-width: 8rem;
   line-height: 1.35;
 }
 
@@ -525,6 +565,26 @@
   font-size: 13px;
 }
 
+.clockWithIcon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #44403c;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.clockWithIcon svg {
+  flex-shrink: 0;
+  color: #a8a29e;
+}
+
+.emptyInline {
+  padding: 36px 12px 44px;
+  text-align: center;
+}
+
 .statusWrap {
   height: auto;
   max-width: 7.25rem;
@@ -536,10 +596,13 @@
 
 .correctionListWrap {
   position: relative;
+  min-height: min(280px, calc(100vh - 360px));
 }
 
 .correctionListWrap .prototypeChip {
-  top: 118px;
+  top: auto;
+  bottom: 8px;
+  right: 0;
   z-index: 1;
 }
 
@@ -650,10 +713,46 @@
 
 .headerActions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
   padding-top: 8px;
+}
+
+.headerSearch,
+.headerFilter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #78716c;
+}
+
+.headerSearch input,
+.headerFilter select {
+  min-width: 0;
+  background: transparent;
+  color: #44403c;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.headerSearch input {
+  width: 92px;
+}
+
+.headerSearch input::placeholder {
+  color: #a8a29e;
+}
+
+.headerFilter select {
+  max-width: 140px;
 }
 
 .printButton {
@@ -867,6 +966,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .statsManager {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .reportFilters,
   .settingsGrid,
   .settingsFields {
@@ -918,8 +1021,14 @@
   }
 
   .printButton,
-  .exportButton {
+  .exportButton,
+  .headerSearch,
+  .headerFilter {
     flex: 1;
     justify-content: center;
+  }
+
+  .headerSearch input {
+    width: 100%;
   }
 }

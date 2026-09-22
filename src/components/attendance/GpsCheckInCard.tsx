@@ -197,7 +197,7 @@ export function GpsCheckInCard({
           <p className={styles.copy}>
             {clockedIn
               ? "You have already checked in for this schedule today."
-              : `Assigned location: ${checkInWindow?.locationName ?? "loading…"}. The server decides if you are inside the site.`}
+              : `Your browser only sends GPS. The server measures distance to ${checkInWindow?.locationName || "the assigned office pin"}. Remote/Onsite on your profile is not a geofence.`}
           </p>
         </div>
       </div>

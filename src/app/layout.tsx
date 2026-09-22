@@ -15,8 +15,8 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "AfrESH WMS",
-  description: "AfrESH Work Management System",
+  title: "Afresh",
+  description: "Afresh workforce",
 };
 
 export default function RootLayout({

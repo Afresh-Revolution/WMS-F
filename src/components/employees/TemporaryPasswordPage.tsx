@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   clearCreatedCredentials,
   getCreatedCredentials,
   subscribeCreatedCredentials,
 } from "@/lib/createdCredentials";
+import { portalHref } from "@/lib/portalPaths";
 
 const pageStyle: CSSProperties = {
   position: "fixed",
@@ -86,6 +87,8 @@ const buttonStyle: CSSProperties = {
 
 export function TemporaryPasswordPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const employeesHref = portalHref(pathname, "/employees");
   const [ready, setReady] = useState(false);
   const [credentials, setCredentials] = useState<ReturnType<typeof getCreatedCredentials>>(null);
   const [copied, setCopied] = useState(false);
@@ -102,8 +105,8 @@ export function TemporaryPasswordPage() {
 
   useEffect(() => {
     if (!ready) return;
-    if (!credentials) router.replace("/employees");
-  }, [ready, credentials, router]);
+    if (!credentials) router.replace(employeesHref);
+  }, [ready, credentials, router, employeesHref]);
 
   useEffect(() => {
     if (!credentials) return;
@@ -124,7 +127,7 @@ export function TemporaryPasswordPage() {
 
   function cancel() {
     clearCreatedCredentials();
-    router.replace("/employees");
+    router.replace(employeesHref);
   }
 
   if (!ready || !credentials) return null;

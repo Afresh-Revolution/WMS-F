@@ -5,6 +5,10 @@ import { useMemo, useState, type FormEvent } from "react";
 import { Paperclip, Plus, Search, Upload, X } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { employeeProfile } from "@/data/employeeHome";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { employeeApi } from "@/lib/api";
+import { listFrom, num, str } from "@/lib/api/mappers";
 import styles from "./EmployeeExpensesPage.module.css";
 
 type ExpenseStatus = "Submitted" | "Approved" | "Reimbursed" | "Rejected";
@@ -90,12 +94,30 @@ export function EmployeeExpensesPage({
   const [createOpen, setCreateOpen] = useState(false);
   const [expenseItems, setExpenseItems] = useState(initialExpenses);
   const [form, setForm] = useState(emptyForm);
+  const { runAction } = usePageActions();
+  const { data: liveExpenses, refetch } = useAsyncData(
+    () => employeeApi.expenses.list({ limit: 50 }).catch(() => []),
+    [],
+  );
+  const catalog = useMemo(() => {
+    const rows = listFrom(liveExpenses ?? undefined);
+    if (!rows.length) return expenseItems;
+    return rows.map((row, index) => ({
+      id: str(row.id ?? row.reference, `EX-${index}`),
+      title: str(row.description ?? row.title ?? row.category, "Expense"),
+      status: str(row.status, "Submitted") as ExpenseStatus,
+      category: str(row.category ?? row.categoryName, "General"),
+      date: str(row.date ?? row.createdAt, "—"),
+      receipt: Boolean(row.receipt || row.hasReceipt),
+      amount: `₦ ${num(row.amount).toLocaleString("en-NG")}`,
+    }));
+  }, [liveExpenses, expenseItems]);
   const visibleExpenses = useMemo(
     () =>
-      expenseItems.filter(
+      catalog.filter(
         (expense) => filter === "All" || expense.status === filter,
       ),
-    [expenseItems, filter],
+    [catalog, filter],
   );
 
   function closeCreate() {
@@ -103,9 +125,22 @@ export function EmployeeExpensesPage({
     setForm(emptyForm);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const amount = Number(form.amount);
+    await runAction(
+      "Submit expense",
+      async () => {
+        await employeeApi.expenses.create({
+          description: form.description.trim(),
+          category: form.category,
+          amount,
+          date: new Date().toISOString().slice(0, 10),
+        });
+        await refetch();
+      },
+      "Expense claim submitted",
+    );
     setExpenseItems((current) => [
       {
         id: `EX-${3100 + current.length}`,

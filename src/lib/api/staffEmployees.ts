@@ -1,5 +1,6 @@
 import { ApiError, apiRequest, buildQuery } from "./client";
 import { unwrapList } from "./types";
+import { readCachedWorkspace } from "@/lib/workspace";
 
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -59,12 +60,28 @@ const LIST_PATHS = [
   "/super-admin/employees",
 ];
 
-const CREATE_PATHS = ["/employees", "/super-admin/employees"];
+const MANAGER_LIST_PATHS = [
+  `/manager/employees${LIST_QUERY}`,
+  "/manager/employees",
+];
+
+function isManagerWorkspace() {
+  const role = readCachedWorkspace()?.roleKey ?? "";
+  return /hod|manager/i.test(role);
+}
+
+function staffListPaths() {
+  return isManagerWorkspace()
+    ? [...MANAGER_LIST_PATHS, ...LIST_PATHS]
+    : [...LIST_PATHS, ...MANAGER_LIST_PATHS];
+}
+
+const CREATE_PATHS = ["/employees", "/hr/employees", "/super-admin/employees"];
 
 export async function listStaffEmployees(): Promise<Record<string, unknown>[]> {
   let lastError: unknown;
 
-  for (const path of LIST_PATHS) {
+  for (const path of staffListPaths()) {
     try {
       return rowsFrom(await apiRequest(path));
     } catch (error) {
@@ -139,6 +156,10 @@ export function buildEmployeeWriteBody(values: Record<string, string>) {
   const phone = str(values.phone).trim();
   const location = str(values.location).trim();
   const employmentType = str(values.employmentType).trim() || "Full-time";
+  const locationType =
+    str(values.locationType).trim().toLowerCase() || "onsite";
+  const typedLocation =
+    locationType === "remote" ? location || "Remote" : location;
   const staffType =
     role === "nysc" || role === "intern" ? role : "employee";
 
@@ -152,6 +173,8 @@ export function buildEmployeeWriteBody(values: Record<string, string>) {
     staffType,
     employmentType,
     status: "active",
+    locationType,
+    location_type: locationType,
   };
   if (email) body.email = email;
   if (departmentId) {
@@ -160,7 +183,11 @@ export function buildEmployeeWriteBody(values: Record<string, string>) {
   }
   if (department) body.department = department;
   if (phone) body.phone = phone;
-  if (location) body.location = location;
+  if (typedLocation) {
+    body.location = typedLocation;
+    body.workLocation = typedLocation;
+    body.work_location = typedLocation;
+  }
   return body;
 }
 

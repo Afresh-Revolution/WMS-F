@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Mail, MapPin, Plus, Search, X } from "lucide-react";
 import {
   type DepartmentFilter,
@@ -16,11 +16,17 @@ import {
   createStaffEmployee,
   departmentsApi,
   listStaffEmployees,
+  managerApi,
+  loadManagerLookups,
   lookupsApi,
   superAdminApi,
 } from "@/lib/api";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
 import { listFrom, mapEmployee, readTemporaryPassword, str, type MappedEmployee } from "@/lib/api/mappers";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { canAddUsers } from "@/lib/auth/portals";
+import { portalHref } from "@/lib/portalPaths";
 import styles from "./EmployeesPage.module.css";
 
 type ViewMode = "grid" | "list";
@@ -36,9 +42,23 @@ const employmentTypeOptions = [
   { label: "Contract", value: "Contract" },
 ];
 
+function sameDepartment(employeeDepartment: string, filter: string) {
+  const left = employeeDepartment.trim().toLowerCase();
+  const right = filter.trim().toLowerCase();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.includes(right) || right.includes(left)) return true;
+  if (right === "hr" && /(^|\b)(hr|human resources)(\b|$)/.test(left)) return true;
+  return false;
+}
+
 export function EmployeesPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { user } = useCurrentUser();
+  const manager = useManagerPortal();
+  const allowAddUsers = canAddUsers(user?.role ?? "");
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<DepartmentFilter>("All");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -69,6 +89,11 @@ export function EmployeesPage() {
     [],
   );
   const { data: departmentData } = useAsyncData(async () => {
+    if (manager) {
+      const lookups = await loadManagerLookups().catch(() => null);
+      if (lookups?.departments.length) return lookups.departments;
+      return managerApi.listDepartments().catch(() => null);
+    }
     const settled = await Promise.allSettled([
       superAdminApi.departments.list(),
       lookupsApi.departments(),
@@ -78,7 +103,7 @@ export function EmployeesPage() {
       if (result.status === "fulfilled") return result.value;
     }
     return null;
-  }, []);
+  }, [manager]);
 
   const employees = useMemo(
     () => (data ?? []).map((record) => mapEmployee(record)),
@@ -141,17 +166,25 @@ export function EmployeesPage() {
   );
 
   const departmentFilters = useMemo((): DepartmentFilter[] => {
-    const names = [
-      ...departmentOptions.map((department) => department.name),
-      ...employees.map((employee) => employee.department),
-    ].filter(Boolean);
-    return ["All", ...Array.from(new Set(names))] as DepartmentFilter[];
+    const names: string[] = [];
+    const seen = new Set<string>();
+    const add = (name: string) => {
+      const trimmed = name.trim();
+      const key = trimmed.toLowerCase();
+      if (!trimmed || trimmed === "All" || seen.has(key)) return;
+      seen.add(key);
+      names.push(trimmed);
+    };
+    for (const department of departmentOptions) add(department.name);
+    for (const employee of employees) add(employee.department);
+    return ["All", ...names] as DepartmentFilter[];
   }, [departmentOptions, employees]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
       const matchesFilter =
-        activeFilter === "All" || employee.department === activeFilter;
+        activeFilter === "All" ||
+        sameDepartment(employee.department, activeFilter);
       const haystack =
         `${employee.name} ${employee.title} ${employee.location} ${employee.department} ${employee.email}`.toLowerCase();
       return (
@@ -215,7 +248,7 @@ export function EmployeesPage() {
           email: values.email.trim(),
           password: temporaryPassword,
         });
-        router.push("/employees/created");
+        router.push(portalHref(pathname, "/employees/created"));
       } else {
         showToast("Employee record created.", "success");
       }
@@ -250,14 +283,16 @@ export function EmployeesPage() {
               Find colleagues, view profiles, and keep the organisation connected.
             </p>
           </div>
-          <button
-            type="button"
-            className={styles.addButton}
-            onClick={() => setAddOpen(true)}
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            Add person
-          </button>
+          {allowAddUsers ? (
+            <button
+              type="button"
+              className={styles.addButton}
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              Add person
+            </button>
+          ) : null}
         </div>
 
         <div className={styles.toolbar}>
@@ -271,12 +306,13 @@ export function EmployeesPage() {
               className={styles.staffSearchInput}
             />
           </label>
-          <div className={styles.viewToggle}>
+          <div className={styles.viewToggle} role="group" aria-label="Directory view">
             <button
               type="button"
               className={`${styles.viewButton} ${
                 viewMode === "grid" ? styles.viewButtonActive : ""
               }`}
+              aria-pressed={viewMode === "grid"}
               onClick={() => setViewMode("grid")}
             >
               Grid
@@ -286,6 +322,7 @@ export function EmployeesPage() {
               className={`${styles.viewButton} ${
                 viewMode === "list" ? styles.viewButtonActive : ""
               }`}
+              aria-pressed={viewMode === "list"}
               onClick={() => setViewMode("list")}
             >
               List

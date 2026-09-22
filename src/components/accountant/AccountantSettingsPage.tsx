@@ -88,7 +88,8 @@ export function AccountantSettingsPage() {
       <h1 className={styles.title}>Settings</h1>
       <p className={styles.subtitle}>
         Personal accountant workspace preferences only. Organization and role
-        settings are managed elsewhere.
+        settings are managed elsewhere. First login uses your first name —{" "}
+        <Link href="/change-password">change that password here</Link>.
       </p>
 
       <form className={styles.form} onSubmit={(event) => void handleSave(event)}>

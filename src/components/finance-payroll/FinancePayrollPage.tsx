@@ -3,16 +3,15 @@
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
+  Bell,
   ClipboardList,
+  DollarSign,
   Download,
-  Play,
-  RefreshCw,
   Search,
-  SlidersHorizontal,
-  Upload,
 } from "lucide-react";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
-import { NotificationsLink } from "@/components/layout/PageLinks";
+import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   payrollSectionTabs,
@@ -22,8 +21,9 @@ import {
 } from "@/data/financePayroll";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi, unwrapRecord } from "@/lib/api";
+import { managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapPayRun, str } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./FinancePayrollPage.module.css";
 
 const statusClass: Record<PayRunStatus, string> = {
@@ -37,53 +37,65 @@ const runPayrollFields = [
 ];
 
 export function FinancePayrollPage() {
+  const manager = useManagerPortal();
   const [activeSection, setActiveSection] = useState<PayrollSectionTab>("Pay runs");
   const [runOpen, setRunOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const { runAction, exportRows, showToast } = usePageActions();
+  const { runAction, exportRows } = usePageActions();
+  const { user } = useCurrentUser();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.payroll.list(),
-    [],
+    () => (manager ? managerApi.listPayrollRuns() : superAdminApi.payroll.list()),
+    [manager],
   );
 
   const payRuns = useMemo(() => {
     return listFrom(data ?? undefined).map((record) => mapPayRun(record));
   }, [data]);
 
-  const filteredPayRuns = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return payRuns;
-    return payRuns.filter((run) =>
-      `${run.ref} ${run.period} ${run.status}`.toLowerCase().includes(term),
-    );
-  }, [payRuns, query]);
-
   const payrollStats = useMemo(() => {
     const summary = unwrapRecord(data);
     const totalStaff = payRuns.reduce((sum, run) => sum + run.staff, 0);
+    const period =
+      str(summary.period ?? payRuns[0]?.period) ||
+      new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    const thisWeek = payRuns.filter((run) => {
+      const parsed = new Date(run.runDate);
+      if (!Number.isFinite(parsed.getTime())) return false;
+      return Date.now() - parsed.getTime() < 7 * 86_400_000;
+    }).length;
     return [
       {
         id: "attainment",
         value: str(summary.attainment, "—"),
-        label: "Cycle attainment",
+        meta: period,
       },
       {
         id: "cycle-total",
-        value: str(summary.cycleTotal ?? summary.total, String(payRuns.length || "0")),
-        label: "Pay runs",
+        value: str(
+          summary.cycleTotal ?? summary.total,
+          String(payRuns.length),
+        ),
+        meta: "This cycle",
       },
       {
         id: "active-staff",
-        value: str(summary.activeStaff ?? summary.staff, String(totalStaff || "0")),
-        label: "Staff in latest runs",
+        value: str(
+          summary.activeStaff ?? summary.staff,
+          String(totalStaff),
+        ),
+        meta: "Active",
+      },
+      {
+        id: "this-week",
+        value: str(summary.thisWeek ?? summary.dueThisWeek, String(thisWeek)),
+        meta: "This week",
       },
     ];
   }, [data, payRuns]);
 
   function handleExport() {
     exportRows(
-      filteredPayRuns.map((run) => ({
+      payRuns.map((run) => ({
         ref: run.ref,
         period: run.period,
         runDate: run.runDate,
@@ -97,20 +109,25 @@ export function FinancePayrollPage() {
 
   async function handleRunPayroll(values: Record<string, string>) {
     await runAction("Run payroll", async () => {
-      await superAdminApi.payroll.collectionAction("run", values);
+      if (manager) {
+        await managerApi.runPayroll({
+          period: values.period,
+          notes: values.notes,
+        });
+      } else {
+        await superAdminApi.payroll.collectionAction("run", values);
+      }
       refetch();
     });
   }
 
   async function downloadRun(run: PayRun) {
     await runAction(`Download ${run.ref}`, async () => {
-      await superAdminApi.payroll.getAction(run.id, "download");
-    });
-  }
-
-  function handleRefresh() {
-    void runAction("Refresh", async () => {
-      refetch();
+      if (manager) {
+        await managerApi.getPayrollRun(run.id);
+      } else {
+        await superAdminApi.payroll.getAction(run.id, "download");
+      }
     });
   }
 
@@ -136,51 +153,51 @@ export function FinancePayrollPage() {
               to vendors — all from one place.
             </p>
           </div>
-          <div className={styles.headerActions}>
-            <button type="button" className={styles.exportButton} onClick={handleExport}>
-              <Upload size={15} />
-              Export
-            </button>
-            <button
-              type="button"
-              className={styles.runButton}
-              onClick={() => setRunOpen(true)}
-            >
-              <Play size={14} fill="currentColor" />
-              Run payroll
-            </button>
+          <div className={styles.headerAside}>
+            <div className={styles.headerActions}>
+              <button type="button" className={styles.exportButton} onClick={handleExport}>
+                <Download size={15} />
+                Export
+              </button>
+              <button
+                type="button"
+                className={styles.runButton}
+                onClick={() => setRunOpen(true)}
+              >
+                <DollarSign size={14} />
+                Run payroll
+              </button>
+            </div>
+            <div className={styles.topActions}>
+              <label className={styles.search}>
+                <Search size={14} />
+                <input
+                  type="search"
+                  placeholder="Search"
+                  className={styles.searchInput}
+                  aria-label="Search"
+                  readOnly
+                />
+                <kbd>⌘ K</kbd>
+              </label>
+              <NotificationsLink className={styles.iconButton}>
+                <Bell size={16} />
+              </NotificationsLink>
+              <ProfileLink className={styles.avatarChip}>
+                {user?.initials || "SU"}
+              </ProfileLink>
+            </div>
           </div>
         </div>
 
-        <div className={styles.statsBar}>
-          <PageDateLabel className={styles.statsDate} />
-          <div className={styles.statsGroup}>
-            {payrollStats.map((stat) => (
-              <div key={stat.id} className={styles.statItem}>
-                <p className={styles.statValue}>{stat.value}</p>
-                <p className={styles.statLabel}>{stat.label}</p>
-              </div>
-            ))}
-          </div>
-          <div className={styles.topActions}>
-            <NotificationsLink className={styles.iconButton} />
-            <button
-              type="button"
-              aria-label="Refresh"
-              className={styles.iconButton}
-              onClick={handleRefresh}
-            >
-              <RefreshCw size={16} />
-            </button>
-            <button
-              type="button"
-              aria-label="Filters"
-              className={styles.iconButton}
-              onClick={() => showToast("Use the section tabs to filter pay runs", "info")}
-            >
-              <SlidersHorizontal size={16} />
-            </button>
-          </div>
+        <PageDateLabel className={styles.statsDate} />
+        <div className={styles.stats}>
+          {payrollStats.map((stat) => (
+            <article key={stat.id} className={styles.statCard}>
+              <p className={styles.statValue}>{stat.value}</p>
+              <span className={styles.statMeta}>{stat.meta}</span>
+            </article>
+          ))}
         </div>
 
         <div className={styles.sectionTabs}>
@@ -214,18 +231,6 @@ export function FinancePayrollPage() {
               </button>
             </div>
 
-            <label className={styles.searchField}>
-              <Search size={15} aria-hidden />
-              <input
-                type="search"
-                data-payroll-search
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search pay runs..."
-                className={styles.searchInput}
-              />
-            </label>
-
             <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
@@ -240,7 +245,7 @@ export function FinancePayrollPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPayRuns.map((run) => (
+                  {payRuns.map((run) => (
                     <tr key={run.id}>
                       <td className={styles.refCell}>{run.ref}</td>
                       <td>{run.period}</td>

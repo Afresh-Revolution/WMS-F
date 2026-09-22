@@ -23,13 +23,11 @@ import { usePageActions } from "@/hooks/usePageActions";
 import { secretaryApi } from "@/lib/api";
 import { listFrom, nestedStr, num, str } from "@/lib/api/mappers";
 import {
-  DEFAULT_MEETING_ORGANISER,
-  PROTOTYPE_TODAY,
-  managedMeetings as fallbackMeetings,
   meetingFilterFromPath,
   meetingFilterHrefs,
   meetingFilters,
-  meetingStats as fallbackStats,
+  meetingStatCards,
+  todayKey,
   type ManagedMeeting,
   type MeetingAudience,
   type MeetingFilter,
@@ -44,7 +42,7 @@ function parseDay(value: string): Date {
 
 function whenFromDate(date: string): string {
   const event = parseDay(date);
-  const today = parseDay(PROTOTYPE_TODAY);
+  const today = parseDay(todayKey());
   const diff = Math.round(
     (event.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
   );
@@ -82,7 +80,7 @@ function mapAudience(value: unknown): MeetingAudience {
 
 function mapMeeting(record: Record<string, unknown>, index: number): ManagedMeeting {
   const start = record.start ?? record.startAt ?? record.date ?? record.day;
-  const date = str(start, PROTOTYPE_TODAY).slice(0, 10);
+  const date = str(start, todayKey()).slice(0, 10);
   const location = str(record.location ?? record.place, "Virtual");
   const attendeeRecords = Array.isArray(record.attendees)
     ? record.attendees
@@ -128,9 +126,9 @@ function mapMeeting(record: Record<string, unknown>, index: number): ManagedMeet
 function matchesFilter(meeting: ManagedMeeting, filter: MeetingFilter): boolean {
   if (filter === "All") return true;
   if (filter === "Today") {
-    return meeting.date === PROTOTYPE_TODAY || meeting.when === "Today";
+    return meeting.date === todayKey() || meeting.when === "Today";
   }
-  if (filter === "Upcoming") return meeting.date > PROTOTYPE_TODAY;
+  if (filter === "Upcoming") return meeting.date > todayKey();
   if (filter === "For Admin") return meeting.audience === "For Admin";
   return meeting.audience === "For HOD";
 }
@@ -138,7 +136,7 @@ function matchesFilter(meeting: ManagedMeeting, filter: MeetingFilter): boolean 
 const emptyCreateForm = {
   title: "",
   for: "Admin",
-  organiser: DEFAULT_MEETING_ORGANISER,
+  organiser: "",
   date: "",
   time: "",
   mins: "60",
@@ -184,10 +182,7 @@ export function SecretaryMeetingsPage() {
     const records = Array.isArray(data)
       ? data
       : listFrom((data ?? undefined) as never);
-    const mapped =
-      data === null
-        ? fallbackMeetings
-        : records.map((record, index) => mapMeeting(record, index));
+    const mapped = records.map((record, index) => mapMeeting(record, index));
     return [...mapped, ...created];
   }, [created, data]);
 
@@ -201,7 +196,7 @@ export function SecretaryMeetingsPage() {
       "For HODs": meetings.filter((item) => matchesFilter(item, "For HODs"))
         .length,
     };
-    return fallbackStats.map((stat) => ({
+    return meetingStatCards.map((stat) => ({
       ...stat,
       value: String(counts[stat.filter]),
     }));
@@ -224,7 +219,7 @@ export function SecretaryMeetingsPage() {
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const date = form.date || PROTOTYPE_TODAY;
+    const date = form.date || todayKey();
     const mins = form.mins.trim() || "60";
     const location = form.location.trim() || (form.virtualLink ? "Virtual" : "TBD");
     const next: ManagedMeeting = {
@@ -271,7 +266,7 @@ export function SecretaryMeetingsPage() {
         {loading ? <p className={styles.dateLabel}>Loading meetings…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
-            Using cached meetings — {error}
+            {error}
           </p>
         ) : null}
         <div className={styles.topActions}>

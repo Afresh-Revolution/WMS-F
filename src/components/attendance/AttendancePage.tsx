@@ -18,13 +18,16 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
-  TriangleAlert,
 } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { usePageActions } from "@/hooks/usePageActions";
 import { useAttendanceMonitor } from "@/hooks/useAttendanceMonitor";
-import { attendanceApi } from "@/lib/api";
+import { AttendanceOfficePanel } from "@/components/attendance/AttendanceOfficePanel";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { attendanceApi, departmentsApi, lookupsApi } from "@/lib/api";
+import { listFrom, str } from "@/lib/api/mappers";
 import {
   addMinutesToTime,
   graceFromSchedule,
@@ -33,7 +36,6 @@ import {
 } from "@/lib/api/attendanceMappers";
 import {
   attendanceCorrectionFilters,
-  attendanceCorrections,
   attendanceExceptionFilters,
   attendanceFilters,
   attendanceReportTypes,
@@ -42,7 +44,6 @@ import {
   type AttendanceCorrectionFilter,
   type AttendanceCorrectionStatus,
   type AttendanceExceptionFilter,
-  type AttendanceExceptionStatus,
   type AttendanceFilter,
   type AttendanceReportType,
   type AttendanceSection,
@@ -52,8 +53,8 @@ import {
 } from "@/data/attendance";
 import styles from "./AttendancePage.module.css";
 
-const tabs: {
-  id: AttendanceSection;
+const adminTabs: {
+  id: AttendanceSection | "my";
   href: string;
   label: string;
   icon: typeof Building2;
@@ -65,6 +66,70 @@ const tabs: {
   { id: "settings", href: "/attendance/settings", label: "Settings", icon: Settings },
   { id: "audit-logs", href: "/attendance/audit-logs", label: "Audit Logs", icon: ScrollText },
 ];
+
+const managerTabs: typeof adminTabs = [
+  { id: "my", href: "/manager/attendance", label: "My Attendance", icon: Clock },
+  { id: "company", href: "/manager/attendance/company", label: "Company Attendance", icon: Building2 },
+  { id: "exceptions", href: "/manager/attendance/exceptions", label: "Exceptions", icon: AlertTriangle },
+  { id: "corrections", href: "/manager/attendance/corrections", label: "Corrections", icon: ClipboardList },
+  { id: "reports", href: "/manager/attendance/reports", label: "Reports", icon: BarChart3 },
+];
+
+function managerCorrectionPath(filter: AttendanceCorrectionFilter) {
+  const base = "/manager/attendance/corrections";
+  if (filter === "Under HR Review") return `${base}/hr-review`;
+  if (filter === "Awaiting Admin Approval") return `${base}/awaiting`;
+  if (filter === "Implemented") return `${base}/implemented`;
+  if (filter === "Rejected") return `${base}/rejected`;
+  return base;
+}
+
+export function AttendanceSectionNav({
+  variant,
+  active,
+}: {
+  variant: "admin" | "manager";
+  active: string;
+}) {
+  const tabs = variant === "manager" ? managerTabs : adminTabs;
+  return (
+    <nav className={styles.tabs} aria-label="Attendance sections">
+      {tabs.map((tab) => {
+        const Icon = tab.icon;
+        const isActive = tab.id === active;
+        const className = `${styles.tab} ${isActive ? styles.tabActive : ""}`;
+        const content = (
+          <>
+            <Icon size={15} strokeWidth={isActive ? 2.25 : 1.75} />
+            {tab.label}
+          </>
+        );
+        if (variant === "manager") {
+          return (
+            <a
+              key={tab.id}
+              href={tab.href}
+              className={className}
+              aria-current={isActive ? "page" : undefined}
+            >
+              {content}
+            </a>
+          );
+        }
+        return (
+          <Link
+            key={tab.id}
+            href={tab.href}
+            className={className}
+            aria-current={isActive ? "page" : undefined}
+          >
+            {content}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
 
 const sectionCopy: Record<
   AttendanceSection,
@@ -93,7 +158,7 @@ const sectionCopy: Record<
   settings: {
     title: "Attendance settings",
     subtitle:
-      "Configure the company attendance policy. These are prototype defaults — every value is configurable and each change is audited.",
+      "Pin office GPS locations, attach them to a weekday schedule, then staff check-in sends coordinates for the server to measure.",
   },
   "audit-logs": {
     title: "Attendance audit logs",
@@ -101,6 +166,15 @@ const sectionCopy: Record<
       "Every administrative change to attendance — corrections, approvals and settings changes — with the previous and new values preserved.",
   },
 };
+
+const managerCompanyStatIds = [
+  "expected",
+  "onLeave",
+  "present",
+  "late",
+  "absent",
+  "notClocked",
+] as const;
 
 const toneClass: Record<AttendanceStatTone, string> = {
   default: "",
@@ -151,15 +225,18 @@ function ClockValue({ value }: { value: string }) {
   );
 }
 
-const reportStatusByType: Record<
-  Exclude<AttendanceReportType, "Daily attendance">,
-  AttendanceExceptionStatus
-> = {
-  "Late arrivals": "Late",
-  Absences: "Absent",
-  "Missing clock-outs": "Missing Clock-Out",
-  "Early departures": "Early Departure",
-};
+function ExceptionClock({ value }: { value: string }) {
+  if (!value || value === "—") {
+    return <span className={styles.muted}>—</span>;
+  }
+
+  return (
+    <span className={styles.clockWithIcon}>
+      <Clock size={13} strokeWidth={2} />
+      {value}
+    </span>
+  );
+}
 
 function formatGeneratedDate(date: Date) {
   const months = [
@@ -179,36 +256,21 @@ function formatGeneratedDate(date: Date) {
   return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
-function parseClockMinutes(value: string) {
-  const match = value.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
-  if (!match) return null;
-  let hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  const period = match[3].toUpperCase();
-  if (period === "PM" && hours !== 12) hours += 12;
-  if (period === "AM" && hours === 12) hours = 0;
-  return hours * 60 + minutes;
-}
-
-function formatDuration(clockIn: string, clockOut: string) {
-  const start = parseClockMinutes(clockIn);
-  const end = parseClockMinutes(clockOut);
-  if (start == null || end == null || end < start) return "—";
-  const mins = end - start;
-  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-}
-
 export function AttendancePage({
   section = "company",
+  variant = "admin",
+  initialCorrectionFilter = "All",
 }: {
   section?: AttendanceSection;
+  variant?: "admin" | "manager";
+  initialCorrectionFilter?: AttendanceCorrectionFilter;
 }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<AttendanceFilter>("All statuses");
   const [exceptionFilter, setExceptionFilter] =
     useState<AttendanceExceptionFilter>("All");
   const [correctionFilter, setCorrectionFilter] =
-    useState<AttendanceCorrectionFilter>("All");
+    useState<AttendanceCorrectionFilter>(initialCorrectionFilter);
   const [reportType, setReportType] =
     useState<AttendanceReportType>("Daily attendance");
   const [reportDepartment, setReportDepartment] = useState("All");
@@ -227,11 +289,51 @@ export function AttendancePage({
   const [earlyDepartureMinutes, setEarlyDepartureMinutes] = useState(
     defaultAttendancePolicy.earlyDepartureMinutes,
   );
-  const { exportRows, runAction } = usePageActions();
-  const monitor = useAttendanceMonitor();
+  const [scheduleName, setScheduleName] = useState("Weekday office check-in");
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>([]);
+  const [scheduleDepartmentId, setScheduleDepartmentId] = useState("");
+  const { exportRows, runAction, showToast } = usePageActions();
+  const { user } = useCurrentUser();
+  const monitor = useAttendanceMonitor(variant);
+  const { data: departmentData } = useAsyncData(async () => {
+    const settled = await Promise.allSettled([
+      lookupsApi.departments(),
+      departmentsApi.list(),
+    ]);
+    for (const result of settled) {
+      if (result.status === "fulfilled") return result.value;
+    }
+    return null;
+  }, []);
+  const departmentOptions = useMemo(
+    () =>
+      listFrom(departmentData ?? undefined)
+        .map((record) => ({
+          id: str(record.id ?? record._id),
+          name: str(record.name ?? record.title ?? record.label),
+        }))
+        .filter((item) => item.id && item.name),
+    [departmentData],
+  );
   const today = useMemo(() => new Date(), []);
   const copy = sectionCopy[section];
   const subtitle = copy.subtitle.replace("{date}", formatLongDate(today));
+  const companyStats = useMemo(() => {
+    if (variant !== "manager") return monitor.stats;
+    return managerCompanyStatIds.map((id) => {
+      const stat = monitor.stats.find((item) => item.id === id);
+      return {
+        id,
+        label: stat?.label ?? id,
+        value: stat?.value ?? 0,
+        tone: stat?.tone ?? "default",
+      };
+    });
+  }, [monitor.stats, variant]);
+
+  useEffect(() => {
+    setCorrectionFilter(initialCorrectionFilter);
+  }, [initialCorrectionFilter]);
 
   useEffect(() => {
     if (!monitor.schedule) return;
@@ -239,6 +341,9 @@ export function AttendancePage({
     setClockOut(monitor.schedule.closingTime);
     setWorkingDays(workingDaysFromNumbers(monitor.schedule.daysOfWeek));
     setGraceMinutes(graceFromSchedule(monitor.schedule));
+    setScheduleName(monitor.schedule.name || "Weekday office check-in");
+    setSelectedLocationIds(monitor.schedule.locationIds);
+    setScheduleDepartmentId(monitor.schedule.departmentId);
   }, [monitor.schedule]);
 
   const rows = useMemo(() => {
@@ -252,14 +357,22 @@ export function AttendancePage({
   }, [monitor.roster, query, statusFilter]);
 
   const exceptionRows = useMemo(() => {
-    if (exceptionFilter === "All") return monitor.exceptions;
-    return monitor.exceptions.filter((row) => row.status === exceptionFilter);
-  }, [exceptionFilter, monitor.exceptions]);
+    const needle = query.trim().toLowerCase();
+    return monitor.exceptions.filter((row) => {
+      const matchesStatus =
+        exceptionFilter === "All" || row.status === exceptionFilter;
+      if (!matchesStatus) return false;
+      if (!needle) return true;
+      const haystack =
+        `${row.name} ${row.department} ${row.detail} ${row.status}`.toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [exceptionFilter, monitor.exceptions, query]);
 
   const correctionRows = useMemo(() => {
-    if (correctionFilter === "All") return attendanceCorrections;
-    return attendanceCorrections.filter((row) => row.status === correctionFilter);
-  }, [correctionFilter]);
+    if (correctionFilter === "All") return monitor.corrections;
+    return monitor.corrections.filter((row) => row.status === correctionFilter);
+  }, [correctionFilter, monitor.corrections]);
 
   const reportDepartments = useMemo(() => {
     const names = monitor.roster.map((person) => person.department).filter(Boolean);
@@ -276,94 +389,46 @@ export function AttendancePage({
       (reportDepartment === "All" || department === reportDepartment) &&
       (reportRole === "All" || role === reportRole);
 
-    if (monitor.live) {
-      return monitor.reportRows.filter((row) => {
-        if (!matchesScope(row.department, row.role)) return false;
-        if (reportType === "Daily attendance") return row.status !== "Not Clocked In";
-        if (reportType === "Late arrivals") return row.status === "Late";
-        if (reportType === "Absences") return row.status === "Absent";
-        if (reportType === "Missing clock-outs") return row.status === "Missing Clock-Out";
-        if (reportType === "Early departures") return row.status === "Early Departure";
-        return true;
-      });
-    }
-
-    const roleByName = new Map(
-      monitor.roster.map((person) => [person.name, person.role]),
-    );
-    const generatedDate = formatGeneratedDate(today);
-
-    if (reportType === "Daily attendance") {
-      return monitor.roster
-        .filter(
-          (person) =>
-            person.status !== "Not Clocked In" &&
-            matchesScope(person.department, person.role),
-        )
-        .map((person) => ({
-          id: person.id,
-          date: generatedDate,
-          employee: person.name,
-          department: person.department,
-          role: person.role,
-          clockIn: person.clockIn,
-          clockOut: person.clockOut,
-          duration: person.duration,
-          detail: "—",
-          status: person.status,
-        }));
-    }
-
-    const status = reportStatusByType[reportType];
-    return monitor.exceptions
-      .filter((row) => row.status === status)
-      .map((row) => {
-        const role = roleByName.get(row.name) ?? "";
-        return {
-          id: row.id,
-          date: row.dateLabel,
-          employee: row.name,
-          department: row.department,
-          role,
-          clockIn: row.clockIn,
-          clockOut: row.clockOut,
-          duration: formatDuration(row.clockIn, row.clockOut),
-          detail: row.detail,
-          status: row.status,
-        };
-      })
-      .filter((row) => matchesScope(row.department, row.role));
+    return monitor.reportRows.filter((row) => {
+      if (!matchesScope(row.department, row.role)) return false;
+      if (reportType === "Daily attendance") return row.status !== "Not Clocked In";
+      if (reportType === "Late arrivals") return row.status === "Late";
+      if (reportType === "Absences") return row.status === "Absent";
+      if (reportType === "Missing clock-outs") return row.status === "Missing Clock-Out";
+      if (reportType === "Early departures") return row.status === "Early Departure";
+      return true;
+    });
   }, [
-    monitor.exceptions,
-    monitor.live,
     monitor.reportRows,
-    monitor.roster,
     reportDepartment,
     reportRole,
     reportType,
-    today,
   ]);
 
   async function savePolicy() {
     await runAction(
       "Save attendance policy",
       async () => {
+        if (selectedLocationIds.length === 0) {
+          throw new Error(
+            "Attach at least one office location so check-in can measure GPS against a pin.",
+          );
+        }
         const body = {
+          name: scheduleName.trim() || "Weekday office check-in",
           openingTime: clockIn,
           closingTime: clockOut,
           lateAfterTime: addMinutesToTime(clockIn, graceMinutes),
           daysOfWeek: numbersFromWorkingDays(workingDays),
+          locationIds: selectedLocationIds,
           timezone: "Africa/Lagos",
           active: true,
+          ...(scheduleDepartmentId ? { departmentId: scheduleDepartmentId } : {}),
         };
         if (monitor.schedule?.id) {
           await attendanceApi.schedules.patch(monitor.schedule.id, body);
         } else {
-          await attendanceApi.schedules.create({
-            name: "Company schedule",
-            locationIds: monitor.locations.map((location) => location.id),
-            ...body,
-          });
+          await attendanceApi.schedules.create(body);
         }
         monitor.refetch();
       },
@@ -385,27 +450,13 @@ export function AttendancePage({
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </NotificationsLink>
-          <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
+          <ProfileLink className={styles.avatarChip}>
+            {user?.initials || "—"}
+          </ProfileLink>
         </div>
       </div>
 
-      <nav className={styles.tabs} aria-label="Attendance sections">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const active = tab.id === section;
-          return (
-            <Link
-              key={tab.id}
-              href={tab.href}
-              className={`${styles.tab} ${active ? styles.tabActive : ""}`}
-              aria-current={active ? "page" : undefined}
-            >
-              <Icon size={15} strokeWidth={active ? 2.25 : 1.75} />
-              {tab.label}
-            </Link>
-          );
-        })}
-      </nav>
+      <AttendanceSectionNav variant={variant} active={section} />
 
       <header className={styles.header}>
         <div className={styles.headerCopy}>
@@ -417,7 +468,59 @@ export function AttendancePage({
           <h1 className={styles.title}>{copy.title}</h1>
           <p className={styles.subtitle}>{subtitle}</p>
         </div>
-        {section === "reports" ? (
+        {section === "exceptions" ? (
+          <div className={styles.headerActions}>
+            <label className={styles.headerSearch}>
+              <Search size={15} />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search"
+                aria-label="Search exceptions"
+              />
+            </label>
+            <label className={styles.headerFilter}>
+              <SlidersHorizontal size={15} />
+              <select
+                value={exceptionFilter}
+                onChange={(event) =>
+                  setExceptionFilter(
+                    event.target.value as AttendanceExceptionFilter,
+                  )
+                }
+                aria-label="Filter exceptions"
+              >
+                {attendanceExceptionFilters.map((filter) => (
+                  <option key={filter} value={filter}>
+                    {filter === "All" ? "Filter" : filter}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className={styles.exportButton}
+              onClick={() =>
+                exportRows(
+                  exceptionRows.map((row) => ({
+                    Employee: row.name,
+                    Department: row.department,
+                    Date: row.dateLabel,
+                    "Clock in": row.clockIn,
+                    "Clock out": row.clockOut,
+                    Issue: row.detail,
+                    Status: row.status,
+                  })),
+                  "attendance-exceptions",
+                )
+              }
+            >
+              <Download size={16} strokeWidth={2.25} />
+              Export
+            </button>
+          </div>
+        ) : section === "reports" ? (
           <div className={styles.headerActions}>
             <button
               type="button"
@@ -466,8 +569,12 @@ export function AttendancePage({
 
       {section === "company" ? (
         <>
-          <div className={styles.stats}>
-            {monitor.stats.map((stat) => (
+          <div
+            className={`${styles.stats} ${
+              variant === "manager" ? styles.statsManager : ""
+            }`}
+          >
+            {companyStats.map((stat) => (
               <article key={stat.id} className={styles.statCard}>
                 <p className={styles.statLabel}>{stat.label}</p>
                 <p className={`${styles.statValue} ${toneClass[stat.tone]}`}>
@@ -478,10 +585,6 @@ export function AttendancePage({
           </div>
 
           <section className={styles.panel}>
-            <span className={styles.prototypeChip}>
-              <TriangleAlert size={13} />
-              Prototype: Super Admin
-            </span>
             <div className={styles.panelHead}>
               <span className={styles.panelIcon} aria-hidden>
                 <Clock size={14} />
@@ -489,7 +592,15 @@ export function AttendancePage({
               <h2 className={styles.panelTitle}>Department breakdown · Today</h2>
             </div>
             <div className={styles.tableWrap}>
-              <table className={styles.table}>
+              {monitor.departments.length === 0 ? (
+                <div className={styles.emptyInline}>
+                  <p className={styles.emptyTitle}>No departments yet</p>
+                  <p className={styles.emptyCopy}>
+                    Team attendance will appear here once employees are loaded.
+                  </p>
+                </div>
+              ) : (
+                <table className={styles.table}>
                 <thead>
                   <tr>
                     <th>Department</th>
@@ -521,6 +632,7 @@ export function AttendancePage({
                   ))}
                 </tbody>
               </table>
+              )}
             </div>
           </section>
 
@@ -553,6 +665,14 @@ export function AttendancePage({
 
           <section className={styles.panel}>
             <div className={styles.tableWrap}>
+              {rows.length === 0 ? (
+                <div className={styles.emptyInline}>
+                  <p className={styles.emptyTitle}>No attendance records</p>
+                  <p className={styles.emptyCopy}>
+                    Nothing matches this search or filter.
+                  </p>
+                </div>
+              ) : (
               <table className={styles.table}>
                 <thead>
                   <tr>
@@ -593,84 +713,92 @@ export function AttendancePage({
                   ))}
                 </tbody>
               </table>
+              )}
             </div>
           </section>
         </>
       ) : section === "exceptions" ? (
         <>
-          <div className={styles.exceptionFilters} role="tablist" aria-label="Filter exceptions">
-            {attendanceExceptionFilters.map((filter) => {
-              const active = exceptionFilter === filter;
-              return (
-                <button
-                  key={filter}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  className={`${styles.exceptionChip} ${
-                    active ? styles.exceptionChipActive : ""
-                  }`}
-                  onClick={() => setExceptionFilter(filter)}
-                >
-                  {filter}
-                </button>
-              );
-            })}
-          </div>
+          {variant === "manager" ? null : (
+            <div className={styles.exceptionFilters} role="tablist" aria-label="Filter exceptions">
+              {attendanceExceptionFilters.map((filter) => {
+                const active = exceptionFilter === filter;
+                return (
+                  <button
+                    key={filter}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    className={`${styles.exceptionChip} ${
+                      active ? styles.exceptionChipActive : ""
+                    }`}
+                    onClick={() => setExceptionFilter(filter)}
+                  >
+                    {filter}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           <section className={styles.panel}>
-            <span className={styles.prototypeChip}>
-              <TriangleAlert size={13} />
-              Prototype: Super Admin
-            </span>
             <div className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th>Department</th>
-                    <th>Date</th>
-                    <th>In</th>
-                    <th>Out</th>
-                    <th>Detail</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {exceptionRows.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        <p className={styles.exceptionName}>{row.name}</p>
-                      </td>
-                      <td className={styles.exceptionDept}>{row.department}</td>
-                      <td>
-                        <div className={styles.stackCell}>
-                          <span>{row.dateLabel}</span>
-                          <span className={styles.stackMuted}>{row.weekday}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <ClockValue value={row.clockIn} />
-                      </td>
-                      <td>
-                        <ClockValue value={row.clockOut} />
-                      </td>
-                      <td className={styles.detailCell}>{row.detail}</td>
-                      <td>
-                        <span
-                          className={`${statusClass[row.status]} ${
-                            row.status === "Missing Clock-Out"
-                              ? styles.statusWrap
-                              : ""
-                          }`}
-                        >
-                          {row.status}
-                        </span>
-                      </td>
+              {exceptionRows.length === 0 ? (
+                <div className={styles.emptyInline}>
+                  <p className={styles.emptyTitle}>No attendance exceptions</p>
+                  <p className={styles.emptyCopy}>
+                    Nothing matches this search or filter.
+                  </p>
+                </div>
+              ) : (
+                <table className={styles.table}>
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Department</th>
+                      <th>Date</th>
+                      <th>Clock in</th>
+                      <th>Clock out</th>
+                      <th>Issue</th>
+                      <th>Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {exceptionRows.map((row) => (
+                      <tr key={row.id}>
+                        <td>
+                          <p className={styles.exceptionName}>{row.name}</p>
+                        </td>
+                        <td className={styles.exceptionDept}>{row.department}</td>
+                        <td>
+                          <div className={styles.stackCell}>
+                            <span>{row.dateLabel}</span>
+                            <span className={styles.stackMuted}>{row.weekday}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <ExceptionClock value={row.clockIn} />
+                        </td>
+                        <td>
+                          <ExceptionClock value={row.clockOut} />
+                        </td>
+                        <td className={styles.detailCell}>{row.detail}</td>
+                        <td>
+                          <span
+                            className={`${statusClass[row.status]} ${
+                              row.status === "Missing Clock-Out"
+                                ? styles.statusWrap
+                                : ""
+                            }`}
+                          >
+                            {row.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </section>
         </>
@@ -679,15 +807,29 @@ export function AttendancePage({
           <div className={styles.exceptionFilters} role="tablist" aria-label="Filter corrections">
             {attendanceCorrectionFilters.map((filter) => {
               const active = correctionFilter === filter;
+              const className = `${styles.exceptionChip} ${
+                active ? styles.exceptionChipActive : ""
+              }`;
+              if (variant === "manager") {
+                return (
+                  <a
+                    key={filter}
+                    href={managerCorrectionPath(filter)}
+                    role="tab"
+                    aria-selected={active}
+                    className={className}
+                  >
+                    {filter}
+                  </a>
+                );
+              }
               return (
                 <button
                   key={filter}
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  className={`${styles.exceptionChip} ${
-                    active ? styles.exceptionChipActive : ""
-                  }`}
+                  className={className}
                   onClick={() => setCorrectionFilter(filter)}
                 >
                   {filter}
@@ -697,10 +839,6 @@ export function AttendancePage({
           </div>
 
           <div className={styles.correctionListWrap}>
-            <span className={styles.prototypeChip}>
-              <TriangleAlert size={13} />
-              Prototype: Super Admin
-            </span>
             {correctionRows.length === 0 ? (
               <div className={styles.emptyPanel}>
                 <p className={styles.emptyTitle}>No correction requests</p>
@@ -736,7 +874,16 @@ export function AttendancePage({
                       </p>
                       <p className={styles.correctionNote}>“{item.note}”</p>
                     </div>
-                    <button type="button" className={styles.reviewButton}>
+                    <button
+                      type="button"
+                      className={styles.reviewButton}
+                      onClick={() =>
+                        showToast(
+                          `Review ${item.reference} · ${item.name}`,
+                          "info",
+                        )
+                      }
+                    >
                       Review
                     </button>
                   </article>
@@ -795,10 +942,6 @@ export function AttendancePage({
           </div>
 
           <section className={styles.panel}>
-            <span className={styles.prototypeChip}>
-              <TriangleAlert size={13} />
-              Prototype: Super Admin
-            </span>
             <div className={styles.panelHead}>
               <span className={styles.panelIcon} aria-hidden>
                 <BarChart3 size={14} />
@@ -875,6 +1018,16 @@ export function AttendancePage({
                 <h2 className={styles.panelTitle}>Work schedule</h2>
               </div>
               <div className={styles.settingsFields}>
+                <label className={`${styles.settingsField} ${styles.settingsFieldFull}`}>
+                  <span className={styles.settingsLabel}>Schedule name</span>
+                  <input
+                    type="text"
+                    className={styles.settingsInput}
+                    value={scheduleName}
+                    onChange={(event) => setScheduleName(event.target.value)}
+                    placeholder="Weekday office check-in"
+                  />
+                </label>
                 <label className={styles.settingsField}>
                   <span className={styles.settingsLabel}>Expected clock-in</span>
                   <input
@@ -906,6 +1059,56 @@ export function AttendancePage({
                     }
                   />
                 </label>
+                <label className={`${styles.settingsField} ${styles.settingsFieldFull}`}>
+                  <span className={styles.settingsLabel}>
+                    Department (optional)
+                  </span>
+                  <select
+                    className={styles.settingsInput}
+                    value={scheduleDepartmentId}
+                    onChange={(event) => setScheduleDepartmentId(event.target.value)}
+                  >
+                    <option value="">Company-wide</option>
+                    {departmentOptions.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className={`${styles.settingsField} ${styles.settingsFieldFull}`}>
+                  <span className={styles.settingsLabel}>Attached offices</span>
+                  {monitor.locations.length === 0 ? (
+                    <p className={styles.settingsNote}>
+                      Add an office pin below, then attach it here.
+                    </p>
+                  ) : (
+                    <div className={styles.dayRow}>
+                      {monitor.locations.map((location) => {
+                        const active = selectedLocationIds.includes(location.id);
+                        return (
+                          <button
+                            key={location.id}
+                            type="button"
+                            className={`${styles.dayChip} ${
+                              active ? styles.dayChipActive : ""
+                            }`}
+                            aria-pressed={active}
+                            onClick={() =>
+                              setSelectedLocationIds((current) =>
+                                current.includes(location.id)
+                                  ? current.filter((id) => id !== location.id)
+                                  : [...current, location.id],
+                              )
+                            }
+                          >
+                            {location.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
                 <div className={`${styles.settingsField} ${styles.settingsFieldFull}`}>
                   <span className={styles.settingsLabel}>Working days</span>
                   <div className={styles.dayRow}>
@@ -937,10 +1140,6 @@ export function AttendancePage({
             </section>
 
             <section className={styles.panel}>
-              <span className={styles.prototypeChip}>
-                <TriangleAlert size={13} />
-                Prototype: Super Admin
-              </span>
               <div className={styles.panelHead}>
                 <span className={styles.panelIcon} aria-hidden>
                   <SlidersHorizontal size={14} />
@@ -998,40 +1197,11 @@ export function AttendancePage({
             </section>
           </div>
 
-          <section className={styles.panel}>
-            <div className={styles.panelHead}>
-              <h2 className={styles.panelTitle}>Check-in locations</h2>
-            </div>
-            {monitor.locations.length === 0 ? (
-              <p className={styles.emptyCopy}>
-                No GPS locations yet. Create an active location with coordinates,
-                then a schedule that points at it, before staff can check in.
-              </p>
-            ) : (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Address</th>
-                      <th>Radius</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {monitor.locations.map((location) => (
-                      <tr key={location.id}>
-                        <td>{location.name}</td>
-                        <td className={styles.muted}>{location.address || "—"}</td>
-                        <td>{location.radiusMeters} m</td>
-                        <td>{location.active ? "Active" : "Disabled"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+          <AttendanceOfficePanel
+            locations={monitor.locations}
+            departments={departmentOptions}
+            onChanged={monitor.refetch}
+          />
 
           <p className={styles.policyBanner}>
             Current effective policy: clock in by{" "}
@@ -1045,11 +1215,15 @@ export function AttendancePage({
         </>
       ) : section === "audit-logs" ? (
         <section className={styles.panel}>
-          <span className={styles.prototypeChip}>
-            <TriangleAlert size={13} />
-            Prototype: Super Admin
-          </span>
           <div className={styles.tableWrap}>
+            {monitor.auditLogs.length === 0 ? (
+              <div className={styles.emptyInline}>
+                <p className={styles.emptyTitle}>No attendance audit logs</p>
+                <p className={styles.emptyCopy}>
+                  Corrections and policy changes will appear here.
+                </p>
+              </div>
+            ) : (
             <table className={styles.table}>
               <thead>
                 <tr>
@@ -1088,6 +1262,7 @@ export function AttendancePage({
                 })}
               </tbody>
             </table>
+            )}
           </div>
         </section>
       ) : (

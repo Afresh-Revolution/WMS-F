@@ -12,8 +12,9 @@ import { PageTopBar } from "@/components/layout/PageTopBar";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapMeeting } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./MeetingsPage.module.css";
 
 const tagClass: Record<MeetingTag, string> = {
@@ -208,6 +209,7 @@ function toDurationSelect(value: string) {
 }
 
 export function MeetingsPage() {
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<MeetingFilter>("Upcoming");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -216,8 +218,8 @@ export function MeetingsPage() {
 
   const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.meetings.list(),
-    [],
+    () => (manager ? managerApi.listMeetings() : superAdminApi.meetings.list()),
+    [manager],
   );
 
   const meetings = useMemo(() => {
@@ -273,7 +275,11 @@ export function MeetingsPage() {
 
   async function handleCreateMeeting(values: Record<string, string>) {
     await runAction("Create meeting", async () => {
-      await superAdminApi.meetings.create(meetingWriteBody(values));
+      if (manager) {
+        await managerApi.createMeeting(meetingWriteBody(values));
+      } else {
+        await superAdminApi.meetings.create(meetingWriteBody(values));
+      }
       refetch();
     });
   }
@@ -281,10 +287,14 @@ export function MeetingsPage() {
   async function handleEditMeeting(values: Record<string, string>) {
     if (!editMeeting) return;
     await runAction("Update meeting", async () => {
-      await superAdminApi.meetings.patch(
-        editMeeting.id,
-        meetingWriteBody(values),
-      );
+      if (manager) {
+        await managerApi.updateMeeting(editMeeting.id, meetingWriteBody(values));
+      } else {
+        await superAdminApi.meetings.patch(
+          editMeeting.id,
+          meetingWriteBody(values),
+        );
+      }
       refetch();
     });
     setEditMeeting(null);

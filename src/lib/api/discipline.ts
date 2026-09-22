@@ -91,6 +91,7 @@ export function listDisciplinaryRecords(params?: Record<string, unknown>) {
   const query = buildQuery(params);
   return firstSuccessful(
     [
+      () => apiRequest(`/manager/discipline${query}`),
       () => apiRequest(`/super-admin/discipline${query}`),
       () =>
         apiRequest(`/api/super-admin/discipline${query}`, { root: true }),
@@ -110,6 +111,8 @@ export function createDisciplinaryRecord(input: DisciplinaryRecordInput) {
   const body = disciplineWriteBody(input);
   return firstSuccessful(
     [
+      () =>
+        apiRequest("/manager/discipline", { method: "POST", body }),
       () =>
         apiRequest("/super-admin/discipline", { method: "POST", body }),
       () =>

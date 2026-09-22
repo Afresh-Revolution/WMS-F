@@ -20,6 +20,7 @@ export type EventItem = {
   description: string;
   category: Exclude<EventFilter, "All">;
   action: EventAction;
+  notifiedStaff?: number;
 };
 
 export type StatTone = "confirmed" | "draft" | "meta";

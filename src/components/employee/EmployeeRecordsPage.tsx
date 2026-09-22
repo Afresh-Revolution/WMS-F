@@ -6,6 +6,9 @@ import { Download, Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { usePageActions } from "@/hooks/usePageActions";
 import { employeeProfile } from "@/data/employeeHome";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { asRecord, employeeApi } from "@/lib/api";
+import { listFrom, str } from "@/lib/api/mappers";
 import styles from "./EmployeeExpensesPage.module.css";
 
 type RecordCategory = "Contract" | "Identity" | "Leave" | "Performance";
@@ -26,7 +29,7 @@ const filters: RecordFilter[] = [
   "Performance",
 ];
 
-const records: EmployeeRecord[] = [
+const fallbackRecords: EmployeeRecord[] = [
   {
     id: "REC-0188-01",
     title: "Offer letter",
@@ -67,10 +70,28 @@ const records: EmployeeRecord[] = [
 export function EmployeeRecordsPage() {
   const [filter, setFilter] = useState<RecordFilter>("All");
   const { showToast } = usePageActions();
+  const { data } = useAsyncData(
+    () => employeeApi.records().catch(() => null),
+    [],
+  );
+  const catalog = useMemo(() => {
+    const payload = asRecord(data);
+    const rows = listFrom(
+      (payload.documents ?? payload.items ?? payload.records ?? data) as never,
+    );
+    if (!rows.length) return fallbackRecords;
+    return rows.map((row, index) => ({
+      id: str(row.id, `REC-${index}`),
+      title: str(row.title ?? row.name ?? row.type, "Record"),
+      category: (str(row.category ?? row.type, "Contract") as RecordCategory),
+      date: str(row.date ?? row.createdAt, "—"),
+      status: str(row.status, "Available") as EmployeeRecord["status"],
+    }));
+  }, [data]);
   const visible = useMemo(
     () =>
-      records.filter((item) => filter === "All" || item.category === filter),
-    [filter],
+      catalog.filter((item) => filter === "All" || item.category === filter),
+    [catalog, filter],
   );
 
   function handleDownload(item: EmployeeRecord) {

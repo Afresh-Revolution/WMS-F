@@ -19,8 +19,6 @@ import { usePageActions } from "@/hooks/usePageActions";
 import { secretaryApi } from "@/lib/api";
 import { avatarColor, initials, nestedStr, str } from "@/lib/api/mappers";
 import {
-  emailQueueRequests,
-  recentlyCreatedEmails,
   suggestEmails,
   type EmailQueueRequest,
   type EmailRequestStatus,
@@ -96,25 +94,14 @@ function mapDetail(record: Record<string, unknown>, fallback?: EmailQueueRequest
 
 function localAvailability(address: string, currentEmail: string) {
   const normalized = address.trim().toLowerCase();
-  const taken = [
-    ...recentlyCreatedEmails.map((item) => item.email),
-    ...emailQueueRequests
-      .filter((item) => item.status === "Created")
-      .map((item) => item.email),
-  ].map((item) => item.toLowerCase());
-
   if (normalized === currentEmail.toLowerCase()) return true;
-  return !taken.includes(normalized);
+  return Boolean(normalized);
 }
 
 export function SecretaryEmailRequestOpenPage({ requestId }: { requestId: string }) {
   const router = useRouter();
   const { runAction, showToast } = usePageActions();
   const searchRef = useRef<HTMLInputElement>(null);
-  const fallback = emailQueueRequests.find(
-    (item) => item.id === requestId || item.requestId === requestId,
-  );
-
   const { data, loading, error } = useAsyncData(
     () => secretaryApi.getEmailRequest(requestId),
     [requestId],
@@ -124,11 +111,11 @@ export function SecretaryEmailRequestOpenPage({ requestId }: { requestId: string
     if (data && typeof data === "object") {
       const record = data as Record<string, unknown>;
       if (record.id || record.email || record.name) {
-        return mapDetail(record, fallback);
+        return mapDetail(record);
       }
     }
-    return fallback ?? null;
-  }, [data, fallback]);
+    return null;
+  }, [data]);
 
   const suggestions = useMemo(
     () => suggestEmails(request?.email ?? ""),
@@ -232,7 +219,7 @@ export function SecretaryEmailRequestOpenPage({ requestId }: { requestId: string
         {loading ? <p className={styles.dateLabel}>Loading request…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
-            Using cached request — {error}
+            {error}
           </p>
         ) : null}
         <div className={styles.topActions}>

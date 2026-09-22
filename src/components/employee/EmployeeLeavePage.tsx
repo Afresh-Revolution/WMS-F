@@ -5,9 +5,9 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Download, Plus, Search, X } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { employeeProfile } from "@/data/employeeHome";
 import {
   applyForLeave,
   employeeBalanceCards,
@@ -54,6 +54,7 @@ export function EmployeeLeavePage({
   );
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const { user } = useCurrentUser();
   const { runAction } = usePageActions();
 
   const status = statusQuery[filter];
@@ -207,7 +208,7 @@ export function EmployeeLeavePage({
           </label>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.profileButton}>
-            {employeeProfile.initials}
+            {user?.initials || "—"}
           </ProfileLink>
         </div>
       </header>
@@ -217,7 +218,10 @@ export function EmployeeLeavePage({
           <p>My leave</p>
           <h1>Leave &amp; time off</h1>
           <span>Apply for leave, track your requests and download decision letters.</span>
-          {error ? (
+          {error &&
+          !/not linked to an employee|employee profile is still being set up/i.test(
+            error,
+          ) ? (
             <p className={styles.empty} role="alert">
               {error}
             </p>

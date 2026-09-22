@@ -18,6 +18,7 @@
   --afresh-upcoming-text: #c2410c;
   --font-sans: var(--font-dm-sans), "Segoe UI", sans-serif;
   --font-display: var(--font-instrument), Georgia, serif;
+  --banner-title-stroke: 0.65px;
   --bp-lg: 1024px;
   --bp-md: 768px;
   --bp-sm: 480px;

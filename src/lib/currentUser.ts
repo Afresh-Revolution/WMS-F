@@ -7,6 +7,8 @@ export type CurrentUser = {
   name: string;
   role: string;
   initials: string;
+  employeeId?: string;
+  mustChangePassword?: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -67,6 +69,24 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function readEmployeeId(record: Record<string, unknown>): string {
+  const employee =
+    asRecord(record.employee) ??
+    asRecord(record.profile) ??
+    asRecord(record.staff);
+  return (
+    readString(record, [
+      "employeeId",
+      "employee_id",
+      "staffId",
+      "staff_id",
+    ]) ||
+    (employee
+      ? readString(employee, ["id", "employeeId", "employee_id", "_id"])
+      : "")
+  );
 }
 
 function collectRoleStrings(record: Record<string, unknown>): string[] {
@@ -139,8 +159,20 @@ export function parseAuthUser(payload: unknown): CurrentUser | null {
   const id = readString(user, ["id", "userId", "sub"]) || email;
   const initials =
     readString(user, ["initials"]) || initialsFromIdentity(name, email);
+  const employeeId =
+    readEmployeeId(user) || readEmployeeId(data) || readEmployeeId(root);
 
   if (!name && !email && !initials) return null;
+
+  const mustChangePassword = Boolean(
+    user.mustChangePassword ??
+      user.must_change_password ??
+      user.forcePasswordReset ??
+      user.force_password_reset ??
+      data.mustChangePassword ??
+      data.must_change_password ??
+      root.mustChangePassword,
+  );
 
   return {
     id,
@@ -148,6 +180,8 @@ export function parseAuthUser(payload: unknown): CurrentUser | null {
     name,
     role: formatRoleLabel(role),
     initials,
+    mustChangePassword,
+    ...(employeeId ? { employeeId } : {}),
   };
 }
 

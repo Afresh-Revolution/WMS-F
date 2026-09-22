@@ -22,8 +22,9 @@ import { DepartmentDetailDrawer } from "@/components/departments/DepartmentDetai
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi, unwrapRecord } from "@/lib/api";
+import { managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapDepartmentRecord, num, str } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./DepartmentsPage.module.css";
 
 const deptIcons = {
@@ -90,6 +91,7 @@ function firstValue(record: Record<string, unknown>, keys: string[]) {
 }
 
 export function DepartmentsPage() {
+  const manager = useManagerPortal();
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] =
     useState<DepartmentFilter>("All departments");
@@ -99,6 +101,13 @@ export function DepartmentsPage() {
 
   const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(async () => {
+    if (manager) {
+      return {
+        departments: await managerApi.listDepartments(),
+        headcount: null,
+        overview: null,
+      };
+    }
     const departments = await superAdminApi.departments.list();
     const extras = await Promise.allSettled([
       superAdminApi.reports.headcount(),
@@ -111,7 +120,7 @@ export function DepartmentsPage() {
       overview:
         extras[1].status === "fulfilled" ? extras[1].value : null,
     };
-  }, []);
+  }, [manager]);
   const { data: hodOptions } = useAsyncData(loadHodOptions, []);
 
   const departments = useMemo(

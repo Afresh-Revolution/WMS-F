@@ -10,6 +10,9 @@ import {
 } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { employeeProfile } from "@/data/employeeHome";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { employeeApi } from "@/lib/api";
+import { listFrom, str } from "@/lib/api/mappers";
 import styles from "./EmployeeMeetingsPage.module.css";
 
 const meetings = [
@@ -48,6 +51,20 @@ const meetings = [
 ] as const;
 
 export function EmployeeMeetingsPage() {
+  const { data } = useAsyncData(
+    () => employeeApi.meetings.list({ limit: 50 }).catch(() => []),
+    [],
+  );
+  const liveMeetings = listFrom(data ?? undefined).map((row) => ({
+    title: str(row.title ?? row.name, "Meeting"),
+    date: str(row.startAt ?? row.start_at ?? row.scheduledAt ?? row.date, "—"),
+    duration: str(row.duration ?? row.durationMinutes, "—"),
+    location: str(row.location ?? row.room ?? row.venue, "—"),
+    organiser: str(row.organiser ?? row.organizer ?? row.createdByName, "—"),
+    due: str(row.status, ""),
+  }));
+  const rows = liveMeetings.length ? liveMeetings : meetings;
+
   return (
     <div className={styles.page}>
       <header className={styles.topBar}>
@@ -72,7 +89,7 @@ export function EmployeeMeetingsPage() {
       </div>
 
       <section className={styles.meetingGrid} aria-label="Upcoming meetings">
-        {meetings.map((meeting) => (
+        {rows.map((meeting) => (
           <article key={meeting.title} className={styles.meetingCard}>
             <div className={styles.cardHeading}>
               <h2>{meeting.title}</h2>

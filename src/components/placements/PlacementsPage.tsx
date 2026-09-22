@@ -3,16 +3,19 @@
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, Download, Plus, Search } from "lucide-react";
 import { type PlacementFilter } from "@/data/placements";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { usePageActions } from "@/hooks/usePageActions";
-import { nyscInternsManageApi, superAdminApi } from "@/lib/api";
-import { listFrom, mapDepartment, mapPlacement, str } from "@/lib/api/mappers";
+import { loadManagerLookups, lookupsApi, managerApi, nyscInternsManageApi, superAdminApi } from "@/lib/api";
+import { firstNameFrom, listFrom, mapDepartment, mapPlacement, readTemporaryPassword, str } from "@/lib/api/mappers";
+import { showCreatedCredentials } from "@/lib/createdCredentials";
 import { asInternRecord } from "@/lib/api/internMappers";
+import { portalHref } from "@/lib/portalPaths";
 import styles from "./PlacementsPage.module.css";
 
 const filters: PlacementFilter[] = ["Active", "Exiting soon", "Exited", "All"];
@@ -58,19 +61,46 @@ function isActivePlacementConflict(error: unknown) {
   );
 }
 
+function localIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function defaultPlacementDates() {
+  const start = new Date();
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + 1);
+  return { start: localIsoDate(start), end: localIsoDate(end) };
+}
+
 function memberWriteBody(values: Record<string, string>) {
+  const supervisorId = values.employeeId.trim();
+  const supervisorName = values.supervisorName.trim();
+  const departmentName = values.departmentName.trim();
+  const school = values.school.trim();
+  const course = values.courseOfStudy.trim();
   return {
     fullName: values.name.trim(),
     name: values.name.trim(),
     type: values.type === "INTERN" ? "INTERN" : "NYSC",
-    institution: values.school.trim(),
-    school: values.school.trim(),
-    courseOfStudy: values.courseOfStudy.trim(),
     startDate: values.startDate,
     endDate: values.endDate,
     departmentId: values.departmentId,
+    ...(departmentName ? { department: departmentName } : {}),
+    ...(school ? { institution: school, school } : {}),
+    ...(course ? { courseOfStudy: course } : {}),
     ...(values.email.trim() ? { email: values.email.trim() } : {}),
     ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
+    ...(supervisorId
+      ? {
+          supervisorEmployeeId: supervisorId,
+          supervisorId,
+          supervisor: supervisorName || supervisorId,
+          employeeId: supervisorId,
+        }
+      : {}),
   };
 }
 
@@ -80,6 +110,8 @@ type PlacementsPageProps = {
 
 export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<PlacementFilter>(initialFilter);
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -93,21 +125,45 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   const statusParam = statusQuery[activeFilter];
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.nyscInterns.list(),
-    [],
+    () =>
+      manager
+        ? managerApi.listNyscInterns()
+        : superAdminApi.nyscInterns.list(),
+    [manager],
   );
 
-  const { data: departmentsPayload } = useAsyncData(
-    () => superAdminApi.departments.list(),
-    [],
+  const { data: lookupPayload } = useAsyncData(
+    () =>
+      manager
+        ? loadManagerLookups()
+        : Promise.all([
+            superAdminApi.departments.list(),
+            lookupsApi.employees(),
+          ]).then(([departments, employees]) => ({
+            departments: listFrom(departments),
+            employees: listFrom(employees),
+            locations: [],
+          })),
+    [manager],
   );
 
   const departmentOptions = useMemo(() => {
-    return listFrom(departmentsPayload ?? undefined)
+    return listFrom(lookupPayload?.departments ?? undefined)
       .map(mapDepartment)
       .filter((item) => item.id && item.name)
       .map((item) => ({ label: item.name, value: item.id }));
-  }, [departmentsPayload]);
+  }, [lookupPayload]);
+
+  const supervisorOptions = useMemo(() => {
+    return listFrom(lookupPayload?.employees ?? undefined)
+      .map((record) => ({
+        label: str(
+          record.fullName ?? record.name ?? record.label ?? record.email,
+        ),
+        value: str(record.id ?? record.employeeId ?? record._id),
+      }))
+      .filter((item) => item.label && item.value);
+  }, [lookupPayload]);
 
   const addMemberFields = useMemo(
     () => [
@@ -125,35 +181,44 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       },
       { name: "school", label: "School / institution", required: true },
       { name: "courseOfStudy", label: "Course of study", required: true },
-      departmentOptions.length > 0
-        ? {
-            name: "departmentId",
-            label: "Department",
-            type: "select" as const,
-            required: true,
-            options: departmentOptions,
-          }
-        : {
-            name: "departmentId",
-            label: "Department ID",
-            required: true,
-          },
+      {
+        name: "departmentId",
+        label: "Department",
+        type: "select" as const,
+        required: true,
+        options:
+          departmentOptions.length > 0
+            ? departmentOptions
+            : [{ label: "No departments available", value: "" }],
+      },
+      {
+        name: "employeeId",
+        label: "Supervisor",
+        type: "select" as const,
+        required: true,
+        options:
+          supervisorOptions.length > 0
+            ? supervisorOptions
+            : [{ label: "No employees in directory", value: "" }],
+      },
       {
         name: "startDate",
         label: "Start date",
         type: "date" as const,
         required: true,
+        defaultValue: defaultPlacementDates().start,
       },
       {
         name: "endDate",
         label: "End date",
         type: "date" as const,
         required: true,
+        defaultValue: defaultPlacementDates().end,
       },
       { name: "email", label: "Email" },
       { name: "phone", label: "Phone" },
     ],
-    [departmentOptions],
+    [departmentOptions, supervisorOptions],
   );
 
   const placementMembers = useMemo(() => {
@@ -185,13 +250,19 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
 
   function handleFilterChange(filter: PlacementFilter) {
     setActiveFilter(filter);
-    router.push(filterRoutes[filter]);
+    router.push(portalHref(pathname, filterRoutes[filter]));
   }
 
   async function handleExport() {
     await runAction(
       "Export placements",
       async () => {
+        if (manager) {
+          await managerApi.exportNyscInterns(
+            statusParam ? { status: statusParam } : undefined,
+          );
+          return;
+        }
         await nyscInternsManageApi.export(
           statusParam ? { status: statusParam } : undefined,
         );
@@ -203,9 +274,10 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   async function findExistingInternId(email: string, phone: string) {
     const needle = email.trim().toLowerCase();
     const phoneNeedle = phone.replace(/\D/g, "");
-    const payload = await superAdminApi.nyscInterns.list(
-      needle ? { email: needle } : undefined,
-    );
+    const listMembers = manager
+      ? managerApi.listNyscInterns.bind(managerApi)
+      : superAdminApi.nyscInterns.list;
+    const payload = await listMembers(needle ? { email: needle } : undefined);
     const records = listFrom(payload ?? undefined);
     const match = records.find((record) => {
       const recEmail = internEmail(record);
@@ -217,7 +289,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     });
     if (match) return internId(match);
 
-    const all = listFrom((await superAdminApi.nyscInterns.list()) ?? undefined);
+    const all = listFrom((await listMembers()) ?? undefined);
     const fallback = all.find((record) => {
       const recEmail = internEmail(record);
       const recPhone = internPhone(record);
@@ -229,10 +301,74 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     return fallback ? internId(fallback) : "";
   }
 
+  async function assignSupervisor(created: unknown, employeeId: string) {
+    const supervisorId = employeeId.trim();
+    if (!supervisorId) return;
+    const envelope = asInternRecord(created);
+    const payload = asInternRecord(envelope.data ?? envelope);
+    const profile = asInternRecord(payload.profile ?? payload);
+    const id = internId(profile) || internId(payload) || internId(envelope);
+    if (!id) return;
+    if (manager) {
+      await managerApi.assignNyscSupervisor(id, { employeeId: supervisorId });
+      return;
+    }
+    await superAdminApi.nyscInterns.action(id, "supervisor", {
+      employeeId: supervisorId,
+    });
+  }
+
   async function handleAddMember(values: Record<string, string>) {
-    const body = memberWriteBody(values);
+    if (!values.name.trim()) {
+      showToast("Enter the member's full name.", "error");
+      throw new Error("Full name is required.");
+    }
+    if (!values.school.trim()) {
+      showToast("Enter the school or institution.", "error");
+      throw new Error("Institution is required.");
+    }
+    if (!values.courseOfStudy.trim()) {
+      showToast("Enter the course of study.", "error");
+      throw new Error("Course of study is required.");
+    }
+    if (!values.departmentId.trim()) {
+      showToast("Choose a department from the dropdown.", "error");
+      throw new Error("Choose a department from the dropdown.");
+    }
+    if (!values.employeeId.trim()) {
+      showToast("Choose a supervisor from the directory.", "error");
+      throw new Error("Choose a supervisor from the directory.");
+    }
+    if (!values.startDate || !values.endDate || values.endDate <= values.startDate) {
+      showToast("End date must be after the start date.", "error");
+      throw new Error("End date must be after the start date.");
+    }
+    const body = memberWriteBody({
+      ...values,
+      departmentName:
+        departmentOptions.find((item) => item.value === values.departmentId)
+          ?.label ?? "",
+      supervisorName:
+        supervisorOptions.find((item) => item.value === values.employeeId)
+          ?.label ?? "",
+    });
     try {
-      await superAdminApi.nyscInterns.create(body);
+      const created = manager
+        ? await managerApi.createNyscIntern(body)
+        : await superAdminApi.nyscInterns.create(body);
+      await assignSupervisor(created, values.employeeId);
+      const loginEmail =
+        str((created as { loginEmail?: unknown })?.loginEmail) ||
+        values.email.trim();
+      const temporaryPassword =
+        readTemporaryPassword(created) || firstNameFrom(values.name);
+      if (temporaryPassword) {
+        showCreatedCredentials({
+          name: values.name.trim(),
+          email: loginEmail,
+          password: temporaryPassword,
+        });
+      }
       refetch();
       showToast("Member added", "success");
     } catch (error) {
@@ -258,7 +394,16 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
         throw error;
       }
 
-      await superAdminApi.nyscInterns.patch(existingId, body);
+      if (manager) {
+        await managerApi.updateNyscIntern(existingId, body);
+      } else {
+        await superAdminApi.nyscInterns.patch(existingId, body);
+      }
+      try {
+        await assignSupervisor({ id: existingId }, values.employeeId);
+      } catch {
+        /* placement was updated even if supervisor assignment is unavailable */
+      }
       refetch();
       showToast(
         "This person already had an active placement. Their details were updated.",
@@ -325,21 +470,21 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
         <div className={styles.stats}>
           {placementStats.map((stat) => (
             <article key={stat.id} className={styles.statCard}>
-              <div className={styles.statTop}>
+              <div className={styles.statCopy}>
                 <p className={styles.statLabel}>{stat.label}</p>
-                <span
-                  className={`${styles.badge} ${
-                    stat.badge === "Alert"
-                      ? styles.badgeAlert
-                      : stat.badge === "Current"
-                        ? styles.badgeCurrent
-                        : styles.badgeActive
-                  }`}
-                >
-                  {stat.badge}
-                </span>
+                <p className={styles.statValue}>{stat.value}</p>
               </div>
-              <p className={styles.statValue}>{stat.value}</p>
+              <span
+                className={`${styles.badge} ${
+                  stat.badge === "Alert"
+                    ? styles.badgeAlert
+                    : stat.badge === "Current"
+                      ? styles.badgeCurrent
+                      : styles.badgeActive
+                }`}
+              >
+                {stat.badge}
+              </span>
             </article>
           ))}
         </div>
@@ -404,7 +549,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
               </div>
 
               <Link
-                href={`/nysc-interns/${member.id}`}
+                href={portalHref(pathname, `/nysc-interns/${member.id}`)}
                 className={styles.cardFooter}
               >
                 View profile
@@ -421,9 +566,10 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
         <SimpleModal
           open={addOpen}
           title="Add member"
-          description="Register a new NYSC member or intern. End date must be after start date."
+          description="Register a new NYSC member or intern. Department and supervisor must come from the directory."
           fields={addMemberFields}
           submitLabel="Add member"
+          wide
           onClose={() => setAddOpen(false)}
           onSubmit={handleAddMember}
         />

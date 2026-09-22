@@ -3,6 +3,7 @@ export type AppPortal =
   | "accountant"
   | "nysc"
   | "secretary"
+  | "manager"
   | "employee";
 
 function normalizeRole(role: string): string {
@@ -29,9 +30,10 @@ const PORTAL_ALIASES: Record<string, AppPortal> = {
   corper: "nysc",
   employee: "employee",
   staff: "employee",
-  manager: "employee",
-  hod: "employee",
-  headofdepartment: "employee",
+  manager: "manager",
+  hod: "manager",
+  headofdepartment: "manager",
+  linemanager: "manager",
 };
 
 export function portalForRole(role: string): AppPortal {
@@ -43,6 +45,7 @@ export function portalForRole(role: string): AppPortal {
     return "nysc";
   }
   if (key.includes("secretar")) return "secretary";
+  if (key.includes("hod") || key.includes("manager")) return "manager";
   if (key.includes("hr")) return "superadmin";
   return "employee";
 }
@@ -52,7 +55,8 @@ const PORTAL_RANK: Record<AppPortal, number> = {
   accountant: 1,
   nysc: 2,
   secretary: 3,
-  employee: 4,
+  manager: 4,
+  employee: 5,
 };
 
 /** Prefer a section-specific role when the payload lists several (e.g. user + accountant). */
@@ -66,6 +70,8 @@ export function preferredRoleLabel(roles: string[]): string {
   });
 }
 
+export const CHANGE_PASSWORD_PATH = "/change-password";
+
 export function homePathForRole(role: string): string {
   switch (portalForRole(role)) {
     case "accountant":
@@ -74,6 +80,8 @@ export function homePathForRole(role: string): string {
       return "/nysc";
     case "secretary":
       return "/secretary";
+    case "manager":
+      return "/manager";
     case "employee":
       return "/employee";
     default:
@@ -83,6 +91,12 @@ export function homePathForRole(role: string): string {
 
 export function portalForPath(pathname: string): AppPortal | null {
   if (pathname === "/sign-out" || pathname.startsWith("/sign-out/")) {
+    return null;
+  }
+  if (
+    pathname === CHANGE_PASSWORD_PATH ||
+    pathname.startsWith(`${CHANGE_PASSWORD_PATH}/`)
+  ) {
     return null;
   }
   if (pathname === "/accountant" || pathname.startsWith("/accountant/")) {
@@ -97,7 +111,23 @@ export function portalForPath(pathname: string): AppPortal | null {
   if (pathname === "/employee" || pathname.startsWith("/employee/")) {
     return "employee";
   }
+  if (pathname === "/manager" || pathname.startsWith("/manager/")) {
+    return "manager";
+  }
   return "superadmin";
+}
+
+export function canAddUsers(role: string): boolean {
+  const key = role.toLowerCase().replace(/[\s-]+/g, "_");
+  if (key === "hod" || key.includes("head_of_department")) return false;
+  return (
+    key.includes("super_admin") ||
+    key === "superadmin" ||
+    key === "admin" ||
+    key === "manager" ||
+    key === "hr" ||
+    key.includes("human_resource")
+  );
 }
 
 export function pathAllowedForRole(pathname: string, role: string): boolean {

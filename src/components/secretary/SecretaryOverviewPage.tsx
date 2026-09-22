@@ -4,6 +4,7 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useEffect, useMemo, useRef } from "react";
 import {
+  ArrowRight,
   Bell,
   CalendarDays,
   CalendarRange,
@@ -19,17 +20,9 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { usePageActions } from "@/hooks/usePageActions";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { secretaryApi } from "@/lib/api";
-import { avatarColor, initials, listFrom, str } from "@/lib/api/mappers";
+import { avatarColor, initials, listFrom, num, str } from "@/lib/api/mappers";
 import {
-  failedEmailCreations as fallbackFailed,
-  managementCalendar as fallbackCalendar,
-  overdueTasks as fallbackTasks,
-  pendingEmailRequests as fallbackPending,
-  recentlyCreatedEmails as fallbackCreated,
-  secretaryStats as fallbackStats,
-  todaysMeetings as fallbackToday,
-  upcomingMeetings as fallbackUpcoming,
-  upcomingReminders as fallbackReminders,
+  secretaryStatCards,
   type CalendarGroup,
   type CreatedEmail,
   type EmailRequest,
@@ -46,7 +39,12 @@ export function SecretaryOverviewPage() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { data, loading, error } = useAsyncData(
-    () => secretaryApi.getDashboard(),
+    () =>
+      Promise.all([
+        secretaryApi.getDashboard(),
+        secretaryApi.listEmailDirectory({ limit: 8 }),
+        secretaryApi.listCalendar(),
+      ]),
     [],
   );
 
@@ -61,26 +59,28 @@ export function SecretaryOverviewPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const overview = (data ?? {}) as Record<string, unknown>;
+  const [dashboard, directory, calendarPayload] = data ?? [null, null, null];
+  const overview = (dashboard ?? {}) as Record<string, unknown>;
+  const dashboardStats = (overview.stats ?? {}) as Record<string, unknown>;
 
   const stats = useMemo((): SecretaryStat[] => {
-    const cards = listFrom(
-      (overview.stats ?? overview.cards ?? overview.summary) as never,
-    );
-    if (cards.length === 0) return fallbackStats;
-    return cards.map((card, index) => ({
-      id: str(card.id, fallbackStats[index]?.id ?? String(index)),
-      value: str(card.value ?? card.count, fallbackStats[index]?.value),
-      label: str(card.label ?? card.title, fallbackStats[index]?.label),
-      tag: str(card.tag ?? card.badge, fallbackStats[index]?.tag),
+    const values: Record<string, number> = {
+      pending: num(dashboardStats.pendingEmailRequests),
+      failed: num(dashboardStats.failedEmailCreations),
+      today: num(dashboardStats.meetingsToday),
+      review: num(dashboardStats.awaitingReview),
+      upcoming: num(dashboardStats.upcomingEmailRequests),
+    };
+    return secretaryStatCards.map((card) => ({
+      ...card,
+      value: String(values[card.id] ?? 0),
     }));
-  }, [overview]);
+  }, [dashboardStats]);
 
   const pendingRequests = useMemo((): EmailRequest[] => {
-    const source = overview.pendingEmailRequests ?? overview.emailRequests;
-    const records = listFrom(source as never);
-    if (source === undefined) return fallbackPending;
-    return records.map((record) => {
+    return listFrom(
+      (overview.pendingEmailRequests ?? overview.emailRequests) as never,
+    ).map((record) => {
       const name = str(record.name ?? record.employeeName);
       return {
         id: str(record.id),
@@ -88,112 +88,139 @@ export function SecretaryOverviewPage() {
         initials: str(record.initials, initials(name)),
         avatarColor: str(record.avatarColor, avatarColor(name)),
         role: str(record.role ?? record.jobTitle),
-        email: str(record.email),
+        email: str(record.email ?? record.requestedEmail ?? record.requested_email),
         requestId: str(record.requestId ?? record.code, str(record.id)),
       };
     });
   }, [overview]);
 
   const failedEmails = useMemo((): FailedEmail[] => {
-    const source = overview.failedEmailCreations ?? overview.failedEmails;
-    const records = listFrom(source as never);
-    if (source === undefined) return fallbackFailed;
-    return records.map((record) => {
+    return listFrom(
+      (overview.failedEmailCreations ?? overview.failedEmails) as never,
+    ).map((record) => {
       const name = str(record.name ?? record.employeeName);
       return {
         id: str(record.id),
         name,
         initials: str(record.initials, initials(name)),
         avatarColor: str(record.avatarColor, avatarColor(name)),
-        reason: str(record.reason ?? record.message ?? record.error),
+        reason: str(
+          record.reason ??
+            record.failureReason ??
+            record.failure_reason ??
+            record.message ??
+            record.error,
+        ),
       };
     });
   }, [overview]);
 
   const todaysMeetings = useMemo((): SecretaryMeeting[] => {
-    const source = overview.todaysMeetings ?? overview.meetingsToday;
-    const records = listFrom(source as never);
-    if (source === undefined) return fallbackToday;
-    return records.map((record) => ({
+    return listFrom(
+      (overview.todaysMeetings ?? overview.meetingsToday) as never,
+    ).map((record) => ({
       id: str(record.id),
       title: str(record.title ?? record.name),
-      time: str(record.time),
-      audience: str(record.audience ?? record.audienceLabel),
+      time: str(
+        record.time,
+        record.startAt ?? record.start_at
+          ? new Date(str(record.startAt ?? record.start_at)).toLocaleTimeString(
+              "en-US",
+              { hour: "numeric", minute: "2-digit" },
+            )
+          : "",
+      ),
+      audience: str(record.audience ?? record.audienceLabel ?? record.organizerName),
       location: str(record.location ?? record.room) || undefined,
     }));
   }, [overview]);
 
   const upcomingMeetings = useMemo((): SecretaryMeeting[] => {
-    const source = overview.upcomingMeetings ?? overview.upcoming;
-    const records = listFrom(source as never);
-    if (source === undefined) return fallbackUpcoming;
-    return records.map((record) => ({
+    return listFrom(
+      (overview.upcomingMeetings ?? overview.upcoming) as never,
+    ).map((record) => ({
       id: str(record.id),
       title: str(record.title ?? record.name),
-      time: str(record.time),
-      when: str(record.when ?? record.relativeDate) || undefined,
-      audience: str(record.audience ?? record.audienceLabel),
+      time: str(
+        record.time,
+        record.startAt ?? record.start_at
+          ? new Date(str(record.startAt ?? record.start_at)).toLocaleTimeString(
+              "en-US",
+              { hour: "numeric", minute: "2-digit" },
+            )
+          : "",
+      ),
+      when: str(record.when ?? record.relativeDate ?? record.date) || undefined,
+      audience: str(record.audience ?? record.audienceLabel ?? record.organizerName),
     }));
   }, [overview]);
 
   const overdueTasks = useMemo((): ManagementTask[] => {
-    const source = overview.overdueTasks ?? overview.tasks;
-    const records = listFrom(source as never);
-    if (source === undefined) return fallbackTasks;
-    return records.map((record) => ({
+    return listFrom(
+      (overview.overdueManagementTasks ??
+        overview.overdueTasks ??
+        overview.tasks) as never,
+    ).map((record) => ({
       id: str(record.id),
       title: str(record.title ?? record.name),
       audience: str(record.audience ?? record.audienceLabel),
-      overdue: str(record.overdue ?? record.due),
+      overdue: str(record.overdue ?? record.due ?? record.dueDate ?? record.due_date),
     }));
   }, [overview]);
 
   const reminders = useMemo((): SecretaryReminder[] => {
-    const source = overview.reminders ?? overview.upcomingReminders;
-    const records = listFrom(source as never);
-    if (source === undefined) return fallbackReminders;
-    return records.map((record) => ({
+    return listFrom(
+      (overview.upcomingReminders ?? overview.reminders) as never,
+    ).map((record) => ({
       id: str(record.id),
       title: str(record.title ?? record.name),
-      detail: str(record.detail ?? record.description),
+      detail: str(record.detail ?? record.description ?? record.relatedItem),
       due: Boolean(record.due ?? record.isDue),
     }));
   }, [overview]);
 
   const calendar = useMemo((): CalendarGroup[] => {
-    const source = overview.calendar ?? overview.managementCalendar;
-    const records = listFrom(source as never);
-    if (source === undefined) return fallbackCalendar;
-    return records.map((record, index) => ({
-      id: str(record.id, String(index)),
-      label: str(record.label ?? record.title),
-      items: listFrom((record.items ?? record.events) as never).map(
-        (item, itemIndex) => ({
-          id: str(item.id, String(itemIndex)),
-          date: str(item.date),
-          title: str(item.title ?? item.name),
-          time: str(item.time),
-        }),
-      ),
-    }));
-  }, [overview]);
+    const records = Array.isArray(calendarPayload)
+      ? calendarPayload
+      : listFrom((calendarPayload ?? undefined) as never);
+    const groups = new Map<string, CalendarGroup>();
+    for (const record of records) {
+      const date = str(record.date ?? record.startAt ?? record.start_at).slice(0, 10);
+      if (!date) continue;
+      const group = groups.get(date) ?? {
+        id: date,
+        label: date,
+        items: [],
+      };
+      group.items.push({
+        id: str(record.id, `${date}-${group.items.length}`),
+        date,
+        title: str(record.title ?? record.name),
+        time: str(record.time),
+      });
+      groups.set(date, group);
+    }
+    return [...groups.values()].slice(0, 3);
+  }, [calendarPayload]);
 
   const createdEmails = useMemo((): CreatedEmail[] => {
-    const source = overview.recentlyCreatedEmails ?? overview.createdEmails;
-    const records = listFrom(source as never);
-    if (source === undefined) return fallbackCreated;
-    return records.map((record) => {
-      const name = str(record.name);
+    const records = Array.isArray(directory)
+      ? directory
+      : listFrom((directory ?? undefined) as never);
+    return records.slice(0, 6).map((record) => {
+      const name = str(record.name ?? record.employeeName);
       return {
         id: str(record.id),
         name,
         initials: str(record.initials, initials(name)),
         avatarColor: str(record.avatarColor, avatarColor(name)),
-        email: str(record.email),
-        status: str(record.status, "active") === "pending" ? "pending" : "active",
+        email: str(record.email ?? record.address ?? record.emailAddress),
+        status: str(record.status).toLowerCase().includes("pending")
+          ? "pending"
+          : "active",
       };
     });
-  }, [overview]);
+  }, [directory]);
 
   function retryFailed() {
     const target = failedEmails[0];
@@ -210,7 +237,7 @@ export function SecretaryOverviewPage() {
         {loading ? <p className={styles.dateLabel}>Loading overview…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
-            Using cached overview — {error}
+            {error}
           </p>
         ) : null}
         <div className={styles.topActions}>
@@ -231,17 +258,14 @@ export function SecretaryOverviewPage() {
 
       <section className={styles.hero}>
         <div className={styles.heroContent}>
-          <p className={styles.heroEyebrow}>Secretary / Operations support</p>
+          <p className={styles.heroEyebrow}>Secretary · Operations support</p>
           <h1 className={styles.heroTitle}>The calendar is ready.</h1>
           <p className={styles.heroSubtitle}>
-            2 email requests waiting, 1 failed, 2 meetings today, 1 task overdue.
+            {`${stats.find((item) => item.id === "pending")?.value ?? "0"} email requests waiting, ${stats.find((item) => item.id === "failed")?.value ?? "0"} failed, ${stats.find((item) => item.id === "today")?.value ?? "0"} meetings today, ${overdueTasks.length} task${overdueTasks.length === 1 ? "" : "s"} overdue.`}
           </p>
           <Link href="/secretary/email-requests" className={styles.heroButton}>
-            Open email queue →
+            Open email queue <ArrowRight size={14} />
           </Link>
-        </div>
-        <div className={styles.heroDecoration} aria-hidden="true">
-          <div className={styles.heroDecorationInner} />
         </div>
       </section>
 
@@ -262,6 +286,9 @@ export function SecretaryOverviewPage() {
             Pending email requests
           </h2>
           <div className={styles.list}>
+            {pendingRequests.length === 0 ? (
+              <p className={styles.empty}>No pending email requests.</p>
+            ) : null}
             {pendingRequests.map((request) => (
               <article key={request.id} className={styles.personRow}>
                 <span
@@ -291,6 +318,9 @@ export function SecretaryOverviewPage() {
             Failed email creations
           </h2>
           <div className={styles.list}>
+            {failedEmails.length === 0 ? (
+              <p className={styles.empty}>No failed email creations.</p>
+            ) : null}
             {failedEmails.map((failed) => (
               <article key={failed.id} className={styles.failedRow}>
                 <div className={styles.failedHead}>
@@ -318,6 +348,9 @@ export function SecretaryOverviewPage() {
             Today&apos;s meetings
           </h2>
           <div className={styles.list}>
+            {todaysMeetings.length === 0 ? (
+              <p className={styles.empty}>No meetings today.</p>
+            ) : null}
             {todaysMeetings.map((meeting) => (
               <article key={meeting.id} className={styles.meetingRow}>
                 <span className={styles.timeBadge}>{meeting.time}</span>
@@ -347,6 +380,9 @@ export function SecretaryOverviewPage() {
             Upcoming meetings
           </h2>
           <div className={styles.list}>
+            {upcomingMeetings.length === 0 ? (
+              <p className={styles.empty}>No upcoming meetings.</p>
+            ) : null}
             {upcomingMeetings.map((meeting) => (
               <article key={meeting.id} className={styles.upcomingRow}>
                 <div className={styles.personBody}>
@@ -393,6 +429,9 @@ export function SecretaryOverviewPage() {
             Upcoming reminders
           </h2>
           <div className={styles.list}>
+            {reminders.length === 0 ? (
+              <p className={styles.empty}>No upcoming reminders.</p>
+            ) : null}
             {reminders.map((reminder) => (
               <article key={reminder.id} className={styles.reminderRow}>
                 <span className={styles.reminderIcon}>
@@ -424,6 +463,9 @@ export function SecretaryOverviewPage() {
             </Link>
           </div>
           <div className={styles.calendarList}>
+            {calendar.length === 0 ? (
+              <p className={styles.empty}>No calendar items yet.</p>
+            ) : null}
             {calendar.map((group) => (
               <div key={group.id} className={styles.calendarGroup}>
                 <p className={styles.calendarLabel}>{group.label}</p>
@@ -445,6 +487,9 @@ export function SecretaryOverviewPage() {
             Recently created emails
           </h2>
           <div className={styles.list}>
+            {createdEmails.length === 0 ? (
+              <p className={styles.empty}>No company emails yet.</p>
+            ) : null}
             {createdEmails.map((person) => (
               <article key={person.id} className={styles.createdRow}>
                 <span

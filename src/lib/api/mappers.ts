@@ -285,6 +285,32 @@ export type MappedEmployee = {
   avatarColor: string;
 };
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function displayEmployeeLocation(
+  nested: Record<string, unknown>,
+  overview: Record<string, unknown> | null,
+  employeeId: string,
+) {
+  const locationType = str(
+    nested.locationType ?? nested.location_type,
+  ).toLowerCase();
+  const candidates = [
+    nested.location,
+    nested.workLocation,
+    nested.work_location,
+    nested.office,
+    overview?.location,
+  ];
+  for (const candidate of candidates) {
+    const text = str(candidate).trim();
+    if (!text || UUID_PATTERN.test(text) || text === employeeId) continue;
+    return text;
+  }
+  return locationType === "remote" ? "Remote" : "";
+}
+
 export function mapEmployee(record: Record<string, unknown>): MappedEmployee {
   const nested = asRecord(record.data) ?? record;
   const user = asRecord(nested.user);
@@ -336,7 +362,7 @@ export function mapEmployee(record: Record<string, unknown>): MappedEmployee {
       ["name", "title", "label"],
       str(nested.departmentName ?? user?.department ?? profile?.department),
     ),
-    location: str(nested.location ?? nested.office ?? overview?.location),
+    location: displayEmployeeLocation(nested, overview, id),
     email,
     phone: str(
       nested.phone ??
@@ -355,6 +381,21 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     return value as Record<string, unknown>;
   }
   return null;
+}
+
+export function firstNameFrom(value: unknown): string {
+  if (typeof value === "string") {
+    return value.trim().split(/\s+/).filter(Boolean)[0] || "";
+  }
+  const record = asRecord(value);
+  if (!record) return "";
+  return firstNameFrom(
+    record.firstName ??
+      record.first_name ??
+      record.fullName ??
+      record.full_name ??
+      record.name,
+  );
 }
 
 export function readTemporaryPassword(payload: unknown): string {
@@ -670,6 +711,10 @@ export function mapLeaveRequest(record: Record<string, unknown>) {
     ),
     status: mapLeaveStatus(nested.status),
     reason: str(nested.reason ?? nested.note ?? nested.comment ?? nested.notes),
+    extensionStatus: str(nested.extensionStatus ?? nested.extension_status),
+    pendingExtensionEndDate: str(
+      nested.pendingExtensionEndDate ?? nested.pending_extension_end_date,
+    ),
   };
 }
 
@@ -1156,8 +1201,51 @@ export function mapAnnouncement(record: Record<string, unknown>) {
   };
 }
 
+function formatEventDate(value: unknown): string {
+  const raw = str(value);
+  if (!raw) return "";
+  if (/[A-Za-z]/.test(raw) && /[–—-]/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return raw;
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function eventAudience(record: Record<string, unknown>): string {
+  const source = record.audience ?? record.targetAudience ?? record.departments;
+  if (Array.isArray(source)) {
+    return source
+      .map((item) => nestedStr(item, ["name", "title", "label"], str(item)))
+      .filter(Boolean)
+      .join(", ");
+  }
+  return nestedStr(source, ["name", "title", "label"], str(source));
+}
+
+function eventTagTone(label: string, fallback = "upcoming") {
+  const lower = label.toLowerCase();
+  if (lower.includes("draft")) return "draft" as const;
+  if (lower.includes("complete")) return "completed" as const;
+  if (lower.includes("sponsor")) return "sponsorship" as const;
+  if (lower.includes("company")) return "company" as const;
+  if (lower.includes("external")) return "external" as const;
+  if (lower.includes("internal")) return "internal" as const;
+  if (lower.includes("upcoming")) return "upcoming" as const;
+  return fallback as
+    | "internal"
+    | "external"
+    | "company"
+    | "sponsorship"
+    | "upcoming"
+    | "completed"
+    | "draft";
+}
+
 export function mapEvent(record: Record<string, unknown>) {
-  const categoryRaw = str(record.category ?? record.status, "Upcoming");
+  const categoryRaw = str(record.category ?? record.type, "Upcoming");
   const category = (
     categoryRaw.toLowerCase().includes("sponsor")
       ? "Sponsorship"
@@ -1165,16 +1253,75 @@ export function mapEvent(record: Record<string, unknown>) {
         ? "Completed"
         : "Upcoming"
   ) as "Upcoming" | "Sponsorship" | "Completed";
+  const audience = eventAudience(record);
+  const statusRaw = str(record.status ?? record.state ?? record.deliveryStatus).toLowerCase();
+  const isDraft =
+    bool(record.isDraft ?? record.draft) ||
+    statusRaw.includes("draft") ||
+    statusRaw.includes("not sent");
+  const isSent =
+    bool(record.sentToHods ?? record.notified ?? record.sent) ||
+    statusRaw.includes("sent") ||
+    statusRaw.includes("delivered") ||
+    category === "Completed";
+
+  const tags: { label: string; tone: ReturnType<typeof eventTagTone> }[] =
+    Array.isArray(record.tags) && record.tags.length
+      ? record.tags.map((tag) => {
+          if (typeof tag === "string") {
+            return { label: tag, tone: eventTagTone(tag) };
+          }
+          const item = asObject(tag);
+          const label = str(item.label ?? item.name, category);
+          return { label, tone: eventTagTone(label, str(item.tone, "upcoming")) };
+        })
+      : [
+          category === "Sponsorship"
+            ? { label: "Sponsorship", tone: "sponsorship" as const }
+            : /company|all department/i.test(
+                  str(record.scope ?? record.visibility ?? audience),
+                )
+              ? { label: "Company-wide", tone: "company" as const }
+              : { label: str(record.scope ?? record.visibility, "Internal"), tone: "internal" as const },
+          isDraft
+            ? { label: "Draft", tone: "draft" as const }
+            : category === "Completed"
+              ? { label: "Completed", tone: "completed" as const }
+              : { label: "Upcoming", tone: "upcoming" as const },
+        ];
+
+  if (
+    !tags.some((tag) =>
+      ["upcoming", "draft", "completed"].includes(tag.tone) ||
+      /upcoming|draft|completed/i.test(tag.label),
+    )
+  ) {
+    tags.push(
+      isDraft
+        ? { label: "Draft", tone: "draft" }
+        : category === "Completed"
+          ? { label: "Completed", tone: "completed" }
+          : { label: "Upcoming", tone: "upcoming" },
+    );
+  }
+
+  const start = formatEventDate(record.date ?? record.startDate ?? record.scheduledAt);
+  const end = formatEventDate(record.endDate);
+  const date = start && end && end !== start ? `${start}–${end}` : start;
 
   return {
     id: str(record.id ?? record._id),
     title: str(record.title ?? record.name),
-    tags: [{ label: category, tone: category.toLowerCase() as "upcoming" | "completed" | "sponsorship" }],
-    date: str(record.date ?? record.startDate ?? record.scheduledAt),
-    audience: str(record.audience ?? record.targetAudience),
+    tags,
+    date,
+    audience,
     description: str(record.description ?? record.summary),
     category,
-    action: (str(record.action).includes("sent") ? "sent" : "none") as "sent" | "send-now" | "none",
+    action: (isDraft ? "send-now" : isSent ? "sent" : "none") as
+      | "sent"
+      | "send-now"
+      | "none",
+    notifiedStaff: num(record.notifiedStaff ?? record.staffNotified ?? record.recipients),
   };
 }
 
@@ -1338,13 +1485,17 @@ export function mapPayRun(record: Record<string, unknown>) {
   return {
     id: str(record.id ?? record._id),
     ref: str(record.ref ?? record.reference),
-    period: str(record.period ?? record.payPeriod),
-    runDate: str(record.runDate ?? record.processedAt),
-    staff: num(record.staff ?? record.employeeCount),
-    totalAmount: str(record.totalAmount ?? record.amount),
-    status: (statusRaw.includes("complete") ? "Completed" : "Processing") as
-      | "Processing"
-      | "Completed",
+    period: str(record.period ?? record.periodName ?? record.payPeriod),
+    runDate: str(record.runDate ?? record.run_date ?? record.processedAt),
+    staff: num(record.staff ?? record.employeeCount ?? record.employee_count),
+    totalAmount: str(
+      record.totalAmount ?? record.netAmount ?? record.net_amount ?? record.amount,
+    ),
+    status: (statusRaw.includes("complete") ||
+    statusRaw.includes("paid") ||
+    statusRaw.includes("lock")
+      ? "Completed"
+      : "Processing") as "Processing" | "Completed",
   };
 }
 
@@ -1382,12 +1533,13 @@ export function mapExpense(record: Record<string, unknown>) {
     id: str(record.id ?? record._id),
     ref: str(record.ref ?? record.reference),
     description: str(record.description ?? record.title),
-    category: str(record.category, "Supplies") as
+    category: str(record.category, "Other") as
       | "Meals"
       | "Transport"
       | "Travel"
       | "Supplies"
-      | "Equipment",
+      | "Equipment"
+      | "Other",
     date: str(record.date ?? record.submittedAt),
     amount: str(record.amount ?? record.total),
     status,

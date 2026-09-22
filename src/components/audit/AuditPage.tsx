@@ -2,7 +2,7 @@
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Check,
   Download,
@@ -17,9 +17,11 @@ import {
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { downloadApiBlob } from "@/lib/export/downloadBlob";
 import { listFrom, mapAuditEvent } from "@/lib/api/mappers";
+import { portalHref } from "@/lib/portalPaths";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./AuditPage.module.css";
 
 const filters: AuditFilter[] = ["All events", "Security", "Failed"];
@@ -47,6 +49,8 @@ type AuditPageProps = {
 
 export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const manager = useManagerPortal();
   const { runAction, exportRows } = usePageActions();
   const [activeFilter, setActiveFilter] = useState<AuditFilter>(initialFilter);
   const [query, setQuery] = useState("");
@@ -55,16 +59,19 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
     setActiveFilter(initialFilter);
   }, [initialFilter]);
 
+  const auditQuery =
+    activeFilter === "Security"
+      ? { category: "security" }
+      : activeFilter === "Failed"
+        ? { outcome: "failed" }
+        : undefined;
+
   const { data: auditData, loading, error } = useAsyncData(
     () =>
-      superAdminApi.auditLogs.list(
-        activeFilter === "Security"
-          ? { category: "security" }
-          : activeFilter === "Failed"
-            ? { outcome: "failed" }
-            : undefined,
-      ),
-    [activeFilter],
+      manager
+        ? managerApi.listAuditLogs(auditQuery)
+        : superAdminApi.auditLogs.list(auditQuery),
+    [activeFilter, manager],
   );
 
   const events = useMemo(() => {
@@ -85,7 +92,7 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
 
   function handleFilterChange(filter: AuditFilter) {
     setActiveFilter(filter);
-    router.push(filterRoutes[filter]);
+    router.push(portalHref(pathname, filterRoutes[filter]));
   }
 
   function exportLogs() {

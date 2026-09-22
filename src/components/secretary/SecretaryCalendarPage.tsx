@@ -18,10 +18,9 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { secretaryApi } from "@/lib/api";
 import { listFrom, str } from "@/lib/api/mappers";
 import {
-  PROTOTYPE_TODAY,
-  calendarEvents as fallbackEvents,
   calendarLegend,
   calendarViews,
+  todayKey,
   type CalendarEvent,
   type CalendarEventKind,
   type CalendarView,
@@ -117,11 +116,11 @@ function timeMinutes(time?: string): number {
   return hours * 60 + minutes;
 }
 
-function relativeWhen(dateKey: string, todayKey = PROTOTYPE_TODAY): string {
+function relativeWhen(dateKey: string, today = todayKey()): string {
   const event = parseDay(dateKey);
-  const today = parseDay(todayKey);
+  const current = parseDay(today);
   const diff = Math.round(
-    (event.getTime() - today.getTime()) / (24 * 60 * 60 * 1000),
+    (event.getTime() - current.getTime()) / (24 * 60 * 60 * 1000),
   );
   if (diff === 0) return "Today";
   if (diff === 1) return "Tomorrow";
@@ -210,7 +209,7 @@ export function SecretaryCalendarPage({
   view?: CalendarView;
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
-  const today = parseDay(PROTOTYPE_TODAY);
+  const today = parseDay(todayKey());
   const [cursor, setCursor] = useState(today);
 
   const { data, loading, error } = useAsyncData(
@@ -233,7 +232,6 @@ export function SecretaryCalendarPage({
     const records = Array.isArray(data)
       ? data
       : listFrom((data ?? undefined) as never);
-    if (data === null) return fallbackEvents;
     return records.map((record, index) => mapEvent(record, index));
   }, [data]);
 
@@ -262,7 +260,7 @@ export function SecretaryCalendarPage({
 
   const agendaItems = useMemo(() => {
     return events
-      .filter((event) => event.date >= PROTOTYPE_TODAY)
+      .filter((event) => event.date >= todayKey())
       .sort((a, b) => {
         const dateDiff = a.date.localeCompare(b.date);
         if (dateDiff !== 0) return dateDiff;
@@ -286,7 +284,7 @@ export function SecretaryCalendarPage({
         {loading ? <p className={styles.dateLabel}>Loading calendar…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
-            Using cached calendar — {error}
+            {error}
           </p>
         ) : null}
         <div className={styles.topActions}>
@@ -403,7 +401,7 @@ export function SecretaryCalendarPage({
           <div className={styles.weekGrid}>
             {days.map((day) => {
               const key = toKey(day);
-              const isToday = key === PROTOTYPE_TODAY;
+              const isToday = key === todayKey();
               const dayEvents = eventsByDate.get(key) ?? [];
 
               return (
@@ -451,7 +449,7 @@ export function SecretaryCalendarPage({
               {days.map((day) => {
                 const key = toKey(day);
                 const inMonth = day.getMonth() === cursor.getMonth();
-                const isToday = key === PROTOTYPE_TODAY;
+                const isToday = key === todayKey();
                 const dayEvents = eventsByDate.get(key) ?? [];
                 const visible = dayEvents.slice(0, MONTH_VISIBLE);
                 const overflow = dayEvents.length - visible.length;

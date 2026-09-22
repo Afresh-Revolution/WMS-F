@@ -18,7 +18,6 @@ import { secretaryApi } from "@/lib/api";
 import { listFrom, nestedStr, str } from "@/lib/api/mappers";
 import {
   boardColumns,
-  boardTasks as fallbackTasks,
   type BoardTask,
   type TaskColumn,
   type TaskPriority,
@@ -38,6 +37,22 @@ function mapPriority(value: unknown): TaskPriority {
   if (raw.includes("high")) return "High";
   if (raw.includes("low")) return "Low";
   return "Medium";
+}
+
+function dueDateFromLabel(value: string): string {
+  const raw = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const today = new Date();
+  const lower = raw.toLowerCase();
+  const offset = lower.includes("today")
+    ? 0
+    : lower.includes("overdue") || lower.includes("yesterday")
+      ? -1
+      : 1;
+  const due = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
+  const month = String(due.getMonth() + 1).padStart(2, "0");
+  const day = String(due.getDate()).padStart(2, "0");
+  return `${due.getFullYear()}-${month}-${day}`;
 }
 
 function mapColumn(value: unknown): TaskColumn {
@@ -67,7 +82,7 @@ function mapTask(record: Record<string, unknown>, index: number): BoardTask {
     owner: nestedStr(
       record.owner ?? record.assignee ?? record.assignedTo,
       ["name", "fullName"],
-      "Grace Bello",
+      "",
     ),
     due,
     overdue:
@@ -119,10 +134,7 @@ export function SecretaryTasksPage() {
     const records = Array.isArray(data)
       ? data
       : listFrom((data ?? undefined) as never);
-    const mapped =
-      data === null
-        ? fallbackTasks
-        : records.map((record, index) => mapTask(record, index));
+    const mapped = records.map((record, index) => mapTask(record, index));
     return [...mapped, ...created].map((task) =>
       columns[task.id] ? { ...task, column: columns[task.id] } : task,
     );
@@ -193,7 +205,7 @@ export function SecretaryTasksPage() {
       description: form.description.trim(),
       priority: mapPriority(form.priority),
       audience: form.audience === "For HOD" ? "For HOD" : "For Admin",
-      owner: "Grace Bello",
+      owner: "",
       due: form.due,
       overdue: form.due.toLowerCase().includes("overdue"),
       column: "Open",
@@ -204,9 +216,9 @@ export function SecretaryTasksPage() {
         description: next.description,
         priority: next.priority.toUpperCase(),
         audience: next.audience === "For HOD" ? "HOD" : "ADMIN",
-        assignee: next.owner,
-        dueDate: next.due,
-        status: "OPEN",
+        assignedTo: next.owner || undefined,
+        dueDate: dueDateFromLabel(next.due),
+        status: "TODO",
       });
       setCreated((current) => [...current, next]);
     });
@@ -220,7 +232,7 @@ export function SecretaryTasksPage() {
         {loading ? <p className={styles.dateLabel}>Loading tasks…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
-            Using cached tasks — {error}
+            {error}
           </p>
         ) : null}
         <div className={styles.topActions}>

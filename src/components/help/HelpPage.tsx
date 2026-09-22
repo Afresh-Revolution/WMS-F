@@ -18,7 +18,7 @@ export function HelpPage() {
       <p className={styles.eyebrow}>Support</p>
       <h1 className={styles.title}>Help center</h1>
       <p className={styles.subtitle}>
-        Find guides, FAQs, and support for using Afresh WMS.
+        Find guides, FAQs, and support for using Afresh.
       </p>
       {loading ? <p>Loading help articles…</p> : null}
       {error ? <p role="alert">{error}</p> : null}

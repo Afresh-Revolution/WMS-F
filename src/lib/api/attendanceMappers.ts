@@ -6,24 +6,19 @@ import {
   num,
   str,
 } from "@/lib/api/mappers";
-import { mappedOrFallback } from "@/lib/api/internMappers";
 import type {
   AttendanceAuditLog,
+  AttendanceCorrection,
+  AttendanceCorrectionStatus,
   AttendanceEmployee,
   AttendanceException,
   AttendanceStat,
   AttendanceStatus,
   AttendanceWeekDay,
   DepartmentAttendance,
+  PersonalAttendanceDay,
 } from "@/data/attendance";
-import {
-  attendanceAuditLogs,
-  attendanceEmployees,
-  attendanceExceptions,
-  attendanceStats,
-  defaultAttendancePolicy,
-  departmentAttendance,
-} from "@/data/attendance";
+import { attendanceStats, defaultAttendancePolicy } from "@/data/attendance";
 
 export function asAttendanceRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -120,9 +115,14 @@ function nestedName(record: Record<string, unknown>, key: string): string {
 
 export function mapGpsStatus(value: unknown): AttendanceStatus {
   const normalized = str(value).toLowerCase().replace(/\s+/g, "_");
+  if (normalized.includes("not_clock") || normalized.includes("notclocked")) {
+    return "Not Clocked In";
+  }
   if (normalized === "late") return "Late";
   if (normalized === "on_leave" || normalized.includes("leave")) return "On Leave";
   if (normalized === "absent") return "Absent";
+  if (normalized.includes("missing")) return "Missing Clock-Out";
+  if (normalized.includes("early")) return "Early Departure";
   return "Present";
 }
 
@@ -257,7 +257,7 @@ export function mergeCompanyRoster(
       }));
   }
 
-  return attendanceEmployees;
+  return [];
 }
 
 export function buildDepartmentBreakdown(
@@ -282,8 +282,7 @@ export function buildDepartmentBreakdown(
     if (person.status === "On Leave") current.onLeave += 1;
     groups.set(name, current);
   }
-  const rows = Array.from(groups.values());
-  return rows.length > 0 ? rows : departmentAttendance;
+  return Array.from(groups.values());
 }
 
 export function buildAttendanceStats(
@@ -297,6 +296,12 @@ export function buildAttendanceStats(
   ).length;
   const absent = roster.filter((person) => person.status === "Absent").length;
   const onLeave = roster.filter((person) => person.status === "On Leave").length;
+  const missing = roster.filter(
+    (person) => person.status === "Missing Clock-Out",
+  ).length;
+  const early = roster.filter(
+    (person) => person.status === "Early Departure",
+  ).length;
   const summary = asAttendanceRecord(unwrapAttendanceData(summaryPayload));
 
   return attendanceStats.map((stat) => {
@@ -308,18 +313,34 @@ export function buildAttendanceStats(
     if (stat.id === "late") return { ...stat, value: num(summary.late, late) };
     if (stat.id === "absent") return { ...stat, value: absent };
     if (stat.id === "onLeave") return { ...stat, value: onLeave };
-    if (stat.id === "missing") return { ...stat, value: 0 };
-    if (stat.id === "early") return { ...stat, value: 0 };
+    if (stat.id === "missing") return { ...stat, value: missing };
+    if (stat.id === "early") return { ...stat, value: early };
     return stat;
   });
+}
+
+const EXCEPTION_STATUSES = new Set<AttendanceStatus>([
+  "Late",
+  "Absent",
+  "Missing Clock-Out",
+  "Early Departure",
+]);
+
+function exceptionDetail(record: MappedAttendanceRecord): string {
+  if (record.notes) return record.notes;
+  if (record.status === "Late") return "Late arrival";
+  if (record.status === "Absent") return "Did not clock in";
+  if (record.status === "Missing Clock-Out") return "No clock-out recorded";
+  if (record.status === "Early Departure") return "Left before closing time";
+  return "—";
 }
 
 export function mapRecordsToExceptions(
   recordsPayload: unknown,
 ): AttendanceException[] {
-  const records = unwrapAttendanceList(recordsPayload).map(mapAttendanceRecord);
-  return records
-    .filter((record) => record.status === "Late")
+  return unwrapAttendanceList(recordsPayload)
+    .map(mapAttendanceRecord)
+    .filter((record) => EXCEPTION_STATUSES.has(record.status))
     .map((record) => ({
       id: record.id,
       name: record.employeeName,
@@ -328,19 +349,101 @@ export function mapRecordsToExceptions(
       weekday: formatLagosWeekday(record.workDate || record.checkInAt),
       clockIn: record.clockIn,
       clockOut: record.clockOut,
-      detail: record.notes || "Late arrival",
-      status: "Late" as const,
+      detail: exceptionDetail(record),
+      status: record.status as AttendanceException["status"],
     }));
 }
 
-export function liveExceptionsOrFallback(
+export function mapCorrectionStatus(
+  value: unknown,
+): AttendanceCorrectionStatus | null {
+  const normalized = str(value).toLowerCase().replace(/[_-]+/g, " ");
+  if (!normalized) return null;
+  if (normalized.includes("reject")) return "Rejected";
+  if (
+    normalized.includes("implement") ||
+    normalized.includes("applied") ||
+    normalized === "approved"
+  ) {
+    return "Implemented";
+  }
+  if (normalized.includes("admin") || normalized.includes("await")) {
+    return "Awaiting Admin Approval";
+  }
+  if (
+    normalized.includes("hr") ||
+    normalized.includes("review") ||
+    normalized.includes("pending")
+  ) {
+    return "Under HR Review";
+  }
+  return null;
+}
+
+export function mapRecordsToCorrections(
   recordsPayload: unknown,
-): AttendanceException[] {
-  return mappedOrFallback(
-    recordsPayload,
-    mapRecordsToExceptions(recordsPayload),
-    attendanceExceptions,
-  );
+): AttendanceCorrection[] {
+  return unwrapAttendanceList(recordsPayload).flatMap((row, index) => {
+    const correction = asAttendanceRecord(
+      row.correction ?? row.correctionRequest ?? row.request,
+    );
+    const hasCorrection =
+      Object.keys(correction).length > 0 ||
+      row.correctionStatus != null ||
+      row.correctionId != null ||
+      str(row.type).toLowerCase().includes("correct");
+    if (!hasCorrection) return [];
+
+    const record = mapAttendanceRecord(row);
+    const status =
+      mapCorrectionStatus(
+        correction.status ??
+          row.correctionStatus ??
+          row.requestStatus ??
+          correction.state,
+      ) ?? "Under HR Review";
+    const reference = str(
+      correction.reference ??
+        correction.code ??
+        row.correctionId ??
+        correction.id,
+      record.id ? `AC-${record.id.slice(-4).toUpperCase()}` : `AC-${index + 1}`,
+    );
+    const change = str(
+      correction.change ??
+        correction.requestedChange ??
+        correction.summary ??
+        record.notes,
+      "—",
+    );
+
+    return [
+      {
+        id: str(
+          correction.id ?? row.correctionId ?? record.id,
+          `correction-${index}`,
+        ),
+        reference,
+        name: record.employeeName,
+        issue: str(
+          correction.issue ?? correction.reason ?? record.status,
+          record.status,
+        ),
+        status,
+        dateLabel: formatLagosDateLabel(
+          correction.date ?? (record.workDate || record.checkInAt),
+        ),
+        change,
+        department: record.department,
+        note: str(
+          correction.note ??
+            correction.notes ??
+            correction.comment ??
+            record.notes,
+        ),
+      },
+    ];
+  });
 }
 
 export type AttendanceReportRow = {
@@ -416,11 +519,7 @@ export function mapAuditToAttendanceLogs(
 }
 
 export function liveAuditLogsOrFallback(payload: unknown): AttendanceAuditLog[] {
-  return mappedOrFallback(
-    payload,
-    mapAuditToAttendanceLogs(payload),
-    attendanceAuditLogs,
-  );
+  return mapAuditToAttendanceLogs(payload);
 }
 
 export type MappedAttendanceSchedule = {
@@ -431,6 +530,7 @@ export type MappedAttendanceSchedule = {
   closingTime: string;
   daysOfWeek: number[];
   locationIds: string[];
+  departmentId: string;
   timezone: string;
   active: boolean;
 };
@@ -453,6 +553,7 @@ export function mapAttendanceSchedule(
     locationIds: Array.isArray(record.locationIds)
       ? record.locationIds.map((id) => str(id))
       : [],
+    departmentId: str(record.departmentId ?? asAttendanceRecord(record.department).id),
     timezone: str(record.timezone, "Africa/Lagos"),
     active: record.active !== false,
   };
@@ -505,21 +606,29 @@ export type MappedAttendanceLocation = {
   active: boolean;
   latitude?: number;
   longitude?: number;
+  departmentId: string;
+  timezone: string;
 };
 
 export function mapAttendanceLocation(
   record: Record<string, unknown>,
 ): MappedAttendanceLocation {
+  const latitude =
+    record.latitude == null ? undefined : num(record.latitude, Number.NaN);
+  const longitude =
+    record.longitude == null ? undefined : num(record.longitude, Number.NaN);
   return {
     id: str(record.id ?? record._id),
     name: str(record.name, "Location"),
     address: str(record.address ?? record.description),
     radiusMeters: num(record.radiusMeters, 3000),
     active: record.active !== false,
-    latitude:
-      record.latitude == null ? undefined : num(record.latitude, Number.NaN),
-    longitude:
-      record.longitude == null ? undefined : num(record.longitude, Number.NaN),
+    latitude: Number.isFinite(latitude) ? latitude : undefined,
+    longitude: Number.isFinite(longitude) ? longitude : undefined,
+    departmentId: str(
+      record.departmentId ?? asAttendanceRecord(record.department).id,
+    ),
+    timezone: str(record.timezone, "Africa/Lagos"),
   };
 }
 
@@ -549,5 +658,44 @@ export function mapCheckInWindow(payload: unknown) {
         Array.isArray(first.locations) ? first.locations[0] : first.locations,
       ).id,
     ),
+    status: mapGpsStatus(data.status ?? first.status ?? data.todayStatus),
+    checkInAt: str(data.checkInAt ?? first.checkInAt),
+    checkOutAt: str(data.checkOutAt ?? first.checkOutAt),
   };
+}
+
+export function formatExpectedClock(value: string) {
+  const text = str(value).trim();
+  if (!text) return "8:00 AM";
+  if (/am|pm/i.test(text)) return text.replace(/^0/, "");
+  const match = text.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return text;
+  const hour = Number(match[1]);
+  const minutes = match[2];
+  const period = hour >= 12 ? "PM" : "AM";
+  const twelve = hour % 12 || 12;
+  return `${twelve}:${minutes} ${period}`;
+}
+
+export function mapPersonalHistory(payload: unknown): PersonalAttendanceDay[] {
+  return unwrapAttendanceList(payload).map((record, index) => {
+    const mapped = mapAttendanceRecord(record);
+    const lateMinutes = num(
+      record.lateMinutes ?? record.lateByMinutes ?? record.minutesLate,
+    );
+    const lateLabel =
+      mapped.status === "Late"
+        ? `Late by ${lateMinutes || 1} minute${lateMinutes === 1 ? "" : "s"}`
+        : "";
+    return {
+      id: mapped.id || String(index),
+      dateLabel: formatLagosDateLabel(mapped.workDate),
+      weekday: formatLagosWeekday(mapped.workDate),
+      clockIn: mapped.clockIn,
+      clockOut: mapped.clockOut,
+      duration: mapped.duration,
+      status: mapped.status,
+      lateLabel,
+    };
+  });
 }

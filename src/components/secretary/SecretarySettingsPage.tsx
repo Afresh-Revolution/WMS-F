@@ -2,6 +2,7 @@
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { FormEvent, useState } from "react";
+import Link from "next/link";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { usePageActions } from "@/hooks/usePageActions";
 import { notificationsApi } from "@/lib/api";
@@ -40,7 +41,8 @@ export function SecretarySettingsPage() {
       <h1 className={styles.title}>Workspace preferences</h1>
       <p className={styles.subtitle}>
         Notification preferences for the secretary workspace. Organization
-        settings stay with Super Admin.
+        settings stay with Super Admin. First login uses your first name —{" "}
+        <Link href="/change-password">change that password here</Link>.
       </p>
 
       <form className={styles.form} onSubmit={(event) => void handleSave(event)}>

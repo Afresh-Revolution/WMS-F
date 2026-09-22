@@ -15,7 +15,8 @@ import {
 } from "@/data/financeExpenses";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapExpense } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceExpensesPage.module.css";
@@ -36,24 +37,44 @@ const createFields = [
     options: [
       { label: "Meals", value: "Meals" },
       { label: "Transport", value: "Transport" },
+      { label: "Accommodation", value: "Accommodation" },
+      { label: "Fuel", value: "Fuel" },
+      { label: "Office Supplies", value: "Office Supplies" },
+      { label: "Communication", value: "Communication" },
       { label: "Travel", value: "Travel" },
-      { label: "Supplies", value: "Supplies" },
+      { label: "Client Entertainment", value: "Client Entertainment" },
+      { label: "Training", value: "Training" },
+      { label: "Software", value: "Software" },
       { label: "Equipment", value: "Equipment" },
+      { label: "Medical", value: "Medical" },
+      { label: "Internet", value: "Internet" },
+      { label: "Other", value: "Other" },
     ],
   },
   { name: "date", label: "Date", type: "date" as const, required: true },
   { name: "amount", label: "Amount", required: true, placeholder: "₦ 0" },
 ];
 
+function expenseWriteBody(values: Record<string, string>) {
+  const amount = Number(String(values.amount ?? "").replace(/[^\d.]/g, ""));
+  return {
+    description: values.description.trim(),
+    category: values.category.trim() || "Other",
+    date: values.date,
+    amount,
+  };
+}
+
 export function FinanceExpensesPage() {
+  const manager = useManagerPortal();
   const [activeSection, setActiveSection] = useState<ExpenseSectionTab>("My expense");
   const [createOpen, setCreateOpen] = useState(false);
   const [query, setQuery] = useState("");
   const { runAction, exportRows } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.expenses.list(),
-    [],
+    () => (manager ? managerApi.listExpenses() : superAdminApi.expenses.list()),
+    [manager],
   );
 
   const expenseClaims = useMemo(() => {
@@ -103,12 +124,22 @@ export function FinanceExpensesPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Submit claim", async () => {
-      await superAdminApi.expenses.create(values);
+      const body = expenseWriteBody(values);
+      if (!body.description) {
+        throw new Error("Enter a description for this claim.");
+      }
+      if (!Number.isFinite(body.amount) || body.amount <= 0) {
+        throw new Error("Enter a valid amount.");
+      }
+      await (manager
+        ? managerApi.createExpense(body)
+        : superAdminApi.expenses.create(body));
       refetch();
     });
   }
 
   async function deleteClaim(claim: ExpenseClaim) {
+    if (manager) return;
     await runAction(`Delete ${claim.ref}`, async () => {
       await superAdminApi.expenses.delete(claim.id);
       refetch();
@@ -255,7 +286,7 @@ export function FinanceExpensesPage() {
                 </thead>
                 <tbody>
                   {filteredClaims.map((claim) => {
-                    const CategoryIcon = categoryIcons[claim.category];
+                    const CategoryIcon = categoryIcons[claim.category] ?? categoryIcons.Other;
                     return (
                       <tr key={claim.id}>
                         <td className={styles.refCell}>{claim.ref}</td>
@@ -272,14 +303,16 @@ export function FinanceExpensesPage() {
                           <span className={statusClass[claim.status]}>{claim.status}</span>
                         </td>
                         <td className={styles.actionCell}>
-                          <button
-                            type="button"
-                            aria-label={`Delete ${claim.ref}`}
-                            className={styles.deleteButton}
-                            onClick={() => void deleteClaim(claim)}
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                          {manager ? null : (
+                            <button
+                              type="button"
+                              aria-label={`Delete ${claim.ref}`}
+                              className={styles.deleteButton}
+                              onClick={() => void deleteClaim(claim)}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -303,7 +336,7 @@ export function FinanceExpensesPage() {
       <SimpleModal
         open={createOpen}
         title="Submit expense claim"
-        description="Add a reimbursable expense with receipt details."
+        description="Add a reimbursable expense. A receipt is optional."
         fields={createFields}
         submitLabel="Submit claim"
         onClose={() => setCreateOpen(false)}

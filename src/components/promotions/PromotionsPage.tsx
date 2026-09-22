@@ -11,8 +11,9 @@ import { PageTopBar } from "@/components/layout/PageTopBar";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { listStaffEmployees, superAdminApi } from "@/lib/api";
+import { listStaffEmployees, managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapEmployee, mapPromotion } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./PromotionsPage.module.css";
 
 const statusClass: Record<PromotionStatus, string> = {
@@ -50,6 +51,7 @@ function formatPromoDate(value: string, withYear = false) {
 }
 
 export function PromotionsPage() {
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<PromotionFilter>("All");
   const [createOpen, setCreateOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -57,8 +59,12 @@ export function PromotionsPage() {
   const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
     () =>
-      superAdminApi.hr.promotions.list().catch(() => superAdminApi.promotions.list()),
-    [],
+      manager
+        ? managerApi.listPromotions()
+        : superAdminApi.hr.promotions
+            .list()
+            .catch(() => superAdminApi.promotions.list()),
+    [manager],
   );
   const { data: employeeData } = useAsyncData(
     () => listStaffEmployees().catch(() => []),
@@ -183,9 +189,13 @@ export function PromotionsPage() {
         body.effectiveDate = effectiveDate;
         body.effectiveFrom = effectiveDate;
       }
-      await superAdminApi.hr.promotions
-        .create(body)
-        .catch(() => superAdminApi.promotions.create(body));
+      if (manager) {
+        await managerApi.createPromotion(body);
+      } else {
+        await superAdminApi.hr.promotions
+          .create(body)
+          .catch(() => superAdminApi.promotions.create(body));
+      }
       refetch();
     });
   }

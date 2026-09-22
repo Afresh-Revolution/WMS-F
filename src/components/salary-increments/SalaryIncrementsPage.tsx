@@ -13,8 +13,9 @@ import { SalaryIncrementDrawer } from "@/components/salary-increments/SalaryIncr
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { listStaffEmployees, superAdminApi } from "@/lib/api";
+import { listStaffEmployees, managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapEmployee, mapSalaryIncrement } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./SalaryIncrementsPage.module.css";
 
 const statusClass: Record<IncrementStatus, string> = {
@@ -75,6 +76,7 @@ function formatEffectiveDate(value: string) {
 }
 
 export function SalaryIncrementsPage() {
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<IncrementFilter>("All");
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedIncrement, setSelectedIncrement] =
@@ -84,10 +86,12 @@ export function SalaryIncrementsPage() {
   const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
     () =>
-      superAdminApi.salaryIncrements
-        .list()
-        .catch(() => superAdminApi.hr.salaryAdjustments.list()),
-    [],
+      manager
+        ? managerApi.listSalaryRecommendations()
+        : superAdminApi.salaryIncrements
+            .list()
+            .catch(() => superAdminApi.hr.salaryAdjustments.list()),
+    [manager],
   );
   const { data: employeeData } = useAsyncData(
     () => listStaffEmployees().catch(() => []),
@@ -213,9 +217,13 @@ export function SalaryIncrementsPage() {
       status,
     };
     await runAction(actionLabel, async () => {
-      await superAdminApi.hr.salaryAdjustments
-        .create(body)
-        .catch(() => superAdminApi.salaryIncrements.create(body));
+      if (manager) {
+        await managerApi.createSalaryRecommendation(body);
+      } else {
+        await superAdminApi.hr.salaryAdjustments
+          .create(body)
+          .catch(() => superAdminApi.salaryIncrements.create(body));
+      }
       refetch();
     });
   }

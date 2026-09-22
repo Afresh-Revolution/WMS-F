@@ -21,7 +21,8 @@ import {
 } from "@/data/financeVendors";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapVendor } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceVendorsPage.module.css";
@@ -30,20 +31,43 @@ const vendorFilters: VendorFilter[] = ["Active", "All"];
 
 const createFields = [
   { name: "name", label: "Vendor name", required: true },
-  { name: "category", label: "Category", required: true },
+  {
+    name: "category",
+    label: "Category",
+    type: "select" as const,
+    required: true,
+    defaultValue: "Meals",
+    options: [
+      { label: "Meals", value: "Meals" },
+      { label: "Transport", value: "Transport" },
+      { label: "Accommodation", value: "Accommodation" },
+      { label: "Fuel", value: "Fuel" },
+      { label: "Office Supplies", value: "Office Supplies" },
+      { label: "Communication", value: "Communication" },
+      { label: "Travel", value: "Travel" },
+      { label: "Client Entertainment", value: "Client Entertainment" },
+      { label: "Training", value: "Training" },
+      { label: "Software", value: "Software" },
+      { label: "Equipment", value: "Equipment" },
+      { label: "Medical", value: "Medical" },
+      { label: "Internet", value: "Internet" },
+      { label: "Other", value: "Other" },
+    ],
+  },
   { name: "location", label: "Location", required: true },
   { name: "email", label: "Email", type: "email" as const, required: true },
 ];
 
 export function FinanceVendorsPage() {
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<VendorFilter>("Active");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction, exportRows } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.vendors.list(),
-    [],
+    () => (manager ? managerApi.listVendors() : superAdminApi.vendors.list()),
+    [manager],
   );
 
   const vendors = useMemo(() => {
@@ -78,14 +102,29 @@ export function FinanceVendorsPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Add vendor", async () => {
-      await superAdminApi.vendors.create({ ...values, active: true });
+      const body = {
+        name: values.name.trim(),
+        vendorName: values.name.trim(),
+        category: values.category.trim() || "Other",
+        location: values.location.trim(),
+        email: values.email.trim(),
+        status: "active",
+      };
+      if (!body.name) {
+        throw new Error("Enter a vendor name.");
+      }
+      await (manager
+        ? managerApi.createVendor(body)
+        : superAdminApi.vendors.create({ ...body, active: true }));
       refetch();
     });
   }
 
   async function viewVendor(vendor: Vendor) {
     await runAction(`Vendor — ${vendor.name}`, async () => {
-      await superAdminApi.vendors.get(vendor.id);
+      await (manager
+        ? managerApi.getVendor(vendor.id)
+        : superAdminApi.vendors.get(vendor.id));
     });
   }
 

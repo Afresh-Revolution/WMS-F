@@ -26,8 +26,7 @@ import {
 } from "@/lib/api/mappers";
 import {
   directoryFilters,
-  directoryMailboxes as fallbackMailboxes,
-  directoryStats as fallbackStats,
+  directoryStatCards,
   type DirectoryMailbox,
   type DirectoryStat,
   type MailboxFilter,
@@ -179,10 +178,7 @@ export function SecretaryEmailDirectoryPage({
     const records = Array.isArray(data)
       ? data
       : listFrom((data ?? undefined) as never);
-    const mapped =
-      data === null
-        ? fallbackMailboxes
-        : records.map((record) => mapMailbox(record));
+    const mapped = records.map((record) => mapMailbox(record));
     return mapped.map((mailbox) =>
       emailOverrides[mailbox.id]
         ? { ...mailbox, email: emailOverrides[mailbox.id] }
@@ -201,7 +197,7 @@ export function SecretaryEmailDirectoryPage({
       Deactivated: mailboxes.filter((item) => item.status === "Deactivated")
         .length,
     };
-    return fallbackStats.map((stat) => ({
+    return directoryStatCards.map((stat) => ({
       ...stat,
       value: String(counts[stat.filter]),
     }));
@@ -276,7 +272,7 @@ export function SecretaryEmailDirectoryPage({
         {loading ? <p className={styles.dateLabel}>Loading directory…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
-            Using cached directory — {error}
+            {error}
           </p>
         ) : null}
         <div className={styles.topActions}>

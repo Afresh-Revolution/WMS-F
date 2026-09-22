@@ -35,6 +35,7 @@
   line-height: 1.12;
   letter-spacing: -0.02em;
   color: var(--afresh-orange);
+  white-space: nowrap;
 }
 
 .subtitle {
@@ -73,29 +74,31 @@
 .viewToggle {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
+  padding: 4px;
+  border-radius: 999px;
 }
 
 .viewButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 44px;
-  padding: 0 16px;
+  min-width: 76px;
+  height: 40px;
+  padding: 0 18px;
   border: 1px solid #ebe6e1;
   border-radius: 999px;
   background: #fff;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: #78716c;
+  color: #c4bfb9;
 }
 
 .viewButtonActive {
   background: var(--afresh-orange);
   border-color: var(--afresh-orange);
   color: #fff;
-  box-shadow: none;
 }
 
 .staffSearch {
@@ -137,7 +140,7 @@
 
 .filterChip {
   padding: 8px 16px;
-  border: 1px solid #ebe6e1;
+  border: 1px solid #f0ece8;
   border-radius: 999px;
   background: #fff;
   font-size: 13px;
@@ -146,6 +149,7 @@
 }
 
 .filterChipActive {
+  border-color: var(--afresh-orange);
   background: var(--afresh-orange);
   border-color: var(--afresh-orange);
   color: #fff;

@@ -5,7 +5,22 @@ export type ExpenseSectionTab = "My expense" | "Team expenses" | "Policies";
 
 export type ExpenseStatus = "Pending" | "Approved" | "Rejected";
 
-export type ExpenseCategory = "Meals" | "Transport" | "Travel" | "Supplies" | "Equipment";
+export type ExpenseCategory =
+  | "Meals"
+  | "Transport"
+  | "Accommodation"
+  | "Fuel"
+  | "Office Supplies"
+  | "Communication"
+  | "Travel"
+  | "Client Entertainment"
+  | "Training"
+  | "Software"
+  | "Equipment"
+  | "Medical"
+  | "Internet"
+  | "Other"
+  | "Supplies";
 
 export type ExpenseClaim = {
   id: string;
@@ -55,12 +70,22 @@ export const expenseStats = [
   },
 ] as const;
 
-export const categoryIcons: Record<ExpenseCategory, LucideIcon> = {
+export const categoryIcons: Record<string, LucideIcon> = {
   Meals: UtensilsCrossed,
   Transport: Car,
+  Accommodation: Package,
+  Fuel: Car,
+  "Office Supplies": Package,
+  Communication: Monitor,
   Travel: Plane,
-  Supplies: Package,
+  "Client Entertainment": UtensilsCrossed,
+  Training: Monitor,
+  Software: Monitor,
   Equipment: Monitor,
+  Medical: Package,
+  Internet: Monitor,
+  Other: Package,
+  Supplies: Package,
 };
 
 export const expenseClaims: ExpenseClaim[] = [

@@ -4,10 +4,10 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { employeeHome, employeeProfile } from "@/data/employeeHome";
-import { notificationsApi } from "@/lib/api";
+import { employeeApi, notificationsApi } from "@/lib/api";
 import { bool, listFrom, str } from "@/lib/api/mappers";
 import styles from "./EmployeeNotificationsPage.module.css";
 
@@ -17,14 +17,6 @@ type EmployeeNotification = {
   time: string;
   unread: boolean;
 };
-
-const fallbackNotifications: EmployeeNotification[] =
-  employeeHome.notifications.map((item, index) => ({
-    id: `local-${index + 1}`,
-    message: item.message,
-    time: "Today",
-    unread: true,
-  }));
 
 function mapNotification(
   record: Record<string, unknown>,
@@ -39,20 +31,24 @@ function mapNotification(
 }
 
 export function EmployeeNotificationsPage() {
+  const { user } = useCurrentUser();
   const { runAction } = usePageActions();
   const [localRead, setLocalRead] = useState<Set<string>>(new Set());
   const { data } = useAsyncData(async () => {
     try {
-      return await notificationsApi.list();
+      return await employeeApi.notifications.list();
     } catch {
-      return null;
+      try {
+        return await notificationsApi.list();
+      } catch {
+        return null;
+      }
     }
   }, []);
 
   const notifications = useMemo(() => {
     const live = listFrom(data ?? undefined).map(mapNotification);
-    const source = live.length > 0 ? live : fallbackNotifications;
-    return source.map((item) =>
+    return live.map((item) =>
       localRead.has(item.id) ? { ...item, unread: false } : item,
     );
   }, [data, localRead]);
@@ -122,7 +118,7 @@ export function EmployeeNotificationsPage() {
           </label>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.profileButton}>
-            {employeeProfile.initials}
+            {user?.initials || "—"}
           </ProfileLink>
         </div>
       </header>

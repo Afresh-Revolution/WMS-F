@@ -5,6 +5,9 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { employeeProfile } from "@/data/employeeHome";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { employeeApi } from "@/lib/api";
+import { listFrom, num, str } from "@/lib/api/mappers";
 import styles from "./EmployeeExpensesPage.module.css";
 
 type ReimbursementStatus = "Pending" | "Paid" | "Returned";
@@ -55,12 +58,28 @@ function statusClass(status: ReimbursementStatus) {
 
 export function EmployeeReimbursementsPage() {
   const [filter, setFilter] = useState<ReimbursementFilter>("All");
+  const { data } = useAsyncData(
+    () => employeeApi.reimbursements.list({ limit: 50 }).catch(() => []),
+    [],
+  );
+  const catalog = useMemo(() => {
+    const rows = listFrom(data ?? undefined);
+    if (!rows.length) return reimbursements;
+    return rows.map((row, index) => ({
+      id: str(row.id ?? row.reference, `RB-${index}`),
+      title: str(row.description ?? row.title, "Reimbursement"),
+      status: str(row.reimbursementStatus ?? row.status, "Pending") as ReimbursementStatus,
+      category: str(row.category ?? row.categoryName, "General"),
+      date: str(row.date ?? row.createdAt, "—"),
+      amount: `₦ ${num(row.amount).toLocaleString("en-NG")}`,
+    }));
+  }, [data]);
   const visible = useMemo(
     () =>
-      reimbursements.filter(
+      catalog.filter(
         (item) => filter === "All" || item.status === filter,
       ),
-    [filter],
+    [catalog, filter],
   );
 
   return (

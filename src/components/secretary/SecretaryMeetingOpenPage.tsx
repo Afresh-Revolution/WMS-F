@@ -15,7 +15,7 @@ import {
   str,
 } from "@/lib/api/mappers";
 import {
-  managedMeetings as fallbackMeetings,
+  todayKey,
   type ManagedMeeting,
   type MeetingAudience,
   type MeetingPerson,
@@ -48,70 +48,60 @@ function mapAudience(value: unknown, fallback: MeetingAudience): MeetingAudience
   return fallback;
 }
 
-function mapPeople(value: unknown, fallback: MeetingPerson[]): MeetingPerson[] {
-  const records = listFrom((value ?? undefined) as never);
-  if (records.length === 0) return fallback;
-  return records.map((record, index) => {
+function mapPeople(value: unknown): MeetingPerson[] {
+  return listFrom((value ?? undefined) as never).map((record, index) => {
     const name = str(
       record.name,
-      nestedStr(record.user ?? record.attendee, ["name", "fullName"], fallback[index]?.name ?? "Guest"),
+      nestedStr(record.user ?? record.attendee, ["name", "fullName"]),
     );
     return {
-      id: str(record.id, fallback[index]?.id ?? String(index)),
+      id: str(record.id, String(index)),
       name,
-      initials: str(record.initials, fallback[index]?.initials ?? initials(name)),
-      avatarColor: str(
-        record.avatarColor,
-        fallback[index]?.avatarColor ?? avatarColor(name),
-      ),
+      initials: str(record.initials, initials(name)),
+      avatarColor: str(record.avatarColor, avatarColor(name)),
     };
   });
 }
 
-function mapMeeting(
-  record: Record<string, unknown>,
-  fallback: ManagedMeeting,
-): ManagedMeeting {
-  const location = str(record.location ?? record.place, fallback.location);
+function mapMeeting(record: Record<string, unknown>, id: string): ManagedMeeting {
+  const location = str(record.location ?? record.place);
   const people = mapPeople(
     record.people ?? record.attendeesList ?? record.attendees,
-    fallback.people ?? [],
   );
   const agendaRecords = listFrom((record.agenda as never) ?? undefined);
-  const agenda =
-    agendaRecords.length > 0
-      ? agendaRecords.map((item) => str(item.title ?? item.name ?? item))
-      : Array.isArray(record.agenda)
-        ? (record.agenda as unknown[]).map((item) => String(item))
-        : fallback.agenda ?? [];
+  const agenda = agendaRecords.map((item) =>
+    str(item.title ?? item.name ?? item),
+  );
+  const start = record.start ?? record.startAt ?? record.start_at ?? record.date;
+  const date = str(start, todayKey()).slice(0, 10);
 
   return {
-    ...fallback,
-    title: str(record.title ?? record.name, fallback.title),
-    date: str(
-      record.start ?? record.startAt ?? record.date ?? record.day,
-      fallback.date,
-    ).slice(0, 10),
-    when: str(record.when, fallback.when),
-    time: str(record.time, fallback.time),
-    duration: str(record.duration, fallback.duration),
+    id: str(record.id, id),
+    title: str(record.title ?? record.name),
+    date,
+    when: str(record.when),
+    time: str(
+      record.time,
+      start
+        ? new Date(str(start)).toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+          })
+        : "",
+    ),
+    duration: str(record.duration ?? record.durationMinutes, "60m"),
     location,
     virtual:
-      Boolean(record.virtual) ||
-      location.toLowerCase().includes("virtual") ||
-      fallback.virtual,
-    attendees: people.length || fallback.attendees,
-    audience: mapAudience(record.audience ?? record.for, fallback.audience),
+      Boolean(record.virtual ?? record.meetingLink) ||
+      location.toLowerCase().includes("virtual"),
+    attendees: people.length,
+    audience: mapAudience(record.audience ?? record.for, "For Admin"),
     organiser: nestedStr(
-      record.organiser ?? record.organizer ?? record.createdBy,
+      record.organiser ?? record.organizer ?? record.organizerName ?? record.createdBy,
       ["name", "fullName"],
-      fallback.organiser ?? "",
     ),
-    virtualLink: str(
-      record.virtualLink ?? record.meetingLink ?? record.link,
-      fallback.virtualLink ?? "",
-    ),
-    reminder: str(record.reminder, fallback.reminder ?? "15 min before"),
+    virtualLink: str(record.virtualLink ?? record.meetingLink ?? record.link),
+    reminder: str(record.reminder),
     people,
     agenda,
   };
@@ -119,8 +109,6 @@ function mapMeeting(
 
 export function SecretaryMeetingOpenPage({ id }: { id: string }) {
   const searchRef = useRef<HTMLInputElement>(null);
-  const fallback = fallbackMeetings.find((item) => item.id === id) ?? null;
-
   const { data, loading, error } = useAsyncData(
     () => secretaryApi.getMeeting(id),
     [id],
@@ -140,11 +128,9 @@ export function SecretaryMeetingOpenPage({ id }: { id: string }) {
   const meeting = useMemo((): ManagedMeeting | null => {
     const record =
       data && typeof data === "object" ? (data as Record<string, unknown>) : null;
-    if (!record) return fallback;
-    const template = fallback ?? fallbackMeetings[0];
-    if (!template) return null;
-    return mapMeeting(record, { ...template, id });
-  }, [data, fallback]);
+    if (!record) return null;
+    return mapMeeting(record, id);
+  }, [data, id]);
 
   return (
     <div className={styles.page}>
@@ -153,7 +139,7 @@ export function SecretaryMeetingOpenPage({ id }: { id: string }) {
         {loading ? <p className={styles.dateLabel}>Loading meeting…</p> : null}
         {error ? (
           <p className={styles.dateLabel} role="alert">
-            Using cached meeting — {error}
+            {error}
           </p>
         ) : null}
         <div className={styles.topActions}>

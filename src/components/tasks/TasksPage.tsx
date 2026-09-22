@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronRight, Clock, Plus } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, Clock, Plus } from "lucide-react";
 import {
   taskFilters,
   type Task,
@@ -13,8 +13,9 @@ import { PageTopBar } from "@/components/layout/PageTopBar";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { listStaffEmployees, superAdminApi } from "@/lib/api";
+import { listStaffEmployees, managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapEmployee, mapTask } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./TasksPage.module.css";
 
 const priorityClass: Record<TaskPriority, string> = {
@@ -49,14 +50,15 @@ function formatDueDate(value: string) {
 }
 
 export function TasksPage() {
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<TaskFilter>("All");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.tasks.list(),
-    [],
+    () => (manager ? managerApi.listTasks() : superAdminApi.tasks.list()),
+    [manager],
   );
   const { data: employeeData } = useAsyncData(
     () => listStaffEmployees().catch(() => []),
@@ -159,7 +161,7 @@ export function TasksPage() {
   async function handleCreate(values: Record<string, string>) {
     const employee = employees.find((item) => item.id === values.assigneeId);
     await runAction("Create task", async () => {
-      await superAdminApi.tasks.create({
+      const body = {
         title: values.title.trim(),
         description: values.description.trim(),
         priority: values.priority,
@@ -170,7 +172,12 @@ export function TasksPage() {
         assigneeName: employee?.name,
         department: employee?.department,
         status: "Not Started",
-      });
+      };
+      if (manager) {
+        await managerApi.createTask(body);
+      } else {
+        await superAdminApi.tasks.create(body);
+      }
       refetch();
     });
   }
@@ -178,7 +185,11 @@ export function TasksPage() {
   async function toggleComplete(task: Task) {
     const nextStatus = task.status === "Completed" ? "In Progress" : "Completed";
     await runAction("Update task", async () => {
-      await superAdminApi.tasks.patch(task.id, { status: nextStatus });
+      if (manager) {
+        await managerApi.updateTask(task.id, { status: nextStatus });
+      } else {
+        await superAdminApi.tasks.patch(task.id, { status: nextStatus });
+      }
       refetch();
     });
   }
@@ -281,6 +292,9 @@ export function TasksPage() {
                       {task.priority}
                     </span>
                     <span className={statusClass[task.status]}>
+                      {task.status === "Overdue" ? (
+                        <AlertTriangle size={11} strokeWidth={2.25} />
+                      ) : null}
                       {task.status}
                     </span>
                   </div>

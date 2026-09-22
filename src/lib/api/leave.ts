@@ -20,20 +20,6 @@ function asObject(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
-function employeeIdFrom(payload: unknown, allowRootId = false): string {
-  const record = unwrapRecord(payload);
-  const nested = asObject(record.data) ?? record;
-  const employee = asObject(nested.employee) ?? asObject(nested.profile);
-  return str(
-    nested.employeeId ??
-      nested.employee_id ??
-      nested.staffId ??
-      employee?.id ??
-      employee?.employeeId ??
-      (allowRootId ? nested.id : ""),
-  );
-}
-
 function accountKind(): "employee" | "staff" | "unknown" {
   const role = `${readCachedWorkspace()?.roleKey ?? ""} ${readCachedOrJwtUser()?.role ?? ""}`
     .toLowerCase()
@@ -61,56 +47,6 @@ function accountKind(): "employee" | "staff" | "unknown" {
   return "unknown";
 }
 
-async function resolveSelfEmployeeId(): Promise<string> {
-  const user = readCachedOrJwtUser();
-  const fromUser = str(
-    (user as { employeeId?: string } | null)?.employeeId,
-  );
-  if (fromUser) return fromUser;
-
-  const profileSources = [
-    "/profile",
-    "/employees/me",
-    "/employee/me",
-    "/auth/me",
-  ];
-  for (const path of profileSources) {
-    try {
-      const id = employeeIdFrom(await apiRequest(path));
-      if (id && id.includes("-")) return id;
-    } catch {
-      /* try the next source */
-    }
-  }
-
-  const email = user?.email?.trim();
-  if (!email) return "";
-  try {
-    const payload = await firstSuccessful(
-      [
-        () => apiRequest(`/employees${buildQuery({ email, q: email, limit: 50 })}`),
-        () =>
-          apiRequest(
-            `/super-admin/employees${buildQuery({ email, q: email, limit: 50 })}`,
-          ),
-      ],
-      "employees",
-    );
-    const needle = email.toLowerCase();
-    const match = unwrapList<Record<string, unknown>>(payload).find((row) => {
-      const nested = asObject(row.data) ?? row;
-      const person = asObject(nested.user) ?? nested;
-      const rowEmail = str(
-        person.email ?? person.workEmail ?? person.companyEmail,
-      ).toLowerCase();
-      return rowEmail === needle;
-    });
-    return match ? employeeIdFrom(match, true) : "";
-  } catch {
-    return "";
-  }
-}
-
 function postLeave(path: string, body: Record<string, unknown>) {
   return apiRequest(path, { method: "POST", body });
 }
@@ -132,6 +68,9 @@ export type LeaveApplyInput = {
   note: string;
   durationType?: "FULL_DAY" | "HALF_DAY";
   attachments?: Array<{ name: string; fileUrl: string; type: string }>;
+  employeeName?: string;
+  departmentId?: string;
+  employeeId?: string;
 };
 
 export type LeaveBalanceCard = {
@@ -149,15 +88,19 @@ const BUSINESS_LEAVE_CODES = new Set([
   "LEAVE_REQUEST_NOT_FOUND",
   "INSUFFICIENT_LEAVE_BALANCE",
   "LEAVE_DATES_OVERLAP",
+  "LEAVE_ALREADY_ACTIVE",
+  "LEAVE_NOT_EXTENDABLE",
+  "LEAVE_EXTENSION_NOT_PENDING",
   "INVALID_LEAVE_DURATION",
   "NOTICE_REQUIRED",
   "MAXIMUM_LEAVE_EXCEEDED",
   "LEAVE_NOT_PENDING",
   "LEAVE_NOT_APPROVED",
-  "NO_ACTIVE_EMPLOYEE_PROFILE",
-  "EMPLOYEE_PROFILE_REQUIRED",
   "REJECTION_REASON_REQUIRED",
 ]);
+
+const UNLINKED_PROFILE_MESSAGE =
+  "Your employee profile is still being set up. Wait a few seconds and submit again.";
 
 function errorCode(error: ApiError): string {
   const body = asObject(error.body);
@@ -165,7 +108,22 @@ function errorCode(error: ApiError): string {
   return str(nested?.code ?? body?.code).toUpperCase();
 }
 
-/** Retry only missing routes / wrong-role aliases — never business 404s. */
+function isUnlinkedEmployee(error: unknown) {
+  if (!(error instanceof ApiError)) return false;
+  const code = errorCode(error);
+  if (
+    code === "NO_ACTIVE_EMPLOYEE_PROFILE" ||
+    code === "EMPLOYEE_PROFILE_REQUIRED" ||
+    code === "EMPLOYEE_NOT_FOUND"
+  ) {
+    return true;
+  }
+  return /not linked to an employee|employee profile is still being set up/i.test(
+    error.message,
+  );
+}
+
+/** Retry missing routes / wrong-role aliases — never leave-policy 404s. */
 function isMissingRoute(error: unknown) {
   if (!(error instanceof ApiError)) return false;
   if (BUSINESS_LEAVE_CODES.has(errorCode(error))) return false;
@@ -175,28 +133,30 @@ function isMissingRoute(error: unknown) {
   return /not found/i.test(error.message);
 }
 
+async function withProvisionRetry<T>(attempt: () => Promise<T>): Promise<T> {
+  try {
+    return await attempt();
+  } catch (error) {
+    if (!isUnlinkedEmployee(error)) throw error;
+    return attempt();
+  }
+}
+
 async function firstSuccessful<T>(
   attempts: Array<() => Promise<T>>,
   notFoundMessage: string,
 ): Promise<T> {
   let lastError: unknown;
-  let lastForbidden: ApiError | undefined;
   for (const attempt of attempts) {
     try {
-      return await attempt();
+      return await withProvisionRetry(attempt);
     } catch (error) {
       lastError = error;
-      if (error instanceof ApiError && error.status === 403) {
-        lastForbidden = error;
-      }
-      if (isMissingRoute(error)) continue;
+      if (isUnlinkedEmployee(error) || isMissingRoute(error)) continue;
       throw error;
     }
   }
-  if (lastForbidden) throw lastForbidden;
-  if (lastError instanceof ApiError) {
-    throw lastError;
-  }
+  if (lastError instanceof ApiError) throw lastError;
   throw new ApiError(404, notFoundMessage);
 }
 
@@ -356,31 +316,44 @@ export async function listLeaveTypes(): Promise<LeaveTypeOption[]> {
   return SEEDED_LEAVE_TYPES;
 }
 
-export function listMyLeave(status?: string) {
+export async function listMyLeave(status?: string) {
   const query = buildQuery({
     page: 1,
     limit: 25,
     ...(status ? { status } : {}),
   });
-  return firstSuccessful(
-    [
-      () => apiRequest(`${EMPLOYEE}${query}`),
-      () => apiRequest(`${EMPLOYEE}/requests${query}`),
-      () => apiRequest(`${SHARED}/requests${query}`),
-    ],
-    "Leave requests could not be loaded.",
-  );
+  try {
+    return await firstSuccessful(
+      [
+        () => apiRequest(`${EMPLOYEE}${query}`),
+        () => apiRequest(`${EMPLOYEE}/requests${query}`),
+        () => apiRequest(`${SHARED}/requests${query}`),
+      ],
+      "Leave requests could not be loaded.",
+    );
+  } catch (error) {
+    if (isUnlinkedEmployee(error) || (error instanceof ApiError && error.status === 403)) {
+      return { data: [] };
+    }
+    throw error;
+  }
 }
 
-export function listLeaveBalances() {
-  return firstSuccessful(
-    [
-      () => apiRequest(`${EMPLOYEE}/balances`),
-      () => apiRequest(`${SHARED}/balances`),
-      () => apiRequest("/super-admin/leave/balances"),
-    ],
-    "Leave balances could not be loaded.",
-  );
+export async function listLeaveBalances() {
+  try {
+    return await firstSuccessful(
+      [
+        () => apiRequest(`${EMPLOYEE}/balances`),
+        () => apiRequest(`${SHARED}/balances`),
+      ],
+      "Leave balances could not be loaded.",
+    );
+  } catch (error) {
+    if (isUnlinkedEmployee(error) || (error instanceof ApiError && error.status === 403)) {
+      return { data: [] };
+    }
+    throw error;
+  }
 }
 
 export function getEmployeeLeave(id: string) {
@@ -396,14 +369,17 @@ export function getEmployeeLeave(id: string) {
 
 export function listOrganisationLeave(params?: Record<string, unknown>) {
   const query = buildQuery(params);
-  return firstSuccessful(
-    [
-      () => apiRequest(`/hr/leave${query}`),
-      () => apiRequest(`${SHARED}/requests${query}`),
-      () => apiRequest(`/super-admin/leave/requests${query}`),
-    ],
-    "Leave requests could not be loaded.",
-  );
+  const managerAttempt = () => apiRequest(`/manager/leave${query}`);
+  const attempts = [
+    () => apiRequest(`/hr/leave${query}`),
+    () => apiRequest(`${SHARED}/requests${query}`),
+    () => apiRequest(`/super-admin/leave/requests${query}`),
+  ];
+  const role = readCachedWorkspace()?.roleKey ?? "";
+  const ordered = /hod|manager/i.test(role)
+    ? [managerAttempt, ...attempts]
+    : [...attempts, managerAttempt];
+  return firstSuccessful(ordered, "Leave requests could not be loaded.");
 }
 
 export async function applyForLeave(input: LeaveApplyInput & { reason?: string }) {
@@ -434,70 +410,89 @@ export async function applyForLeave(input: LeaveApplyInput & { reason?: string }
     durationType,
   };
   if (note) body.note = note;
+  const employeeName = (input.employeeName ?? "").trim();
+  const departmentId = (input.departmentId ?? "").trim();
+  const employeeId = (input.employeeId ?? "").trim();
+  if (employeeName) {
+    body.employeeName = employeeName;
+    body.fullName = employeeName;
+    body.name = employeeName;
+  }
+  if (departmentId) body.departmentId = departmentId;
+  if (employeeId) body.employeeId = employeeId;
   if (input.attachments?.length) body.attachments = input.attachments;
 
   const kind = accountKind();
-  const employeeId =
-    kind === "employee" ? "" : await resolveSelfEmployeeId();
-  const sharedBody = employeeId ? { ...body, employeeId } : body;
-
-  const employeeAttempts = [
+  const selfAttempts = [
     () => postLeave(EMPLOYEE, body),
-    () => postLeave(`${EMPLOYEE}/requests`, body),
+    () => postLeave(`${SHARED}/requests`, body),
   ];
-  const sharedAttempts = [
-    () => postLeave(`${SHARED}/requests`, sharedBody),
-    () => postLeave(SHARED, sharedBody),
-    () => postLeave("/super-admin/leave/requests", sharedBody),
-    () => postLeave("/super-admin/leave", sharedBody),
-    () => postLeave("/hr/leave", sharedBody),
-    () => postLeave("/hod/leave", sharedBody),
-    () => postLeave("/manager/leave", sharedBody),
+  const staffAttempts = [
+    () => postLeave(`${SHARED}/requests`, body),
+    () => postLeave(EMPLOYEE, body),
+    () => postLeave("/hr/leave", body),
   ];
-  if (employeeId) {
-    sharedAttempts.push(
-      () => postLeave(`${SHARED}/requests`, body),
-      () => postLeave("/super-admin/leave/requests", body),
-    );
-  }
-
-  const attempts =
-    kind === "staff"
-      ? sharedAttempts
-      : kind === "employee"
-        ? [...employeeAttempts, () => postLeave(`${SHARED}/requests`, body)]
-        : [...employeeAttempts, ...sharedAttempts];
 
   try {
     return await firstSuccessful(
-      attempts,
+      kind === "staff" ? staffAttempts : selfAttempts,
       "Could not submit the leave request. Sign in as an employee and pick a leave type from the list.",
     );
   } catch (error) {
-    if (
-      error instanceof ApiError &&
-      (errorCode(error) === "NO_ACTIVE_EMPLOYEE_PROFILE" ||
-        errorCode(error) === "EMPLOYEE_PROFILE_REQUIRED" ||
-        errorCode(error) === "EMPLOYEE_NOT_FOUND" ||
-        /employee (record |profile )?not found/i.test(error.message))
-    ) {
-      throw new ApiError(
-        error.status || 404,
-        "This login is not linked to an employee profile. Ask an admin to add you on the Employees page, then apply again.",
-        error.body,
-      );
-    }
-    if (error instanceof ApiError && error.status === 403) {
-      throw new ApiError(
-        403,
-        employeeId
-          ? "This account is not allowed to apply for leave with the employee API. The shared leave engine also rejected the request."
-          : "This login is not linked to an employee profile. Ask an admin to add you on the Employees page, then apply again.",
-        error.body,
-      );
+    if (error instanceof ApiError && isUnlinkedEmployee(error)) {
+      throw new ApiError(error.status || 403, UNLINKED_PROFILE_MESSAGE, error.body);
     }
     throw error;
   }
+}
+
+export function leaveRequestIdFromError(error: unknown): string {
+  if (!(error instanceof ApiError)) return "";
+  const body = asObject(error.body);
+  const nested = asObject(body?.error);
+  const details = asObject(nested?.details ?? body?.details);
+  return str(
+    details?.leaveRequestId ??
+      details?.leave_request_id ??
+      details?.requestId ??
+      nested?.leaveRequestId,
+  );
+}
+
+export function isActiveLeaveBlock(error: unknown) {
+  if (!(error instanceof ApiError)) return false;
+  const code = errorCode(error);
+  if (code === "LEAVE_ALREADY_ACTIVE" || code === "LEAVE_DATES_OVERLAP") {
+    return true;
+  }
+  return /already has pending or approved leave|extend that request/i.test(
+    error.message,
+  );
+}
+
+export function extendLeaveRequest(
+  id: string,
+  body: { endDate: string; note?: string },
+) {
+  return postLeave(`${SHARED}/requests/${id}/extend`, {
+    endDate: toLeaveDate(body.endDate),
+    note: (body.note ?? "").trim(),
+  });
+}
+
+export function approveLeaveExtension(id: string, comment = "Approved") {
+  return postLeave(`${SHARED}/requests/${id}/extend/approve`, { comment });
+}
+
+export function rejectLeaveExtension(id: string, reason: string) {
+  const comment = reason.trim();
+  if (!comment) {
+    throw new ApiError(400, "A rejection reason is required.");
+  }
+  return postLeave(`${SHARED}/requests/${id}/extend/reject`, {
+    reason: comment,
+    comment,
+  });
 }
 
 export function withdrawLeaveRequest(id: string, reason: string) {

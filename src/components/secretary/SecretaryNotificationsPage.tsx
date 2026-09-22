@@ -9,7 +9,6 @@ import { usePageActions } from "@/hooks/usePageActions";
 import { secretaryApi } from "@/lib/api";
 import { str } from "@/lib/api/mappers";
 import {
-  notifications as fallbackNotifications,
   type Notification,
   type NotificationFilter,
   type NotificationType,
@@ -52,10 +51,9 @@ export function SecretaryNotificationsPage() {
   );
 
   const items = useMemo(() => {
-    const mapped =
-      data && data.length > 0
-        ? data.map((record, index) => mapNotification(record, index))
-        : fallbackNotifications;
+    const mapped = (data ?? []).map((record, index) =>
+      mapNotification(record, index),
+    );
     return mapped.map((item) =>
       readIds[item.id] ? { ...item, unread: false } : item,
     );

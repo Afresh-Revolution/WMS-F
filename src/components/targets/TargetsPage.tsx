@@ -12,8 +12,9 @@ import { PageTopBar } from "@/components/layout/PageTopBar";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { listStaffEmployees, superAdminApi, unwrapRecord } from "@/lib/api";
+import { listStaffEmployees, managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import { listFrom, mapEmployee, mapPerformanceReview, str } from "@/lib/api/mappers";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./TargetsPage.module.css";
 
 const statusClass: Record<ReviewStatus, string> = {
@@ -97,6 +98,7 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 export function TargetsPage() {
+  const manager = useManagerPortal();
   const [activeTab, setActiveTab] = useState<TargetTab>("Reviews");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
@@ -104,8 +106,8 @@ export function TargetsPage() {
   const cycle = useMemo(() => currentCycle(), []);
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.targets.list(),
-    [],
+    () => (manager ? managerApi.listTargets() : superAdminApi.targets.list()),
+    [manager],
   );
   const { data: reportData } = useAsyncData(
     () => superAdminApi.reports.targets().catch(() => null),
@@ -296,7 +298,7 @@ export function TargetsPage() {
         throw new Error("End date must be on or after the start date.");
       }
 
-      await superAdminApi.targets.create({
+      const payload = {
         title,
         employeeId: values.employeeId,
         name,
@@ -317,7 +319,12 @@ export function TargetsPage() {
         periodStart: startDate,
         periodEnd: endDate,
         type: "review",
-      });
+      };
+      if (manager) {
+        await managerApi.createTarget(payload);
+      } else {
+        await superAdminApi.targets.create(payload);
+      }
       refetch();
     });
   }
