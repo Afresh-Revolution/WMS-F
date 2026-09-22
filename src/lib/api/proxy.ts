@@ -15,29 +15,48 @@ const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 /** Server-side backend URL (route handlers). Prefer API_ROOT_URL over NEXT_PUBLIC_*. */
 const PROXY_ATTEMPTS = 3;
 const PROXY_TIMEOUT_MS = 15_000;
+const MUTATING_TIMEOUT_MS = 60_000;
+const SAFE_RETRY_METHODS = new Set(["GET", "HEAD"]);
+
+function isTimeoutError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.name === "TimeoutError" ||
+    error.name === "AbortError" ||
+    /timeout|aborted/i.test(error.message)
+  );
+}
 
 async function fetchBackend(
   targetUrl: string,
   init: RequestInit,
 ): Promise<Response> {
+  const method = String(init.method || "GET").toUpperCase();
+  const canRetrySafely = SAFE_RETRY_METHODS.has(method);
+  const attempts = canRetrySafely ? PROXY_ATTEMPTS : 2;
+  const timeoutMs = canRetrySafely ? PROXY_TIMEOUT_MS : MUTATING_TIMEOUT_MS;
   let lastError: unknown;
-  for (let attempt = 1; attempt <= PROXY_ATTEMPTS; attempt += 1) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       return await fetch(targetUrl, {
         ...init,
-        signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       lastError = error;
       const detail = error instanceof Error ? error.message : String(error);
       console.error(
-        `[api-proxy] attempt ${attempt}/${PROXY_ATTEMPTS} failed:`,
+        `[api-proxy] attempt ${attempt}/${attempts} failed:`,
         targetUrl,
         detail,
       );
-      if (attempt < PROXY_ATTEMPTS) {
+      const retryMutating =
+        !canRetrySafely && attempt < attempts && !isTimeoutError(error);
+      if (attempt < attempts && (canRetrySafely || retryMutating)) {
         await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+        continue;
       }
+      break;
     }
   }
   throw lastError instanceof Error

@@ -7,7 +7,7 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { notificationsApi } from "@/lib/api";
+import { employeeApi } from "@/lib/api";
 import { bool, listFrom, str } from "@/lib/api/mappers";
 import styles from "./EmployeeNotificationsPage.module.css";
 
@@ -34,13 +34,7 @@ export function EmployeeNotificationsPage() {
   const { user } = useCurrentUser();
   const { runAction } = usePageActions();
   const [localRead, setLocalRead] = useState<Set<string>>(new Set());
-  const { data } = useAsyncData(async () => {
-    try {
-      return await notificationsApi.list();
-    } catch {
-      return null;
-    }
-  }, []);
+  const { data } = useAsyncData(() => employeeApi.listNotifications(), []);
 
   const notifications = useMemo(() => {
     const live = listFrom(data ?? undefined).map(mapNotification);
@@ -85,13 +79,9 @@ export function EmployeeNotificationsPage() {
         async () => {
           const remote = unread.filter((item) => !item.id.startsWith("local-"));
           if (remote.length > 0) {
-            try {
-              await notificationsApi.markAllRead();
-            } catch {
-              await Promise.all(
-                remote.map((item) => notificationsApi.markRead(item.id)),
-              );
-            }
+            await Promise.all(
+              remote.map((item) => employeeApi.markNotificationRead(item.id)),
+            );
           }
           markLocal(unread.map((item) => item.id));
         },

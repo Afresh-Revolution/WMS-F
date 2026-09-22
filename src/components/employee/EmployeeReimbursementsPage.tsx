@@ -4,69 +4,103 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { employeeProfile } from "@/data/employeeHome";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { employeeApi } from "@/lib/api";
+import { listFrom, num, str } from "@/lib/api/mappers";
+import type {
+  EmployeeReimbursement,
+  EmployeeReimbursementStatus,
+} from "@/data/employeeHome";
 import styles from "./EmployeeExpensesPage.module.css";
 
-type ReimbursementStatus = "Pending" | "Paid" | "Returned";
-type ReimbursementFilter = "All" | ReimbursementStatus;
-type Reimbursement = {
-  id: string;
-  title: string;
-  status: ReimbursementStatus;
-  category: string;
-  date: string;
-  amount: string;
-};
+type ReimbursementFilter = "All" | EmployeeReimbursementStatus;
 
 const filters: ReimbursementFilter[] = ["All", "Pending", "Paid", "Returned"];
 
-const reimbursements: Reimbursement[] = [
-  {
-    id: "RB-2144",
-    title: "Home internet top-up",
-    status: "Pending",
-    category: "Utilities",
-    date: "8 Aug",
-    amount: "₦ 15,000",
-  },
-  {
-    id: "RB-2138",
-    title: "Design software subscription",
-    status: "Paid",
-    category: "Software",
-    date: "29 Jul",
-    amount: "₦ 32,400",
-  },
-  {
-    id: "RB-2119",
-    title: "Conference travel",
-    status: "Returned",
-    category: "Travel",
-    date: "12 Jul",
-    amount: "₦ 86,000",
-  },
-];
+function mapStatus(value: unknown): EmployeeReimbursementStatus {
+  const raw = str(value).toLowerCase();
+  if (raw.includes("paid") || raw.includes("reimburse") || raw.includes("settled")) {
+    return "Paid";
+  }
+  if (raw.includes("return") || raw.includes("reject")) return "Returned";
+  return "Pending";
+}
 
-function statusClass(status: ReimbursementStatus) {
+function formatAmount(value: unknown): string {
+  const amount = num(value);
+  return `₦ ${amount.toLocaleString("en-NG")}`;
+}
+
+function formatDate(value: unknown): string {
+  const raw = str(value);
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function mapReimbursement(
+  record: Record<string, unknown>,
+  index: number,
+): EmployeeReimbursement | null {
+  const status = str(
+    record.reimbursementStatus ?? record.reimbursement_status ?? record.status,
+  );
+  if (!status || status.toLowerCase() === "not_required") return null;
+  return {
+    id: str(record.reference ?? record.id, `RB-${index + 1}`),
+    title: str(record.description ?? record.title ?? record.reference),
+    status: mapStatus(status),
+    category: str(record.categoryName ?? record.category),
+    date: formatDate(
+      record.expenseDate ?? record.expense_date ?? record.date ?? record.createdAt,
+    ),
+    amount: formatAmount(record.amount ?? record.total ?? record.totalAmount),
+  };
+}
+
+function statusClass(status: EmployeeReimbursementStatus) {
   if (status === "Paid") return styles.statusSuccess;
   if (status === "Returned") return styles.statusRejected;
   return styles.statusSubmitted;
 }
 
 export function EmployeeReimbursementsPage() {
+  const { user } = useCurrentUser();
   const [filter, setFilter] = useState<ReimbursementFilter>("All");
+  const { data, loading, error } = useAsyncData(
+    () => employeeApi.listExpenses(),
+    [],
+  );
+
+  const reimbursements = useMemo(() => {
+    const records = Array.isArray(data)
+      ? data
+      : listFrom((data ?? undefined) as never);
+    return records
+      .map((record, index) => mapReimbursement(record, index))
+      .filter((item): item is EmployeeReimbursement => Boolean(item));
+  }, [data]);
+
   const visible = useMemo(
     () =>
       reimbursements.filter(
         (item) => filter === "All" || item.status === filter,
       ),
-    [filter],
+    [filter, reimbursements],
   );
 
   return (
     <div className={styles.page}>
       <header className={styles.topBar}>
         <PageDateLabel />
+        {loading ? <p className={styles.empty}>Loading reimbursements…</p> : null}
+        {error ? (
+          <p className={styles.empty} role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />
@@ -75,7 +109,7 @@ export function EmployeeReimbursementsPage() {
           </label>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.profileButton}>
-            {employeeProfile.initials}
+            {user?.initials || "—"}
           </ProfileLink>
         </div>
       </header>

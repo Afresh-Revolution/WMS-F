@@ -4,20 +4,54 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState, type FormEvent } from "react";
 import { Paperclip, Plus, Search, Upload, X } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { employeeProfile } from "@/data/employeeHome";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { employeeApi } from "@/lib/api";
+import { listFrom, num, str } from "@/lib/api/mappers";
+import type {
+  EmployeeExpense,
+  EmployeeExpenseStatus,
+} from "@/data/employeeHome";
 import styles from "./EmployeeExpensesPage.module.css";
 
-type ExpenseStatus = "Submitted" | "Approved" | "Reimbursed" | "Rejected";
-type ExpenseFilter = "All" | ExpenseStatus;
-type Expense = {
-  id: string;
-  title: string;
-  status: ExpenseStatus;
-  category: string;
-  date: string;
-  receipt: boolean;
-  amount: string;
-};
+const MAX_RECEIPT_BYTES = 700 * 1024;
+
+const expenseCategories = [
+  "Travel",
+  "Transport",
+  "Meals",
+  "Training",
+  "Equipment",
+  "Office Supplies",
+  "Communication",
+  "Other",
+] as const;
+
+function todayKey(date = new Date()): string {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "").trim();
+      if (!result) {
+        reject(new Error("Could not read the receipt file."));
+        return;
+      }
+      resolve(result);
+    };
+    reader.onerror = () =>
+      reject(new Error("Could not read the receipt file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+type ExpenseFilter = "All" | EmployeeExpenseStatus;
 
 const filters: ExpenseFilter[] = [
   "All",
@@ -27,53 +61,56 @@ const filters: ExpenseFilter[] = [
   "Rejected",
 ];
 
-const initialExpenses: Expense[] = [
-  {
-    id: "EX-3081",
-    title: "Team offsite — planning day",
-    status: "Submitted",
-    category: "Team",
-    date: "7 Aug",
-    receipt: true,
-    amount: "₦ 24,000",
-  },
-  {
-    id: "EX-3062",
-    title: "Udemy course — advanced React",
-    status: "Approved",
-    category: "Training",
-    date: "22 Jul",
-    receipt: true,
-    amount: "₦ 18,500",
-  },
-  {
-    id: "EX-3040",
-    title: "Transport — client workshop",
-    status: "Reimbursed",
-    category: "Travel",
-    date: "10 Jul",
-    receipt: true,
-    amount: "₦ 9,200",
-  },
-  {
-    id: "EX-3011",
-    title: "USB-C hub",
-    status: "Rejected",
-    category: "Equipment",
-    date: "28 Jun",
-    receipt: false,
-    amount: "₦ 15,000",
-  },
-];
-
 const emptyForm = {
   description: "",
   category: "Travel",
   amount: "",
-  receipt: false,
+  receiptFile: null as File | null,
 };
 
-function statusClass(status: ExpenseStatus) {
+function mapStatus(value: unknown): EmployeeExpenseStatus {
+  const raw = str(value).toLowerCase();
+  if (raw.includes("reject") || raw.includes("declin")) return "Rejected";
+  if (raw.includes("reimburse") || raw.includes("paid")) return "Reimbursed";
+  if (raw.includes("approv")) return "Approved";
+  return "Submitted";
+}
+
+function formatAmount(value: unknown): string {
+  const amount = num(value);
+  return `₦ ${amount.toLocaleString("en-NG")}`;
+}
+
+function formatDate(value: unknown): string {
+  const raw = str(value);
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function mapExpense(
+  record: Record<string, unknown>,
+  index: number,
+): EmployeeExpense {
+  return {
+    id: str(record.reference ?? record.id, `EX-${index + 1}`),
+    title: str(record.description ?? record.title ?? record.reference),
+    status: mapStatus(record.status),
+    category: str(record.categoryName ?? record.category ?? record.categoryId),
+    date: formatDate(
+      record.expenseDate ?? record.expense_date ?? record.date ?? record.createdAt,
+    ),
+    receipt: Boolean(
+      record.hasReceipt ??
+        record.receipt ??
+        (Array.isArray(record.receipts) && record.receipts.length > 0),
+    ),
+    amount: formatAmount(record.amount ?? record.total ?? record.totalAmount),
+  };
+}
+
+function statusClass(status: EmployeeExpenseStatus) {
   if (status === "Approved" || status === "Reimbursed") {
     return styles.statusSuccess;
   }
@@ -86,15 +123,37 @@ export function EmployeeExpensesPage({
 }: {
   initialFilter?: ExpenseFilter;
 }) {
+  const { user } = useCurrentUser();
+  const { runAction } = usePageActions();
   const [filter, setFilter] = useState<ExpenseFilter>(initialFilter);
   const [createOpen, setCreateOpen] = useState(false);
-  const [expenseItems, setExpenseItems] = useState(initialExpenses);
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const { data, loading, error, refetch } = useAsyncData(
+    () => employeeApi.listExpenses(),
+    [],
+  );
+
+  const expenseItems = useMemo(() => {
+    const records = Array.isArray(data)
+      ? data
+      : listFrom((data ?? undefined) as never);
+    return records
+      .filter((record) => {
+        const status = str(record.status).toLowerCase();
+        return !status.includes("cancel");
+      })
+      .map((record, index) => mapExpense(record, index));
+  }, [data]);
+
   const visibleExpenses = useMemo(
     () =>
-      expenseItems.filter(
-        (expense) => filter === "All" || expense.status === filter,
-      ),
+      expenseItems.filter((expense) => {
+        if (filter === "All") {
+          return expense.status !== "Rejected";
+        }
+        return expense.status === filter;
+      }),
     [expenseItems, filter],
   );
 
@@ -103,29 +162,60 @@ export function EmployeeExpensesPage({
     setForm(emptyForm);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const amount = Number(form.amount);
-    setExpenseItems((current) => [
-      {
-        id: `EX-${3100 + current.length}`,
-        title: form.description.trim(),
-        status: "Submitted",
-        category: form.category,
-        date: "12 Aug",
-        receipt: form.receipt,
-        amount: `₦ ${amount.toLocaleString("en-NG")}`,
-      },
-      ...current,
-    ]);
-    setFilter("All");
-    closeCreate();
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await runAction("Submit expense", async () => {
+        const amount = Number(form.amount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+          throw new Error("Enter a valid amount.");
+        }
+        const receiptFile = form.receiptFile;
+        if (!receiptFile) {
+          throw new Error("Attach a receipt. Most categories require one.");
+        }
+        if (receiptFile.size > MAX_RECEIPT_BYTES) {
+          throw new Error("Receipt files must be 700 KB or smaller.");
+        }
+        await employeeApi.createExpense({
+          description: form.description.trim(),
+          category: form.category,
+          amount,
+          expenseDate: todayKey(),
+          currency: "NGN",
+          receipts: [
+            {
+              fileName: receiptFile.name,
+              fileUrl: await fileToDataUrl(receiptFile),
+              fileType: receiptFile.type || "application/octet-stream",
+              fileSize: receiptFile.size,
+              receiptDate: todayKey(),
+            },
+          ],
+        });
+        refetch();
+      });
+      setFilter("All");
+      closeCreate();
+    } catch {
+      return;
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <div className={styles.page}>
       <header className={styles.topBar}>
         <PageDateLabel />
+        {loading ? <p className={styles.empty}>Loading expenses…</p> : null}
+        {error ? (
+          <p className={styles.empty} role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />
@@ -134,7 +224,7 @@ export function EmployeeExpensesPage({
           </label>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.profileButton}>
-            {employeeProfile.initials}
+            {user?.initials || "—"}
           </ProfileLink>
         </div>
       </header>
@@ -169,33 +259,37 @@ export function EmployeeExpensesPage({
       </nav>
 
       <section className={styles.expenseList} aria-label={`${filter} expenses`}>
-        {visibleExpenses.map((expense) => (
-          <article key={expense.id} className={styles.expenseCard}>
-            <div className={styles.expenseBody}>
-              <div className={styles.expenseHeading}>
-                <span className={styles.expenseId}>{expense.id}</span>
-                <h2>{expense.title}</h2>
-                <span
-                  className={`${styles.status} ${statusClass(expense.status)}`}
-                >
-                  {expense.status}
-                </span>
+        {visibleExpenses.length === 0 ? (
+          <p className={styles.empty}>No expenses in this view.</p>
+        ) : (
+          visibleExpenses.map((expense) => (
+            <article key={expense.id} className={styles.expenseCard}>
+              <div className={styles.expenseBody}>
+                <div className={styles.expenseHeading}>
+                  <span className={styles.expenseId}>{expense.id}</span>
+                  <h2>{expense.title}</h2>
+                  <span
+                    className={`${styles.status} ${statusClass(expense.status)}`}
+                  >
+                    {expense.status}
+                  </span>
+                </div>
+                <p>
+                  {expense.category} · {expense.date}
+                  <span
+                    className={
+                      expense.receipt ? styles.receipt : styles.noReceipt
+                    }
+                  >
+                    {expense.receipt ? <Paperclip size={11} /> : null}
+                    {expense.receipt ? "Receipt" : "No receipt"}
+                  </span>
+                </p>
               </div>
-              <p>
-                {expense.category} · {expense.date}
-                <span
-                  className={
-                    expense.receipt ? styles.receipt : styles.noReceipt
-                  }
-                >
-                  {expense.receipt ? <Paperclip size={11} /> : null}
-                  {expense.receipt ? "Receipt" : "No receipt"}
-                </span>
-              </p>
-            </div>
-            <strong>{expense.amount}</strong>
-          </article>
-        ))}
+              <strong>{expense.amount}</strong>
+            </article>
+          ))
+        )}
       </section>
 
       {createOpen ? (
@@ -250,11 +344,9 @@ export function EmployeeExpensesPage({
                       }))
                     }
                   >
-                    <option>Travel</option>
-                    <option>Team</option>
-                    <option>Training</option>
-                    <option>Equipment</option>
-                    <option>Meals</option>
+                    {expenseCategories.map((category) => (
+                      <option key={category}>{category}</option>
+                    ))}
                   </select>
                 </label>
                 <label className={styles.formField}>
@@ -283,21 +375,22 @@ export function EmployeeExpensesPage({
                     <Upload size={17} />
                   </span>
                   <strong>
-                    {form.receipt
-                      ? "Receipt selected"
+                    {form.receiptFile
+                      ? form.receiptFile.name
                       : "Drop a file or click to upload"}
                   </strong>
                   <small>
                     <Paperclip size={11} />
-                    PDF, DOCX, JPG or PNG · up to 10 MB
+                    PDF, DOCX, JPG or PNG · up to 700 KB
                   </small>
                   <input
                     type="file"
                     accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    required
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        receipt: Boolean(event.target.files?.length),
+                        receiptFile: event.target.files?.[0] ?? null,
                       }))
                     }
                   />
@@ -311,9 +404,13 @@ export function EmployeeExpensesPage({
                 >
                   Cancel
                 </button>
-                <button type="submit" className={styles.modalSubmit}>
+                <button
+                  type="submit"
+                  className={styles.modalSubmit}
+                  disabled={submitting}
+                >
                   <Plus size={15} />
-                  Submit expense
+                  {submitting ? "Submitting…" : "Submit expense"}
                 </button>
               </div>
             </form>

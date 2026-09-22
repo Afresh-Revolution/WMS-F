@@ -213,6 +213,9 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
     "Meeting type was not found. Create the meeting without a meeting type.",
   PASSWORD_CHANGE_REQUIRED:
     "Change your password before updating other account details.",
+  INVALID_CURRENT_PASSWORD: "Current password is incorrect.",
+  PASSWORD_POLICY_VIOLATION:
+    "New password must be at least 10 characters and include uppercase, lowercase, a number, and a symbol.",
   ANNOUNCEMENT_REQUIRED_FIELDS: "Title and message are required.",
   ANNOUNCEMENT_AUDIENCE_REQUIRED: "Choose who should receive this announcement.",
   ANNOUNCEMENT_DEPARTMENT_REQUIRED: "Pick a department for this audience.",
@@ -359,7 +362,15 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
       }
 
       if (typeof details === "object" && details !== null) {
-        const detailMessage = (details as Record<string, unknown>).message;
+        const detailRecord = details as Record<string, unknown>;
+        const policyErrors = detailRecord.errors;
+        if (Array.isArray(policyErrors) && policyErrors.length > 0) {
+          const joined = policyErrors
+            .filter((item) => isUsefulErrorMessage(item))
+            .join(" ");
+          if (joined) return rewriteKnownApiMessage(joined, code);
+        }
+        const detailMessage = detailRecord.message;
         if (isUsefulErrorMessage(detailMessage)) {
           return rewriteKnownApiMessage(detailMessage, code);
         }

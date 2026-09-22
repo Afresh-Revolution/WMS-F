@@ -2,7 +2,7 @@
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { employeeProfile } from "@/data/employeeHome";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import styles from "./EmployeeUtilityPages.module.css";
 
 const helpItems = [
@@ -36,7 +36,7 @@ export function EmployeeHelpPage() {
         <div className={styles.topActions}>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.avatarChip}>
-            {employeeProfile.initials}
+            {user?.initials || "—"}
           </ProfileLink>
         </div>
       </div>

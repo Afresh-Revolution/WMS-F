@@ -91,6 +91,12 @@
   font-size: 13px;
 }
 
+.empty {
+  margin: 8px 0 0;
+  color: #78716c;
+  font-size: 13px;
+}
+
 .meetingGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

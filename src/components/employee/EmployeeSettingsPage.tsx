@@ -13,6 +13,25 @@ import { profileApi } from "@/lib/api";
 import { unwrapRecord, str } from "@/lib/api/mappers";
 import styles from "./EmployeeSettingsPage.module.css";
 
+function passwordPolicyError(password: string) {
+  if (password.length < 10) {
+    return "New password must be at least 10 characters.";
+  }
+  if (!/[A-Z]/.test(password)) {
+    return "New password must include an uppercase letter.";
+  }
+  if (!/[a-z]/.test(password)) {
+    return "New password must include a lowercase letter.";
+  }
+  if (!/[0-9]/.test(password)) {
+    return "New password must include a number.";
+  }
+  if (!/[^A-Za-z0-9]/.test(password)) {
+    return "New password must include a symbol.";
+  }
+  return null;
+}
+
 function isPasswordChangeRequired(error: unknown) {
   return (
     error instanceof Error && /password change required/i.test(error.message)
@@ -43,6 +62,7 @@ export function EmployeeSettingsPage() {
   const [address, setAddress] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [updatingPassword, setUpdatingPassword] = useState(false);
   const { data: profile } = useAsyncData(async () => {
     try {
       return await profileApi.get();
@@ -105,6 +125,19 @@ export function EmployeeSettingsPage() {
 
   async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (updatingPassword) return;
+    const policyError = passwordPolicyError(newPassword);
+    if (policyError) {
+      try {
+        await runAction("Change password", async () => {
+          throw new Error(policyError);
+        });
+      } catch {
+        return;
+      }
+      return;
+    }
+    setUpdatingPassword(true);
     try {
       await runAction(
         "Change password",
@@ -121,6 +154,8 @@ export function EmployeeSettingsPage() {
       );
     } catch {
       /* runAction already showed the API error */
+    } finally {
+      setUpdatingPassword(false);
     }
   }
 
@@ -153,12 +188,20 @@ export function EmployeeSettingsPage() {
           value={newPassword}
           onChange={(event) => setNewPassword(event.target.value)}
           autoComplete="new-password"
-          minLength={8}
+          minLength={10}
           required
         />
       </label>
-      <button type="submit" className={styles.saveButton}>
-        Update password
+      <p className={styles.hint}>
+        Use at least 10 characters, with uppercase, lowercase, a number, and a
+        symbol.
+      </p>
+      <button
+        type="submit"
+        className={styles.saveButton}
+        disabled={updatingPassword}
+      >
+        {updatingPassword ? "Updating…" : "Update password"}
       </button>
     </form>
   );

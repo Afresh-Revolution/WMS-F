@@ -4,19 +4,16 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import { Download, Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { employeeProfile } from "@/data/employeeHome";
+import { asRecord, employeeApi } from "@/lib/api";
+import { listFrom, str } from "@/lib/api/mappers";
+import type { EmployeeRecordItem } from "@/data/employeeHome";
 import styles from "./EmployeeExpensesPage.module.css";
 
-type RecordCategory = "Contract" | "Identity" | "Leave" | "Performance";
+type RecordCategory = EmployeeRecordItem["category"];
 type RecordFilter = "All" | RecordCategory;
-type EmployeeRecord = {
-  id: string;
-  title: string;
-  category: RecordCategory;
-  date: string;
-  status: "Available" | "Pending";
-};
 
 const filters: RecordFilter[] = [
   "All",
@@ -26,54 +23,91 @@ const filters: RecordFilter[] = [
   "Performance",
 ];
 
-const records: EmployeeRecord[] = [
-  {
-    id: "REC-0188-01",
-    title: "Offer letter",
-    category: "Contract",
-    date: "4 Mar 2024",
-    status: "Available",
-  },
-  {
-    id: "REC-0188-02",
-    title: "Employment contract",
-    category: "Contract",
-    date: "4 Mar 2024",
-    status: "Available",
-  },
-  {
-    id: "REC-0188-03",
-    title: "Staff identity card",
-    category: "Identity",
-    date: "4 Mar 2024",
-    status: "Available",
-  },
-  {
-    id: "REC-0188-04",
-    title: "Leave approval — LV-3987",
-    category: "Leave",
-    date: "15 Jul 2026",
-    status: "Available",
-  },
-  {
-    id: "REC-0188-05",
-    title: "Mid-year performance summary",
-    category: "Performance",
-    date: "12 Dec 2025",
-    status: "Pending",
-  },
-];
+function mapCategory(value: unknown): RecordCategory {
+  const raw = str(value).toLowerCase();
+  if (raw.includes("ident") || raw.includes("id card")) return "Identity";
+  if (raw.includes("leave")) return "Leave";
+  if (raw.includes("perform") || raw.includes("review")) return "Performance";
+  return "Contract";
+}
+
+function formatDate(value: unknown): string {
+  const raw = str(value);
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function mapRecord(
+  record: Record<string, unknown>,
+  index: number,
+): EmployeeRecordItem {
+  const available = !["pending", "processing", "draft"].includes(
+    str(record.status).toLowerCase(),
+  );
+  return {
+    id: str(record.id ?? record.reference, `REC-${index + 1}`),
+    title: str(
+      record.title ?? record.documentName ?? record.document_name ?? record.name,
+    ),
+    category: mapCategory(
+      record.category ?? record.documentType ?? record.document_type,
+    ),
+    date: formatDate(
+      record.date ?? record.createdAt ?? record.created_at ?? record.issuedAt,
+    ),
+    status: available ? "Available" : "Pending",
+  };
+}
 
 export function EmployeeRecordsPage() {
+  const { user } = useCurrentUser();
   const [filter, setFilter] = useState<RecordFilter>("All");
   const { showToast } = usePageActions();
+  const { data, loading, error } = useAsyncData(
+    () => employeeApi.listRecords(),
+    [],
+  );
+
+  const records = useMemo(() => {
+    const payload = asRecord(data) ?? {};
+    const documents = listFrom(
+      (payload.documents ?? payload.records ?? data) as never,
+    );
+    const leave = listFrom((payload.leaveHistory ?? []) as never).map(
+      (record) => ({
+        ...record,
+        title: str(
+          record.title ?? record.leaveTypeName ?? record.leave_type_name,
+          "Leave letter",
+        ),
+        documentType: "Leave",
+      }),
+    );
+    const performance = listFrom(
+      (payload.performanceReviews ?? []) as never,
+    ).map((record) => ({
+      ...record,
+      title: str(record.title ?? record.reviewPeriod, "Performance review"),
+      documentType: "Performance",
+    }));
+    return [...documents, ...leave, ...performance].map((record, index) =>
+      mapRecord(record, index),
+    );
+  }, [data]);
+
   const visible = useMemo(
     () =>
       records.filter((item) => filter === "All" || item.category === filter),
-    [filter],
+    [filter, records],
   );
 
-  function handleDownload(item: EmployeeRecord) {
+  function handleDownload(item: EmployeeRecordItem) {
     if (item.status !== "Available") {
       showToast("This record is not ready to download yet.", "info");
       return;
@@ -85,6 +119,12 @@ export function EmployeeRecordsPage() {
     <div className={styles.page}>
       <header className={styles.topBar}>
         <PageDateLabel />
+        {loading ? <p className={styles.empty}>Loading records…</p> : null}
+        {error ? (
+          <p className={styles.empty} role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />
@@ -93,7 +133,7 @@ export function EmployeeRecordsPage() {
           </label>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.profileButton}>
-            {employeeProfile.initials}
+            {user?.initials || "—"}
           </ProfileLink>
         </div>
       </header>
@@ -103,8 +143,7 @@ export function EmployeeRecordsPage() {
           <p>My records</p>
           <h1>Your HR file</h1>
           <span>
-            Contracts, identity, leave letters and reviews that belong to{" "}
-            {employeeProfile.name} only.
+            Contracts, identity, leave letters and reviews that belong to you.
           </span>
         </div>
       </div>
