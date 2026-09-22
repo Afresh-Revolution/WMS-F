@@ -15,11 +15,9 @@ import { accountantApi } from "@/lib/api";
 import {
   mapAccountantDeduction,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
   accountantDeductionEmployees,
-  accountantDeductions as fallbackDeductions,
   accountantDeductionsPeriod,
   formatNaira,
   type AccountantDeduction,
@@ -35,11 +33,7 @@ export function AccountantDeductionsPage() {
   );
 
   const deductions = useMemo(
-    () =>
-      withFallback(
-        unwrapAccountantList(data).map(mapAccountantDeduction),
-        fallbackDeductions,
-      ),
+    () => unwrapAccountantList(data).map(mapAccountantDeduction),
     [data],
   );
 

@@ -66,7 +66,15 @@ export function AccountantHelpPage() {
               {item.description ? (
                 <p className={styles.cardBody}>{item.description}</p>
               ) : null}
-              {item.href ? <p className={styles.cardMeta}>{item.href}</p> : null}
+              {item.href ? (
+                item.href.startsWith("/") ? (
+                  <Link href={item.href} className={styles.cardMeta}>
+                    {item.href}
+                  </Link>
+                ) : (
+                  <p className={styles.cardMeta}>{item.href}</p>
+                )
+              ) : null}
             </article>
           ))
         )}

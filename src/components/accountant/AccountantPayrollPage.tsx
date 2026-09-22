@@ -18,11 +18,8 @@ import { accountantApi, accountantSettled } from "@/lib/api";
 import {
   mapAccountantPayrollPeriod,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
-  accountantPayrollPeriods as fallbackPeriods,
-  type AccountantPayrollPeriod,
   type AccountantPayrollStatus,
 } from "@/data/accountantPayroll";
 import styles from "./AccountantPayrollPage.module.css";
@@ -35,7 +32,6 @@ const statusClass: Record<AccountantPayrollStatus, string> = {
 
 export function AccountantPayrollPage() {
   const [createOpen, setCreateOpen] = useState(false);
-  const [localPeriods, setLocalPeriods] = useState<AccountantPayrollPeriod[]>([]);
   const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(async () => {
     const [runs, periods, payroll] = await Promise.all([
@@ -48,41 +44,27 @@ export function AccountantPayrollPage() {
   }, []);
 
   const periods = useMemo(() => {
-    const mapped = withFallback(
-      [
-        ...unwrapAccountantList(data?.runs),
-        ...unwrapAccountantList(data?.payroll),
-        ...unwrapAccountantList(data?.periods),
-      ].map(mapAccountantPayrollPeriod),
-      fallbackPeriods,
-    );
-    const merged = [...localPeriods, ...mapped];
+    const mapped = [
+      ...unwrapAccountantList(data?.runs),
+      ...unwrapAccountantList(data?.payroll),
+      ...unwrapAccountantList(data?.periods),
+    ].map(mapAccountantPayrollPeriod);
     const seen = new Set<string>();
-    return merged.filter((period) => {
+    return mapped.filter((period) => {
       if (seen.has(period.id)) return false;
       seen.add(period.id);
       return true;
     });
-  }, [data, localPeriods]);
+  }, [data]);
 
   async function handleCreatePeriod(values: { month: string; year: string }) {
     await runAction(
       "Create payroll period",
       async () => {
-        const id = `${values.month.slice(0, 3).toLowerCase()}-${values.year}`;
-        const next: AccountantPayrollPeriod = {
-          id,
-          title: `${values.month} ${values.year} payroll run`,
+        await accountantApi.payroll.createPeriod({
           month: values.month,
           year: values.year,
-          status: "In Preparation",
-          staff: 12,
-          net: "₦ 0",
-          readiness: "0% ready",
-        };
-        setLocalPeriods((current) => {
-          if (current.some((period) => period.id === id)) return current;
-          return [next, ...current];
+          period: `${values.month} ${values.year}`,
         });
         refetch();
       },
@@ -144,7 +126,10 @@ export function AccountantPayrollPage() {
       </div>
 
       <div className={styles.list}>
-        {periods.map((period) => (
+        {periods.length === 0 ? (
+          <p className={styles.empty}>No payroll periods or runs yet.</p>
+        ) : (
+          periods.map((period) => (
           <Link
             key={period.id}
             href={`/accountant/payroll/${period.id}`}
@@ -168,7 +153,8 @@ export function AccountantPayrollPage() {
               <ArrowUpRight size={18} />
             </span>
           </Link>
-        ))}
+          ))
+        )}
       </div>
 
       <CreatePayrollPeriodModal

@@ -16,11 +16,9 @@ import { accountantApi } from "@/lib/api";
 import {
   mapAccountantNotification,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
   accountantNotificationFilters,
-  accountantNotifications as fallbackNotifications,
   matchesNotificationFilter,
   type AccountantNotification,
   type AccountantNotificationFilter,
@@ -42,11 +40,7 @@ export function AccountantNotificationsPage() {
   );
 
   const notifications = useMemo(
-    () =>
-      withFallback(
-        unwrapAccountantList(data).map(mapAccountantNotification),
-        fallbackNotifications,
-      ),
+    () => unwrapAccountantList(data).map(mapAccountantNotification),
     [data],
   );
 

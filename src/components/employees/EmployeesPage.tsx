@@ -3,19 +3,12 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  LayoutGrid,
-  List,
-  Mail,
-  MapPin,
-  Plus,
-  Search,
-} from "lucide-react";
+import { Mail, MapPin, Plus, Search, X } from "lucide-react";
 import {
   type DepartmentFilter,
   type EmployeeStatus,
 } from "@/data/employees";
-import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { PageTopBar } from "@/components/layout/PageTopBar";
 import { EmployeeProfileDrawer } from "@/components/employees/EmployeeProfileDrawer";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
@@ -24,6 +17,7 @@ import {
   departmentsApi,
   listStaffEmployees,
   lookupsApi,
+  superAdminApi,
 } from "@/lib/api";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
 import { listFrom, mapEmployee, readTemporaryPassword, str, type MappedEmployee } from "@/lib/api/mappers";
@@ -36,15 +30,10 @@ const statusClass: Record<EmployeeStatus, string> = {
   "On leave": styles.statusLeave,
 };
 
-const roleOptions = [
-  { label: "Employee", value: "employee" },
-  { label: "NYSC", value: "nysc" },
-  { label: "Intern", value: "intern" },
-  { label: "Secretary", value: "secretary" },
-  { label: "Manager", value: "manager" },
-  { label: "Head of department", value: "hod" },
-  { label: "HR", value: "hr" },
-  { label: "Accountant", value: "accountant" },
+const employmentTypeOptions = [
+  { label: "Full-time", value: "Full-time" },
+  { label: "Part-time", value: "Part-time" },
+  { label: "Contract", value: "Contract" },
 ];
 
 export function EmployeesPage() {
@@ -65,12 +54,23 @@ export function EmployeesPage() {
     const department = searchParams.get("department");
     if (department) setActiveFilter(department);
   }, [searchParams]);
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
   const { data, loading, error, refetch } = useAsyncData(
     () => listStaffEmployees(),
     [],
   );
   const { data: departmentData } = useAsyncData(async () => {
     const settled = await Promise.allSettled([
+      superAdminApi.departments.list(),
       lookupsApi.departments(),
       departmentsApi.list(),
     ]);
@@ -98,15 +98,22 @@ export function EmployeesPage() {
 
   const addEmployeeFields = useMemo(
     () => [
-      { name: "fullName", label: "Full name", required: true },
-      { name: "email", label: "Email", type: "email" as const, required: true },
-      { name: "phone", label: "Phone", placeholder: "08030000000" },
-      { name: "jobTitle", label: "Job title", required: true },
+      {
+        name: "fullName",
+        label: "Full name",
+        placeholder: "e.g. Ada Obi",
+        required: true,
+      },
+      {
+        name: "jobTitle",
+        label: "Job title",
+        placeholder: "e.g. Product Designer",
+        required: true,
+      },
       {
         name: "departmentId",
         label: "Department",
         type: "select" as const,
-        required: true,
         defaultValue: departmentOptions[0]?.id ?? "",
         options:
           departmentOptions.length > 0
@@ -116,23 +123,30 @@ export function EmployeesPage() {
               }))
             : [{ label: "Loading departments…", value: "" }],
       },
-      { name: "location", label: "Location", placeholder: "Remote" },
       {
-        name: "role",
-        label: "Role",
+        name: "employmentType",
+        label: "Employment type",
         type: "select" as const,
-        required: true,
-        defaultValue: "employee",
-        options: roleOptions,
+        defaultValue: "Full-time",
+        options: employmentTypeOptions,
+      },
+      {
+        name: "email",
+        label: "Company email (optional)",
+        type: "email" as const,
+        placeholder: "name@afresh.co",
       },
     ],
     [departmentOptions],
   );
 
   const departmentFilters = useMemo((): DepartmentFilter[] => {
-    const departments = new Set(employees.map((e) => e.department).filter(Boolean));
-    return ["All", ...Array.from(departments)] as DepartmentFilter[];
-  }, [employees]);
+    const names = [
+      ...departmentOptions.map((department) => department.name),
+      ...employees.map((employee) => employee.department),
+    ].filter(Boolean);
+    return ["All", ...Array.from(new Set(names))] as DepartmentFilter[];
+  }, [departmentOptions, employees]);
 
   const filteredEmployees = useMemo(() => {
     return employees.filter((employee) => {
@@ -146,11 +160,6 @@ export function EmployeesPage() {
     });
   }, [activeFilter, query, employees]);
 
-  function focusSearch() {
-    searchRef.current?.focus();
-    showToast("Use the search field below", "info");
-  }
-
   function viewProfile(employee: MappedEmployee) {
     setProfileEmployee(employee);
   }
@@ -159,6 +168,15 @@ export function EmployeesPage() {
     if (saving) return;
     setAddOpen(false);
   }
+
+  useEffect(() => {
+    if (!addOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeAddModal();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [addOpen, saving]);
 
   async function handleAddEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -180,23 +198,31 @@ export function EmployeesPage() {
       values.departmentId = selectedDepartment.id;
       values.department = selectedDepartment.name;
     }
+    values.role = "employee";
+    values.employmentType = String(
+      form.get("employmentType") ?? values.employmentType ?? "Full-time",
+    );
     setSaving(true);
     try {
       const created = await createStaffEmployee(values);
-      const temporaryPassword =
-        readTemporaryPassword(created) || "No temporary password was returned.";
-      showCreatedCredentials({
-        name: values.fullName.trim(),
-        email: values.email.trim(),
-        password: temporaryPassword,
-      });
       refetch();
       setAddOpen(false);
-      router.push("/employees/created");
+      if (values.email.trim()) {
+        const temporaryPassword =
+          readTemporaryPassword(created) || "No temporary password was returned.";
+        showCreatedCredentials({
+          name: values.fullName.trim(),
+          email: values.email.trim(),
+          password: temporaryPassword,
+        });
+        router.push("/employees/created");
+      } else {
+        showToast("Employee record created.", "success");
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Something went wrong";
-      showToast(`Add person failed — ${message}`, "error");
+      showToast(`Create record failed — ${message}`, "error");
     } finally {
       setSaving(false);
     }
@@ -204,76 +230,68 @@ export function EmployeesPage() {
 
   return (
       <div className={styles.page}>
-        <div className={styles.topBar}>
-          {loading ? <span>Loading employees…</span> : null}
-          {error ? <span role="alert">{error}</span> : null}
-          <button
-            type="button"
-            className={styles.globalSearch}
-            onClick={focusSearch}
-          >
-            <Search size={15} className={styles.globalSearchIcon} />
-            <span className={styles.globalSearchText}>Search</span>
-            <span className={styles.shortcut}>⌘ K</span>
-          </button>
-          <div className={styles.topActions}>
-            <NotificationsLink className={styles.iconButton} />
-            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
-          </div>
-        </div>
+        <PageTopBar
+          status={
+            loading ? (
+              <p className={styles.statusLine}>Loading employees…</p>
+            ) : error ? (
+              <p className={styles.statusLine} role="alert">
+                {error}
+              </p>
+            ) : null
+          }
+        />
 
         <div className={styles.header}>
           <div>
             <p className={styles.eyebrow}>Staff Directory</p>
             <h1 className={styles.title}>Everyone, in one considered place</h1>
             <p className={styles.subtitle}>
-              Find colleagues, view profiles, and keep the organization connected.
+              Find colleagues, view profiles, and keep the organisation connected.
             </p>
           </div>
-          <div className={styles.headerActions}>
-            <button
-              type="button"
-              className={styles.addButton}
-              onClick={() => setAddOpen(true)}
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              Add person
-            </button>
-            <div className={styles.viewToggle}>
-              <button
-                type="button"
-                className={`${styles.viewButton} ${
-                  viewMode === "grid" ? styles.viewButtonActive : ""
-                }`}
-                onClick={() => setViewMode("grid")}
-              >
-                <LayoutGrid size={14} />
-                Grid
-              </button>
-              <button
-                type="button"
-                className={`${styles.viewButton} ${
-                  viewMode === "list" ? styles.viewButtonActive : ""
-                }`}
-                onClick={() => setViewMode("list")}
-              >
-                <List size={14} />
-                List
-              </button>
-            </div>
-          </div>
+          <button
+            type="button"
+            className={styles.addButton}
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            Add person
+          </button>
         </div>
 
-        <label className={styles.staffSearch}>
-          <Search size={16} className={styles.staffSearchIcon} />
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search staff..."
-            className={styles.staffSearchInput}
-          />
-        </label>
+        <div className={styles.toolbar}>
+          <label className={styles.staffSearch}>
+            <Search size={16} className={styles.staffSearchIcon} />
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search staff..."
+              className={styles.staffSearchInput}
+            />
+          </label>
+          <div className={styles.viewToggle}>
+            <button
+              type="button"
+              className={`${styles.viewButton} ${
+                viewMode === "grid" ? styles.viewButtonActive : ""
+              }`}
+              onClick={() => setViewMode("grid")}
+            >
+              Grid
+            </button>
+            <button
+              type="button"
+              className={`${styles.viewButton} ${
+                viewMode === "list" ? styles.viewButtonActive : ""
+              }`}
+              onClick={() => setViewMode("list")}
+            >
+              List
+            </button>
+          </div>
+        </div>
 
         <div className={styles.filters}>
           {departmentFilters.map((filter) => {
@@ -295,42 +313,46 @@ export function EmployeesPage() {
 
         {viewMode === "grid" ? (
           <div className={styles.grid}>
-            {filteredEmployees.map((employee) => (
-              <article key={employee.id} className={styles.card}>
-                <div className={styles.cardBody}>
-                  <div className={styles.cardTop}>
-                    <span
-                      className={styles.avatar}
-                      style={{ background: employee.avatarColor }}
-                    >
-                      {employee.initials}
-                    </span>
-                    <span className={statusClass[employee.status]}>
-                      {employee.status}
-                    </span>
+            {filteredEmployees.map((employee) => {
+              const locationLine = [employee.location, employee.department]
+                .filter((part) => part.trim())
+                .join(" · ");
+              return (
+                <article key={employee.id} className={styles.card}>
+                  <div className={styles.cardBody}>
+                    <div className={styles.cardTop}>
+                      <span className={styles.avatar}>{employee.initials}</span>
+                      <span className={statusClass[employee.status]}>
+                        {employee.status}
+                      </span>
+                    </div>
+                    <h2 className={styles.name}>{employee.name}</h2>
+                    <p className={styles.jobTitle}>{employee.title}</p>
+                    <div className={styles.meta}>
+                      {locationLine ? (
+                        <p className={styles.metaItem}>
+                          <MapPin size={14} className={styles.metaIcon} />
+                          {locationLine}
+                        </p>
+                      ) : null}
+                      {employee.email ? (
+                        <p className={styles.metaItem}>
+                          <Mail size={14} className={styles.metaIcon} />
+                          {employee.email}
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
-                  <h2 className={styles.name}>{employee.name}</h2>
-                  <p className={styles.jobTitle}>{employee.title}</p>
-                  <div className={styles.meta}>
-                    <p className={styles.metaItem}>
-                      <MapPin size={14} className={styles.metaIcon} />
-                      {employee.location} • {employee.department}
-                    </p>
-                    <p className={styles.metaItem}>
-                      <Mail size={14} className={styles.metaIcon} />
-                      {employee.email}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className={styles.cardFooter}
-                  onClick={() => viewProfile(employee)}
-                >
-                  View profile
-                </button>
-              </article>
-            ))}
+                  <button
+                    type="button"
+                    className={styles.cardFooter}
+                    onClick={() => viewProfile(employee)}
+                  >
+                    View profile
+                  </button>
+                </article>
+              );
+            })}
 
             {filteredEmployees.length === 0 && !loading && (
               <div className={styles.empty}>No staff match this view.</div>
@@ -338,36 +360,34 @@ export function EmployeesPage() {
           </div>
         ) : (
           <div className={styles.list}>
-            {filteredEmployees.map((employee) => (
-              <article key={employee.id} className={styles.listRow}>
-                <div className={styles.listIdentity}>
-                  <span
-                    className={styles.avatar}
-                    style={{ background: employee.avatarColor }}
-                  >
-                    {employee.initials}
-                  </span>
-                  <div className={styles.listMeta}>
-                    <p className={styles.listName}>{employee.name}</p>
-                    <p className={styles.listTitle}>{employee.title}</p>
+            {filteredEmployees.map((employee) => {
+              const locationLine = [employee.location, employee.department]
+                .filter((part) => part.trim())
+                .join(" · ");
+              return (
+                <article key={employee.id} className={styles.listRow}>
+                  <div className={styles.listIdentity}>
+                    <span className={styles.avatar}>{employee.initials}</span>
+                    <div className={styles.listMeta}>
+                      <p className={styles.listName}>{employee.name}</p>
+                      <p className={styles.listTitle}>{employee.title}</p>
+                    </div>
                   </div>
-                </div>
-                <p className={styles.listCell}>
-                  {employee.location} • {employee.department}
-                </p>
-                <p className={styles.listCell}>{employee.email}</p>
-                <span className={statusClass[employee.status]}>
-                  {employee.status}
-                </span>
-                <button
-                  type="button"
-                  className={styles.profileLink}
-                  onClick={() => viewProfile(employee)}
-                >
-                  View profile
-                </button>
-              </article>
-            ))}
+                  <p className={styles.listCell}>{locationLine || "—"}</p>
+                  <p className={styles.listCell}>{employee.email}</p>
+                  <span className={statusClass[employee.status]}>
+                    {employee.status}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.profileLink}
+                    onClick={() => viewProfile(employee)}
+                  >
+                    View profile
+                  </button>
+                </article>
+              );
+            })}
 
             {filteredEmployees.length === 0 && !loading && (
               <div className={styles.empty}>No staff match this view.</div>
@@ -378,22 +398,34 @@ export function EmployeesPage() {
         {addOpen && typeof document !== "undefined"
           ? createPortal(
               <div
-                className={styles.passwordBackdrop}
+                className={styles.addBackdrop}
                 role="presentation"
                 onClick={closeAddModal}
               >
                 <div
-                  className={styles.passwordModal}
+                  className={styles.addModal}
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="add-person-title"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <h2 id="add-person-title" className={styles.passwordTitle}>
-                    Add person
-                  </h2>
-                  <p className={styles.passwordCopy}>
-                    Create a new staff directory entry.
+                  <div className={styles.addModalHead}>
+                    <h2 id="add-person-title" className={styles.addModalTitle}>
+                      Add employee record
+                    </h2>
+                    <button
+                      type="button"
+                      className={styles.addModalClose}
+                      onClick={closeAddModal}
+                      aria-label="Close"
+                      disabled={saving}
+                    >
+                      <X size={18} strokeWidth={2} />
+                    </button>
+                  </div>
+                  <p className={styles.addModalCopy}>
+                    Create a new record. The employee enters the onboarding queue
+                    automatically.
                   </p>
                   <form
                     className={styles.addForm}
@@ -402,7 +434,12 @@ export function EmployeesPage() {
                     <div className={styles.addFormFields}>
                       {addEmployeeFields.map((field) => (
                         <label key={field.name} className={styles.addField}>
-                          <span>{field.label}</span>
+                          <span>
+                            {field.label}
+                            {field.required ? (
+                              <span className={styles.addRequired}> *</span>
+                            ) : null}
+                          </span>
                           {field.type === "select" ? (
                             <select
                               name={field.name}
@@ -426,10 +463,10 @@ export function EmployeesPage() {
                         </label>
                       ))}
                     </div>
-                    <div className={styles.passwordActions}>
+                    <div className={styles.addModalActions}>
                       <button
                         type="button"
-                        className={styles.passwordCancel}
+                        className={styles.addCancel}
                         onClick={closeAddModal}
                         disabled={saving}
                       >
@@ -438,9 +475,10 @@ export function EmployeesPage() {
                       <button
                         type="submit"
                         className={styles.addSubmit}
-                        disabled={saving || departmentOptions.length === 0}
+                        disabled={saving}
                       >
-                        {saving ? "Adding…" : "Add person"}
+                        <Plus size={16} strokeWidth={2.5} />
+                        {saving ? "Creating…" : "Create record"}
                       </button>
                     </div>
                   </form>

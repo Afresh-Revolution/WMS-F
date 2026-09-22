@@ -138,21 +138,22 @@ export function buildEmployeeWriteBody(values: Record<string, string>) {
   const role = str(values.role).trim() || "employee";
   const phone = str(values.phone).trim();
   const location = str(values.location).trim();
+  const employmentType = str(values.employmentType).trim() || "Full-time";
   const staffType =
     role === "nysc" || role === "intern" ? role : "employee";
 
   const body: Record<string, unknown> = {
     fullName,
     name: fullName,
-    email,
     jobTitle,
     title: jobTitle,
     position: jobTitle,
     role,
     staffType,
-    employmentType: "Full-time",
+    employmentType,
     status: "active",
   };
+  if (email) body.email = email;
   if (departmentId) {
     body.departmentId = departmentId;
     body.department_id = departmentId;

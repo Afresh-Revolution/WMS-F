@@ -23,11 +23,9 @@ import { accountantApi, accountantSettled } from "@/lib/api";
 import {
   mapAccountantBillItem,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
   accountantBillFilters,
-  accountantBillItems as fallbackBills,
   formatBillNaira,
   matchesAccountantBillFilter,
   type AccountantBillFilter,
@@ -46,7 +44,7 @@ const statusClass: Record<AccountantBillStatus, string> = {
 export function AccountantBillsPage() {
   const [filter, setFilter] = useState<AccountantBillFilter>("All");
   const [createOpen, setCreateOpen] = useState(false);
-  const { runAction, showToast } = usePageActions();
+  const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(async () => {
     const [bills, invoices] = await Promise.all([
       accountantApi.bills.list(),
@@ -57,13 +55,10 @@ export function AccountantBillsPage() {
 
   const bills = useMemo(
     () =>
-      withFallback(
-        [
-          ...unwrapAccountantList(data?.bills),
-          ...unwrapAccountantList(data?.invoices),
-        ].map(mapAccountantBillItem),
-        fallbackBills,
-      ),
+      [
+        ...unwrapAccountantList(data?.bills),
+        ...unwrapAccountantList(data?.invoices),
+      ].map(mapAccountantBillItem),
     [data],
   );
 
@@ -108,13 +103,35 @@ export function AccountantBillsPage() {
     await runAction(
       "Attach invoice",
       async () => {
+        const invoiceNumber = bill.invoice ?? `INV-${bill.ref}`;
+        await accountantApi.invoices.create({
+          billId: bill.id,
+          vendor: bill.vendor,
+          invoiceNumber,
+          amount: bill.amountValue,
+        });
         await accountantApi.bills.patch(bill.id, {
-          invoice: bill.invoice ?? `INV-${bill.ref}`,
+          invoice: invoiceNumber,
           missingInvoice: false,
         });
         refetch();
       },
       `Invoice attached to ${bill.ref}`,
+    );
+  }
+
+  async function handlePay(bill: AccountantBillItem) {
+    await runAction(
+      "Record bill payment",
+      async () => {
+        await accountantApi.bills.recordPayment(bill.id, {
+          amount: bill.amountValue,
+          reference: bill.ref,
+          vendor: bill.vendor,
+        });
+        refetch();
+      },
+      `Payment recorded for ${bill.vendor}`,
     );
   }
 
@@ -237,20 +254,22 @@ export function AccountantBillsPage() {
                     Invoice
                   </button>
                 ) : bill.overdue ? (
-                  <span className={styles.overdueTiming}>
+                  <button
+                    type="button"
+                    className={styles.timing}
+                    onClick={() => void handlePay(bill)}
+                  >
                     <AlertTriangle size={13} />
-                    {bill.timing}
-                  </span>
+                    Pay · {bill.timing}
+                  </button>
                 ) : (
                   <button
                     type="button"
                     className={styles.timing}
-                    onClick={() =>
-                      showToast(`${bill.vendor}: ${bill.timing}`, "info")
-                    }
+                    onClick={() => void handlePay(bill)}
                   >
                     <Clock size={13} />
-                    {bill.timing}
+                    Pay · {bill.timing}
                   </button>
                 )}
               </div>

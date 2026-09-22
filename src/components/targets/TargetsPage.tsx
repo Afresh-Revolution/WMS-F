@@ -1,20 +1,19 @@
 "use client";
 
-import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
-import { ChevronRight, Plus, RefreshCw, Search, Star } from "lucide-react";
-import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { SimpleModal } from "@/components/ui/SimpleModal";
+import { ChevronRight, Plus, Star } from "lucide-react";
 import {
   targetTabs,
   type PerformanceReview,
   type ReviewStatus,
   type TargetTab,
 } from "@/data/targets";
+import { PageTopBar } from "@/components/layout/PageTopBar";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi, unwrapRecord } from "@/lib/api";
-import { listFrom, mapPerformanceReview, str } from "@/lib/api/mappers";
+import { listStaffEmployees, superAdminApi, unwrapRecord } from "@/lib/api";
+import { listFrom, mapEmployee, mapPerformanceReview, str } from "@/lib/api/mappers";
 import styles from "./TargetsPage.module.css";
 
 const statusClass: Record<ReviewStatus, string> = {
@@ -43,55 +42,34 @@ function defaultReviewDates() {
   return { startDate: ymd(start), endDate: ymd(end) };
 }
 
+function currentCycle(date = new Date()) {
+  const quarter = Math.floor(date.getMonth() / 3);
+  const end = new Date(date.getFullYear(), quarter * 3 + 3, 0);
+  return {
+    label: `Q${quarter + 1} ${date.getFullYear()}`,
+    closes: end.toLocaleDateString("en-US", { month: "long", day: "numeric" }),
+  };
+}
+
+function recordKind(record: Record<string, unknown>) {
+  const kind = str(record.type ?? record.kind ?? record.category).toLowerCase();
+  if (kind.includes("kpi")) return "kpi";
+  if (kind.includes("goal")) return "goal";
+  return "review";
+}
+
+function formatKpi(value: unknown) {
+  if (value === null || value === undefined || value === "") return "";
+  const raw = String(value).trim();
+  if (raw.endsWith("%")) return raw;
+  const n = Number(raw.replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(n)) return raw;
+  const pct = n <= 1 ? n * 100 : n;
+  return `${Math.round(pct)}%`;
+}
+
 const { startDate: defaultStartDate, endDate: defaultEndDate } =
   defaultReviewDates();
-
-const createFields = [
-  {
-    name: "title",
-    label: "Review title",
-    required: true,
-    placeholder: "Q2 2026 performance review",
-    minLength: 3,
-    maxLength: 180,
-    fullWidth: true,
-  },
-  {
-    name: "startDate",
-    label: "Start date",
-    type: "date" as const,
-    required: true,
-    defaultValue: defaultStartDate,
-  },
-  {
-    name: "endDate",
-    label: "End date",
-    type: "date" as const,
-    required: true,
-    defaultValue: defaultEndDate,
-  },
-  { name: "name", label: "Employee name", required: true },
-  { name: "role", label: "Role", required: true },
-  { name: "reviewedBy", label: "Reviewed by", required: true },
-  {
-    name: "value",
-    label: "Target value",
-    type: "number" as const,
-    required: true,
-    defaultValue: "1",
-    min: 0.01,
-    step: 0.01,
-  },
-  {
-    name: "rating",
-    label: "Rating (1–5)",
-    type: "number" as const,
-    defaultValue: "4",
-    min: 1,
-    max: 5,
-    step: 0.1,
-  },
-];
 
 function StarRating({ rating }: { rating: number }) {
   return (
@@ -101,7 +79,6 @@ function StarRating({ rating }: { rating: number }) {
           const starValue = index + 1;
           const filled = rating >= starValue;
           const partial = !filled && rating > index;
-
           return (
             <Star
               key={starValue}
@@ -123,20 +100,124 @@ export function TargetsPage() {
   const [activeTab, setActiveTab] = useState<TargetTab>("Reviews");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const { runAction, exportRows } = usePageActions();
+  const { runAction } = usePageActions();
+  const cycle = useMemo(() => currentCycle(), []);
 
   const { data, loading, error, refetch } = useAsyncData(
     () => superAdminApi.targets.list(),
     [],
   );
+  const { data: reportData } = useAsyncData(
+    () => superAdminApi.reports.targets().catch(() => null),
+    [],
+  );
+  const { data: employeeData } = useAsyncData(
+    () => listStaffEmployees().catch(() => []),
+    [],
+  );
+
+  const records = useMemo(() => listFrom(data ?? undefined), [data]);
+  const employees = useMemo(
+    () => (employeeData ?? []).map((record) => mapEmployee(record)),
+    [employeeData],
+  );
 
   const performanceReviews = useMemo(() => {
-    return listFrom(data ?? undefined).map((record) => mapPerformanceReview(record));
-  }, [data]);
+    return records
+      .filter((record) => recordKind(record) === "review")
+      .map((record) => mapPerformanceReview(record));
+  }, [records]);
+
+  const kpis = useMemo(() => {
+    return records.filter((record) => recordKind(record) === "kpi");
+  }, [records]);
+
+  const goals = useMemo(() => {
+    return records.filter((record) => recordKind(record) === "goal");
+  }, [records]);
+
+  const createFields = useMemo(
+    () => [
+      {
+        name: "title",
+        label: "Review title",
+        required: true,
+        placeholder: `${cycle.label} performance review`,
+        minLength: 3,
+        maxLength: 180,
+        fullWidth: true,
+      },
+      {
+        name: "employeeId",
+        label: "Employee",
+        type: "select" as const,
+        required: true,
+        defaultValue: "",
+        options: [
+          { label: "Select employee", value: "" },
+          ...employees.map((employee) => ({
+            label: employee.name,
+            value: employee.id,
+          })),
+        ],
+      },
+      {
+        name: "reviewerId",
+        label: "Reviewed by",
+        type: "select" as const,
+        required: true,
+        defaultValue: "",
+        options: [
+          { label: "Select reviewer", value: "" },
+          ...employees.map((employee) => ({
+            label: employee.name,
+            value: employee.id,
+          })),
+        ],
+      },
+      {
+        name: "startDate",
+        label: "Start date",
+        type: "date" as const,
+        required: true,
+        defaultValue: defaultStartDate,
+        placeholder: "mm/dd/yyyy",
+      },
+      {
+        name: "endDate",
+        label: "End date",
+        type: "date" as const,
+        required: true,
+        defaultValue: defaultEndDate,
+        placeholder: "mm/dd/yyyy",
+      },
+      {
+        name: "value",
+        label: "Target value",
+        type: "number" as const,
+        required: true,
+        defaultValue: "1",
+        min: 0.01,
+        step: 0.01,
+      },
+      {
+        name: "rating",
+        label: "Rating (1–5)",
+        type: "number" as const,
+        defaultValue: "4",
+        min: 1,
+        max: 5,
+        step: 0.1,
+      },
+    ],
+    [cycle.label, employees],
+  );
 
   const targetStats = useMemo(() => {
-    const summary = unwrapRecord(data);
-    const ratings = performanceReviews.map((review) => review.rating);
+    const summary = unwrapRecord(reportData ?? data);
+    const ratings = performanceReviews
+      .map((review) => review.rating)
+      .filter((rating) => rating > 0);
     const avgScore =
       ratings.length > 0
         ? (ratings.reduce((sum, rating) => sum + rating, 0) / ratings.length).toFixed(1)
@@ -144,49 +225,59 @@ export function TargetsPage() {
     const reviewsDue = performanceReviews.filter(
       (review) => review.status === "In review" || review.status === "Overdue",
     ).length;
+    const goalsOverdue = goals.filter((goal) =>
+      str(goal.status).toLowerCase().includes("overdue"),
+    ).length;
+    const kpiLive = formatKpi(
+      summary.kpiAttainment ?? summary.kpi ?? summary.attainment,
+    );
+
     return [
       {
         id: "avg-score",
-        label: "Avg. review score",
-        value: str(summary.avgScore ?? summary.averageRating, avgScore),
-        badge: str(summary.cycle, "—"),
+        label: "Avg review score",
+        value: ratings.length ? avgScore : str(summary.avgScore ?? summary.averageRating, "—"),
+        hint: cycle.label,
+        accent: true,
       },
       {
         id: "reviews-due",
         label: "Reviews due",
-        value: str(summary.reviewsDue ?? summary.pending, String(reviewsDue)),
-        badge: "Pending",
+        value: String(reviewsDue),
+        hint: "This cycle",
       },
       {
         id: "kpi-attainment",
         label: "KPI attainment",
-        value: str(summary.kpiAttainment ?? summary.kpi, "—"),
-        badge: "Cycle",
+        value: kpiLive || "—",
+        hint: "Overall",
       },
       {
-        id: "total-reviews",
-        label: "Total reviews",
-        value: str(summary.totalReviews, String(performanceReviews.length)),
-        badge: "All",
+        id: "goals-overdue",
+        label: "Goals overdue",
+        value: str(summary.goalsOverdue, String(goalsOverdue)),
+        hint: "Action needed",
       },
     ];
-  }, [data, performanceReviews]);
+  }, [cycle.label, data, goals, performanceReviews, reportData]);
 
   const filteredReviews = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const needle = query.trim().toLowerCase();
     return performanceReviews.filter((review) => {
-      if (!normalizedQuery) return true;
+      if (!needle) return true;
       const haystack =
         `${review.name} ${review.role} ${review.reviewedBy}`.toLowerCase();
-      return haystack.includes(normalizedQuery);
+      return haystack.includes(needle);
     });
   }, [performanceReviews, query]);
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Create review", async () => {
-      const name = values.name.trim();
-      const role = values.role.trim();
-      const reviewedBy = values.reviewedBy.trim();
+      const employee = employees.find((item) => item.id === values.employeeId);
+      const reviewer = employees.find((item) => item.id === values.reviewerId);
+      const name = employee?.name ?? "";
+      const role = employee?.title ?? "";
+      const reviewedBy = reviewer?.name ?? "";
       const title = (values.title.trim() || `${name} performance review`).slice(
         0,
         180,
@@ -207,10 +298,12 @@ export function TargetsPage() {
 
       await superAdminApi.targets.create({
         title,
+        employeeId: values.employeeId,
         name,
         employeeName: name,
         role,
         jobTitle: role,
+        reviewerId: values.reviewerId,
         reviewedBy,
         reviewer: reviewedBy,
         rating,
@@ -223,6 +316,7 @@ export function TargetsPage() {
         endDate,
         periodStart: startDate,
         periodEnd: endDate,
+        type: "review",
       });
       refetch();
     });
@@ -234,174 +328,180 @@ export function TargetsPage() {
     });
   }
 
-  function handleRefresh() {
-    void runAction("Refresh", async () => {
-      refetch();
-    });
-  }
-
-  function handleExport() {
-    exportRows(
-      filteredReviews.map((review) => ({
-        name: review.name,
-        role: review.role,
-        reviewedBy: review.reviewedBy,
-        rating: review.rating,
-        status: review.status,
-      })),
-      "performance-reviews.csv",
-    );
-  }
-
   return (
-    <>
-      <div className={styles.page}>
-        <div className={styles.topBar}>
-          <PageDateLabel className={styles.dateLabel} />
-          {loading ? <p className={styles.dateLabel}>Loading targets…</p> : null}
-          {error ? (
-            <p className={styles.dateLabel} role="alert">
+    <div className={styles.page}>
+      <PageTopBar
+        searchValue={query}
+        onSearchChange={setQuery}
+        status={
+          loading ? (
+            <p className={styles.statusLine}>Loading performance…</p>
+          ) : error ? (
+            <p className={styles.statusLine} role="alert">
               {error}
             </p>
-          ) : null}
-          <div className={styles.topActions}>
-            <label className={styles.search}>
-              <Search size={15} className={styles.searchIcon} />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search"
-                className={styles.searchInput}
-              />
-            </label>
-            <NotificationsLink className={styles.iconButton} />
-            <button
-              type="button"
-              aria-label="Refresh"
-              className={styles.iconButton}
-              onClick={handleRefresh}
-            >
-              <RefreshCw size={16} />
-            </button>
-            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
-          </div>
+          ) : null
+        }
+      />
+
+      <div className={styles.header}>
+        <div>
+          <p className={styles.eyebrow}>Performance</p>
+          <h1 className={styles.title}>Where growth becomes visible</h1>
+          <p className={styles.subtitle}>
+            Track appraisals, monitor KPIs, and build a culture of intentional
+            progress.
+          </p>
         </div>
-
-        <div className={styles.header}>
-          <div>
-            <p className={styles.eyebrow}>Performance</p>
-            <h1 className={styles.title}>Where growth becomes visible</h1>
-            <p className={styles.subtitle}>
-              Track appraisals, monitor KPIs, and build a culture of intentional
-              progress.
-            </p>
-          </div>
-          <div className={styles.headerActions}>
-            <button type="button" className={styles.exportButton} onClick={handleExport}>
-              Export
-            </button>
-            <button
-              type="button"
-              className={styles.createButton}
-              onClick={() => setCreateOpen(true)}
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              New review
-            </button>
-          </div>
-        </div>
-
-        <div className={styles.stats}>
-          {targetStats.map((stat) => (
-            <article key={stat.id} className={styles.statCard}>
-              <div className={styles.statTop}>
-                <p className={styles.statLabel}>{stat.label}</p>
-                <span className={styles.statBadge}>{stat.badge}</span>
-              </div>
-              <p className={styles.statValue}>{stat.value}</p>
-            </article>
-          ))}
-        </div>
-
-        <div className={styles.tabs}>
-          {targetTabs.map((tab) => {
-            const active = activeTab === tab;
-            return (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`${styles.tab} ${active ? styles.tabActive : ""}`}
-              >
-                {tab}
-              </button>
-            );
-          })}
-        </div>
-
-        {activeTab === "Reviews" ? (
-          <section className={styles.reviewsSection}>
-            <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>Q2 2026 performance reviews</h2>
-              <p className={styles.sectionSubtitle}>
-                Cycle closes July 31. Reviews in progress are shown first.
-              </p>
-            </div>
-
-            <div className={styles.reviewList}>
-              {filteredReviews.map((review) => (
-                <button
-                  key={review.id}
-                  type="button"
-                  className={styles.reviewRow}
-                  onClick={() => void openReview(review)}
-                >
-                  <span
-                    className={styles.avatar}
-                    style={{ background: review.avatarColor }}
-                  >
-                    {review.initials}
-                  </span>
-
-                  <span className={styles.reviewInfo}>
-                    <span className={styles.reviewName}>{review.name}</span>
-                    <span className={styles.reviewRole}>{review.role}</span>
-                    <span className={styles.reviewedBy}>
-                      Reviewed by {review.reviewedBy}
-                    </span>
-                  </span>
-
-                  <span className={styles.reviewMeta}>
-                    <StarRating rating={review.rating} />
-                    <span className={statusClass[review.status]}>{review.status}</span>
-                    <ChevronRight size={16} className={styles.chevron} />
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        ) : (
-          <section className={styles.placeholder}>
-            <h2 className={styles.sectionTitle}>{activeTab}</h2>
-            <p className={styles.sectionSubtitle}>
-              {activeTab === "KPIs"
-                ? "Track key performance indicators across teams and departments."
-                : "Set and monitor individual and team goals for the current cycle."}
-            </p>
-          </section>
-        )}
+        <button
+          type="button"
+          className={styles.createButton}
+          onClick={() => setCreateOpen(true)}
+        >
+          <Plus size={16} strokeWidth={2.5} />
+          New review
+        </button>
       </div>
+
+      <div className={styles.stats}>
+        {targetStats.map((stat) => (
+          <article
+            key={stat.id}
+            className={`${styles.statCard} ${stat.accent ? styles.statCardAccent : ""}`}
+          >
+            <p className={styles.statLabel}>{stat.label}</p>
+            <div className={styles.statRow}>
+              <p className={styles.statValue}>{stat.value}</p>
+              <span className={styles.statHint}>{stat.hint}</span>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <div className={styles.filters}>
+        {targetTabs.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={`${styles.filterChip} ${
+              activeTab === tab ? styles.filterChipActive : ""
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "Reviews" ? (
+        <section className={styles.panel}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>
+              {cycle.label} performance reviews
+            </h2>
+            <p className={styles.sectionSubtitle}>
+              Cycle closes {cycle.closes}. Reviews in progress are shown first.
+            </p>
+          </div>
+          {filteredReviews.length === 0 ? (
+            <p className={styles.empty}>No performance reviews match this filter.</p>
+          ) : (
+            filteredReviews.map((review) => (
+              <button
+                key={review.id}
+                type="button"
+                className={styles.reviewRow}
+                onClick={() => void openReview(review)}
+              >
+                <span className={styles.avatar}>{review.initials}</span>
+                <span className={styles.reviewInfo}>
+                  <span className={styles.reviewName}>{review.name}</span>
+                  <span className={styles.reviewMetaLine}>
+                    {[
+                      review.role,
+                      review.reviewedBy ? `Reviewed by ${review.reviewedBy}` : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </span>
+                <span className={styles.reviewMeta}>
+                  <StarRating rating={review.rating} />
+                  <span className={statusClass[review.status]}>{review.status}</span>
+                  <ChevronRight size={16} className={styles.chevron} />
+                </span>
+              </button>
+            ))
+          )}
+        </section>
+      ) : activeTab === "KPIs" ? (
+        <section className={styles.panel}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>KPIs</h2>
+            <p className={styles.sectionSubtitle}>
+              Key performance indicators for this cycle.
+            </p>
+          </div>
+          {kpis.length === 0 ? (
+            <p className={styles.empty}>No KPIs in this cycle.</p>
+          ) : (
+            kpis.map((kpi) => (
+              <article key={str(kpi.id ?? kpi._id)} className={styles.simpleRow}>
+                <p className={styles.simpleTitle}>
+                  {str(kpi.name ?? kpi.title ?? kpi.metric)}
+                </p>
+                <p className={styles.simpleValue}>
+                  {formatKpi(kpi.attainment ?? kpi.value ?? kpi.percent) || "—"}
+                </p>
+              </article>
+            ))
+          )}
+        </section>
+      ) : (
+        <section className={styles.panel}>
+          <div className={styles.sectionHeader}>
+            <h2 className={styles.sectionTitle}>Goals</h2>
+            <p className={styles.sectionSubtitle}>
+              Individual and team goals for this cycle.
+            </p>
+          </div>
+          {goals.length === 0 ? (
+            <p className={styles.empty}>No goals in this cycle.</p>
+          ) : (
+            goals.map((goal) => (
+              <article key={str(goal.id ?? goal._id)} className={styles.simpleRow}>
+                <div>
+                  <p className={styles.simpleTitle}>
+                    {str(goal.name ?? goal.title)}
+                  </p>
+                  <p className={styles.simpleSub}>{str(goal.dueDate ?? goal.deadline)}</p>
+                </div>
+                <span
+                  className={
+                    str(goal.status).toLowerCase().includes("overdue")
+                      ? styles.statusOverdue
+                      : styles.statusInReview
+                  }
+                >
+                  {str(goal.status, "In review")}
+                </span>
+              </article>
+            ))
+          )}
+        </section>
+      )}
 
       <SimpleModal
         open={createOpen}
         title="New performance review"
-        description="Set the review window and a target value greater than zero."
         fields={createFields}
         submitLabel="Create review"
+        showClose
         wide
+        appearance="soft"
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />
-    </>
+    </div>
   );
 }

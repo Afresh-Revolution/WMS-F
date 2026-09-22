@@ -1,21 +1,30 @@
-import { apiRequest, buildQuery } from "./client";
+import { ApiError, apiRequest, buildQuery, getAccessToken } from "./client";
+import { downloadBlob } from "@/lib/export/downloadBlob";
 import type { GpsCheckInBody } from "./attendance";
 import type { Id } from "./types";
 
-const BASE = "/accountant";
+type RequestOptions = Omit<RequestInit, "body"> & {
+  body?: unknown;
+  auth?: boolean;
+  root?: boolean;
+};
 
-function downloadBlob(content: unknown, filename: string, mime = "text/csv;charset=utf-8;") {
-  const text =
-    typeof content === "string"
-      ? content
-      : JSON.stringify(content, null, 2);
-  const blob = new Blob([text], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+export async function accRequest<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  try {
+    return await apiRequest<T>(`/accountant${normalized}`, options);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return await apiRequest<T>(`/api/accountant${normalized}`, {
+        ...options,
+        root: true,
+      });
+    }
+    throw err;
+  }
 }
 
 export async function accountantSettled<T>(promise: Promise<T>): Promise<T | null> {
@@ -26,76 +35,86 @@ export async function accountantSettled<T>(promise: Promise<T>): Promise<T | nul
   }
 }
 
+async function accExport(path: string, filename: string) {
+  const token = getAccessToken();
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  const candidates = [
+    `/api/v1/accountant${normalized}`,
+    `/api/accountant${normalized}`,
+  ];
+  let response: Response | null = null;
+  for (const url of candidates) {
+    response = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (response.ok || response.status !== 404) break;
+  }
+  if (!response?.ok) {
+    throw new Error(response?.statusText || "Export failed");
+  }
+  downloadBlob(await response.blob(), filename);
+}
+
 export const accountantApi = {
-  scope: () => apiRequest<unknown>(`${BASE}/scope`),
+  scope: () => accRequest<unknown>("/scope"),
 
-  dashboard: () => apiRequest<unknown>(`${BASE}/dashboard`),
+  dashboard: () => accRequest<unknown>("/dashboard"),
 
-  dashboardStats: () => apiRequest<unknown>(`${BASE}/dashboard/stats`),
+  dashboardStats: () => accRequest<unknown>("/dashboard/stats"),
 
   profile: {
-    get: () => apiRequest<unknown>(`${BASE}/profile`),
+    get: () => accRequest<unknown>("/profile"),
     patch: (body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/profile`, { method: "PATCH", body }),
+      accRequest<unknown>("/profile", { method: "PATCH", body }),
     put: (body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/profile`, { method: "PUT", body }),
+      accRequest<unknown>("/profile", { method: "PUT", body }),
   },
 
   employmentRecord: {
-    get: () => apiRequest<unknown>(`${BASE}/employment-record`),
-    documents: () =>
-      apiRequest<unknown>(`${BASE}/employment-record/documents`),
+    get: () => accRequest<unknown>("/employment-record"),
+    documents: () => accRequest<unknown>("/employment-record/documents"),
     patch: (body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/employment-record`, {
-        method: "PATCH",
-        body,
-      }),
+      accRequest<unknown>("/employment-record", { method: "PATCH", body }),
     put: (body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/employment-record`, {
-        method: "PUT",
-        body,
-      }),
+      accRequest<unknown>("/employment-record", { method: "PUT", body }),
   },
 
   settings: {
-    get: () => apiRequest<unknown>(`${BASE}/settings`),
+    get: () => accRequest<unknown>("/settings"),
     patch: (body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/settings`, { method: "PATCH", body }),
+      accRequest<unknown>("/settings", { method: "PATCH", body }),
   },
 
-  helpCenter: () => apiRequest<unknown>(`${BASE}/help-center`),
+  helpCenter: () => accRequest<unknown>("/help-center"),
 
   payroll: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/payroll${buildQuery(params)}`),
-    dashboard: () => apiRequest<unknown>(`${BASE}/payroll/dashboard`),
+      accRequest<unknown>(`/payroll${buildQuery(params)}`),
+    dashboard: () => accRequest<unknown>("/payroll/dashboard"),
     periods: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/payroll/periods${buildQuery(params)}`),
+      accRequest<unknown>(`/payroll/periods${buildQuery(params)}`),
+    createPeriod: (body: Record<string, unknown>) =>
+      accRequest<unknown>("/payroll/periods", { method: "POST", body }),
     runs: {
       list: (params?: Record<string, unknown>) =>
-        apiRequest<unknown>(`${BASE}/payroll/runs${buildQuery(params)}`),
-      get: (id: Id) => apiRequest<unknown>(`${BASE}/payroll/runs/${id}`),
+        accRequest<unknown>(`/payroll/runs${buildQuery(params)}`),
+      get: (id: Id) => accRequest<unknown>(`/payroll/runs/${id}`),
       items: (id: Id, params?: Record<string, unknown>) =>
-        apiRequest<unknown>(
-          `${BASE}/payroll/runs/${id}/items${buildQuery(params)}`,
-        ),
+        accRequest<unknown>(`/payroll/runs/${id}/items${buildQuery(params)}`),
+      patch: (id: Id, body: Record<string, unknown>) =>
+        accRequest<unknown>(`/payroll/runs/${id}`, { method: "PATCH", body }),
     },
     payments: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/payroll/payments${buildQuery(params)}`),
+      accRequest<unknown>(`/payroll/payments${buildQuery(params)}`),
     payslips: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/payroll/payslips${buildQuery(params)}`),
+      accRequest<unknown>(`/payroll/payslips${buildQuery(params)}`),
     deductions: {
       list: (params?: Record<string, unknown>) =>
-        apiRequest<unknown>(
-          `${BASE}/payroll/deductions${buildQuery(params)}`,
-        ),
+        accRequest<unknown>(`/payroll/deductions${buildQuery(params)}`),
       create: (body: Record<string, unknown>) =>
-        apiRequest<unknown>(`${BASE}/payroll/deductions`, {
-          method: "POST",
-          body,
-        }),
+        accRequest<unknown>("/payroll/deductions", { method: "POST", body }),
       patch: (id: Id, body: Record<string, unknown>) =>
-        apiRequest<unknown>(`${BASE}/payroll/deductions/${id}`, {
+        accRequest<unknown>(`/payroll/deductions/${id}`, {
           method: "PATCH",
           body,
         }),
@@ -104,30 +123,25 @@ export const accountantApi = {
 
   salaryImplementations: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(
-        `${BASE}/salary-implementations${buildQuery(params)}`,
-      ),
+      accRequest<unknown>(`/salary-implementations${buildQuery(params)}`),
     create: (body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/salary-implementations`, {
-        method: "POST",
-        body,
-      }),
+      accRequest<unknown>("/salary-implementations", { method: "POST", body }),
     implement: (id: Id) =>
-      apiRequest<unknown>(`${BASE}/salary-implementations/${id}/implement`, {
+      accRequest<unknown>(`/salary-implementations/${id}/implement`, {
         method: "PATCH",
       }),
   },
 
   purchaseRequests: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/purchase-requests${buildQuery(params)}`),
+      accRequest<unknown>(`/purchase-requests${buildQuery(params)}`),
   },
 
   purchaseOrders: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/purchase-orders${buildQuery(params)}`),
+      accRequest<unknown>(`/purchase-orders${buildQuery(params)}`),
     recordPayment: (id: Id, body?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/purchase-orders/${id}/payments`, {
+      accRequest<unknown>(`/purchase-orders/${id}/payments`, {
         method: "POST",
         body,
       }),
@@ -135,36 +149,30 @@ export const accountantApi = {
 
   bills: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/bills${buildQuery(params)}`),
+      accRequest<unknown>(`/bills${buildQuery(params)}`),
     create: (body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/bills`, { method: "POST", body }),
-    get: (id: Id) => apiRequest<unknown>(`${BASE}/bills/${id}`),
+      accRequest<unknown>("/bills", { method: "POST", body }),
+    get: (id: Id) => accRequest<unknown>(`/bills/${id}`),
     patch: (id: Id, body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/bills/${id}`, { method: "PATCH", body }),
+      accRequest<unknown>(`/bills/${id}`, { method: "PATCH", body }),
     recordPayment: (id: Id, body?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/bills/${id}/payments`, {
-        method: "POST",
-        body,
-      }),
+      accRequest<unknown>(`/bills/${id}/payments`, { method: "POST", body }),
   },
 
   invoices: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/invoices${buildQuery(params)}`),
+      accRequest<unknown>(`/invoices${buildQuery(params)}`),
     create: (body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/invoices`, { method: "POST", body }),
+      accRequest<unknown>("/invoices", { method: "POST", body }),
     patch: (id: Id, body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/invoices/${id}`, {
-        method: "PATCH",
-        body,
-      }),
+      accRequest<unknown>(`/invoices/${id}`, { method: "PATCH", body }),
   },
 
   expenses: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/expenses${buildQuery(params)}`),
+      accRequest<unknown>(`/expenses${buildQuery(params)}`),
     reimburse: (id: Id, body?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/expenses/${id}/reimburse`, {
+      accRequest<unknown>(`/expenses/${id}/reimburse`, {
         method: "POST",
         body,
       }),
@@ -172,57 +180,45 @@ export const accountantApi = {
 
   vendors: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/vendors${buildQuery(params)}`),
-    get: (id: Id) => apiRequest<unknown>(`${BASE}/vendors/${id}`),
+      accRequest<unknown>(`/vendors${buildQuery(params)}`),
+    get: (id: Id) => accRequest<unknown>(`/vendors/${id}`),
   },
 
   payments: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/payments${buildQuery(params)}`),
+      accRequest<unknown>(`/payments${buildQuery(params)}`),
     create: (body: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/payments`, { method: "POST", body }),
+      accRequest<unknown>("/payments", { method: "POST", body }),
     reconcile: (id: Id, body?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/payments/${id}/reconcile`, {
+      accRequest<unknown>(`/payments/${id}/reconcile`, {
         method: "PATCH",
         body,
       }),
-    export: async (params?: Record<string, unknown>) => {
-      const payload = await apiRequest<unknown>(
-        `${BASE}/payments/export${buildQuery(params)}`,
-      );
-      downloadBlob(payload, "accountant-payments.csv");
-      return payload;
-    },
+    export: (params?: Record<string, unknown>) =>
+      accExport(`/payments/export${buildQuery(params)}`, "accountant-payments.csv"),
   },
 
   reports: {
     get: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/reports${buildQuery(params)}`),
+      accRequest<unknown>(`/reports${buildQuery(params)}`),
     summary: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/reports/summary${buildQuery(params)}`),
-    export: async (params?: Record<string, unknown>) => {
-      const payload = await apiRequest<unknown>(
-        `${BASE}/reports/export${buildQuery(params)}`,
-      );
-      downloadBlob(payload, "accountant-finance-report.csv");
-      return payload;
-    },
+      accRequest<unknown>(`/reports/summary${buildQuery(params)}`),
+    export: (params?: Record<string, unknown>) =>
+      accExport(`/reports/export${buildQuery(params)}`, "accountant-finance-report.csv"),
   },
 
   notifications: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/notifications${buildQuery(params)}`),
+      accRequest<unknown>(`/notifications${buildQuery(params)}`),
     markRead: (id: Id) =>
-      apiRequest<unknown>(`${BASE}/notifications/${id}/read`, {
-        method: "PATCH",
-      }),
+      accRequest<unknown>(`/notifications/${id}/read`, { method: "PATCH" }),
   },
 
   attendance: {
-    locations: () => apiRequest<unknown>(`${BASE}/attendance/locations`),
-    status: () => apiRequest<unknown>(`${BASE}/attendance/status`),
+    locations: () => accRequest<unknown>("/attendance/locations"),
+    status: () => accRequest<unknown>("/attendance/status"),
     checkIn: (body: GpsCheckInBody, idempotencyKey?: string) =>
-      apiRequest<unknown>(`${BASE}/attendance/check-in`, {
+      accRequest<unknown>("/attendance/check-in", {
         method: "POST",
         body,
         headers: idempotencyKey
@@ -230,11 +226,11 @@ export const accountantApi = {
           : undefined,
       }),
     history: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/attendance/history${buildQuery(params)}`),
+      accRequest<unknown>(`/attendance/history${buildQuery(params)}`),
   },
 
   auditLogs: {
     list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/audit-logs${buildQuery(params)}`),
+      accRequest<unknown>(`/audit-logs${buildQuery(params)}`),
   },
 };

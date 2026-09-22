@@ -11,13 +11,8 @@ import { accountantApi } from "@/lib/api";
 import {
   mapAccountantExpense,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
-import {
-  accountantExpenses as fallbackExpenses,
-  formatExpenseNaira,
-  type AccountantExpense,
-} from "@/data/accountantExpenses";
+import { type AccountantExpense } from "@/data/accountantExpenses";
 import styles from "./AccountantUtilityPages.module.css";
 
 export function AccountantReimbursementsPage() {
@@ -28,11 +23,7 @@ export function AccountantReimbursementsPage() {
   );
 
   const expenses = useMemo(
-    () =>
-      withFallback(
-        unwrapAccountantList(data).map(mapAccountantExpense),
-        fallbackExpenses,
-      ),
+    () => unwrapAccountantList(data).map(mapAccountantExpense),
     [data],
   );
 

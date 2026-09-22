@@ -5,10 +5,6 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { Bell, Search } from "lucide-react";
 import {
-  accountantBills as fallbackBills,
-  accountantPayrollSummary as fallbackPayroll,
-  accountantPurchaseReviews as fallbackPurchases,
-  accountantRecentPayments as fallbackPayments,
   accountantStats as fallbackStats,
   type AccountantStatTone,
 } from "@/data/accountantOverview";
@@ -25,7 +21,6 @@ import {
   overlayAccountantStats,
   unwrapAccountantData,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import styles from "./AccountantOverviewPage.module.css";
 
@@ -49,30 +44,29 @@ export function AccountantOverviewPage() {
 
   const dashboard = asRecord(unwrapAccountantData(data?.dashboard));
   const stats = overlayAccountantStats(fallbackStats, data?.stats ?? dashboard);
-  const bills = withFallback(
-    unwrapAccountantList(dashboard.bills ?? dashboard.unpaidBills).map(mapOverviewBill),
-    fallbackBills,
+  const bills = unwrapAccountantList(dashboard.bills ?? dashboard.unpaidBills).map(
+    mapOverviewBill,
   );
-  const purchases = withFallback(
-    unwrapAccountantList(
-      dashboard.purchases ?? dashboard.purchaseReviews ?? dashboard.queue,
-    ).map(mapOverviewPurchase),
-    fallbackPurchases,
-  );
+  const purchases = unwrapAccountantList(
+    dashboard.purchases ?? dashboard.purchaseReviews ?? dashboard.queue,
+  ).map(mapOverviewPurchase);
   const mappedPayroll = mapDashboardPayrollSummary(dashboard.payroll ?? dashboard);
   const payrollSummary = {
-    period: mappedPayroll.period || fallbackPayroll.period,
-    status: mappedPayroll.status || fallbackPayroll.status,
-    staff: mappedPayroll.staff || fallbackPayroll.staff,
-    lines:
-      mappedPayroll.lines.length > 0 ? mappedPayroll.lines : fallbackPayroll.lines,
+    period: mappedPayroll.period || "Current payroll",
+    status: mappedPayroll.status || "—",
+    staff: mappedPayroll.staff,
+    lines: mappedPayroll.lines,
   };
-  const payments = withFallback(
-    unwrapAccountantList(dashboard.payments ?? dashboard.recentPayments).map(
-      mapOverviewPayment,
-    ),
-    fallbackPayments,
-  );
+  const payments = unwrapAccountantList(
+    dashboard.payments ?? dashboard.recentPayments,
+  ).map(mapOverviewPayment);
+  const periodStat = stats.find((item) => item.id === "period")?.value;
+  const heroTitle =
+    periodStat && periodStat !== "0" && periodStat !== "—"
+      ? `The ${periodStat} pay cycle is in progress.`
+      : payrollSummary.period !== "Current payroll"
+        ? `The ${payrollSummary.period} pay cycle is in progress.`
+        : "Payroll and payables at a glance.";
 
   const heroSubtitle = useMemo(() => {
     const overdue = stats.find((item) => item.id === "overdue")?.value ?? "0";
@@ -118,7 +112,7 @@ export function AccountantOverviewPage() {
         <div className={styles.heroContent}>
           <p className={styles.heroEyebrow}>Accountant — Finance Desk</p>
           <h1 className={styles.heroTitle}>
-            The August 2026 pay cycle is in progress.
+            {heroTitle}
           </h1>
           <p className={styles.heroSubtitle}>
             {heroSubtitle}
@@ -160,7 +154,12 @@ export function AccountantOverviewPage() {
               </Link>
             </div>
             <ul className={styles.list}>
-              {bills.map((bill) => (
+              {bills.length === 0 ? (
+                <li className={styles.listRow}>
+                  <p className={styles.listSub}>No bills returned for this workspace.</p>
+                </li>
+              ) : (
+                bills.map((bill) => (
                 <li key={bill.id} className={styles.listRow}>
                   <div className={styles.listMain}>
                     <p className={styles.listTitle}>{bill.name}</p>
@@ -179,7 +178,8 @@ export function AccountantOverviewPage() {
                     </span>
                   </div>
                 </li>
-              ))}
+                ))
+              )}
             </ul>
           </section>
 
@@ -191,7 +191,12 @@ export function AccountantOverviewPage() {
               </Link>
             </div>
             <ul className={styles.list}>
-              {purchases.map((item) => (
+              {purchases.length === 0 ? (
+                <li className={styles.listRow}>
+                  <p className={styles.listSub}>No purchase reviews in the finance queue.</p>
+                </li>
+              ) : (
+                purchases.map((item) => (
                 <li key={item.id} className={styles.listRow}>
                   <div className={styles.listMain}>
                     <p className={styles.listTitle}>{item.title}</p>
@@ -212,7 +217,8 @@ export function AccountantOverviewPage() {
                     </span>
                   </div>
                 </li>
-              ))}
+                ))
+              )}
             </ul>
           </section>
         </div>
@@ -231,7 +237,13 @@ export function AccountantOverviewPage() {
               </div>
             </div>
             <ul className={styles.payrollLines}>
-              {payrollSummary.lines.map((line) => (
+              {payrollSummary.lines.length === 0 ? (
+                <li className={styles.payrollLine}>
+                  <span>No payroll totals yet</span>
+                  <strong>—</strong>
+                </li>
+              ) : (
+                payrollSummary.lines.map((line) => (
                 <li
                   key={line.label}
                   className={`${styles.payrollLine} ${
@@ -241,7 +253,8 @@ export function AccountantOverviewPage() {
                   <span>{line.label}</span>
                   <strong>{line.value}</strong>
                 </li>
-              ))}
+                ))
+              )}
             </ul>
             <Link href="/accountant/payroll" className={styles.payrollButton}>
               Open payroll
@@ -253,7 +266,12 @@ export function AccountantOverviewPage() {
               <h2 className={styles.cardTitle}>Recent payments</h2>
             </div>
             <ul className={styles.list}>
-              {payments.map((payment) => (
+              {payments.length === 0 ? (
+                <li className={styles.listRow}>
+                  <p className={styles.listSub}>No recent payments.</p>
+                </li>
+              ) : (
+                payments.map((payment) => (
                 <li key={payment.id} className={styles.listRow}>
                   <div className={styles.listMain}>
                     <p className={styles.listTitle}>{payment.name}</p>
@@ -263,7 +281,8 @@ export function AccountantOverviewPage() {
                   </div>
                   <p className={styles.listAmount}>{payment.amount}</p>
                 </li>
-              ))}
+                ))
+              )}
             </ul>
             <Link href="/accountant/payments" className={styles.footerLink}>
               Open payments register →

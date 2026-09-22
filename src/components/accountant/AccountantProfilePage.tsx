@@ -19,13 +19,18 @@ import {
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { accountantApi, accountantSettled } from "@/lib/api";
-import { mapAccountantProfile } from "@/lib/api/accountantMappers";
+import { accountantApi, accountantSettled, ApiError } from "@/lib/api";
 import {
-  accountantLeaveBalances as initialBalances,
+  asRecord,
+  mapAccountantDocuments,
+  mapAccountantExpense,
+  mapAccountantLeaveHistory,
+  mapAccountantProfile,
+  unwrapAccountantData,
+  unwrapAccountantList,
+} from "@/lib/api/accountantMappers";
+import {
   accountantProfile as fallbackProfile,
-  accountantProfileExpenses,
-  accountantProfileLeaveHistory,
   accountantProfileTabs,
   type AccountantProfileTab,
 } from "@/data/accountantProfile";
@@ -37,16 +42,32 @@ export function AccountantProfilePage() {
   const { runAction } = usePageActions();
   const titleId = useId();
   const { data, loading, error, refetch } = useAsyncData(async () => {
-    const [profile, employment, documents] = await Promise.all([
+    const [profile, employment, documents, expenses] = await Promise.all([
       accountantApi.profile.get(),
       accountantSettled(accountantApi.employmentRecord.get()),
       accountantSettled(accountantApi.employmentRecord.documents()),
+      accountantSettled(accountantApi.expenses.list()),
     ]);
-    return { profile, employment, documents };
+    return { profile, employment, documents, expenses };
   }, []);
 
   const profile = useMemo(
     () => mapAccountantProfile(data?.profile, data?.employment, fallbackProfile),
+    [data],
+  );
+
+  const documents = useMemo(
+    () => mapAccountantDocuments(data?.documents),
+    [data],
+  );
+  const leaveHistory = useMemo(() => {
+    const employment = asRecord(unwrapAccountantData(data?.employment));
+    return mapAccountantLeaveHistory(
+      employment.leave ?? employment.leaveHistory ?? employment.requests,
+    );
+  }, [data]);
+  const expenses = useMemo(
+    () => unwrapAccountantList(data?.expenses).map(mapAccountantExpense),
     [data],
   );
 
@@ -73,16 +94,34 @@ export function AccountantProfilePage() {
     await runAction(
       "Update profile",
       async () => {
-        await accountantApi.profile.patch({
-          phone,
-          personalEmail,
-          location,
-        });
-        await accountantApi.employmentRecord.patch({
-          phone,
-          personalEmail,
-          location,
-        });
+        try {
+          await accountantApi.profile.patch({
+            phone,
+            personalEmail,
+            location,
+          });
+        } catch (err) {
+          if (!(err instanceof ApiError) || err.status !== 404) throw err;
+          await accountantApi.profile.put({
+            phone,
+            personalEmail,
+            location,
+          });
+        }
+        try {
+          await accountantApi.employmentRecord.patch({
+            phone,
+            personalEmail,
+            location,
+          });
+        } catch (err) {
+          if (!(err instanceof ApiError) || err.status !== 404) throw err;
+          await accountantApi.employmentRecord.put({
+            phone,
+            personalEmail,
+            location,
+          });
+        }
         refetch();
         setEditOpen(false);
       },
@@ -249,34 +288,31 @@ export function AccountantProfilePage() {
           </article>
 
           <article className={`${styles.card} ${styles.leaveCard}`}>
-            <h3 className={styles.cardTitle}>Leave balance</h3>
-            <div className={styles.balanceList}>
-              {initialBalances.map((balance) => (
-                <div key={balance.id} className={styles.balanceRow}>
-                  <div className={styles.balanceTop}>
-                    <span>{balance.label}</span>
-                    <strong>
-                      {balance.remaining} of {balance.total} left
-                    </strong>
-                  </div>
-                  <div className={styles.balanceTrack}>
-                    <div
-                      className={styles.balanceBar}
-                      style={{
-                        width: `${(balance.remaining / balance.total) * 100}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+            <h3 className={styles.cardTitle}>Documents</h3>
+            {documents.length === 0 ? (
+              <p className={styles.listMeta}>No documents on your employment record.</p>
+            ) : (
+              <ul className={styles.detailList}>
+                {documents.map((doc) => (
+                  <li key={doc.id}>
+                    <span>
+                      <strong>{doc.name}</strong>
+                      {[doc.type, doc.date].filter(Boolean).join(" · ")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </article>
         </div>
       ) : null}
 
       {tab === "Leave" ? (
         <div className={styles.listCard}>
-          {accountantProfileLeaveHistory.map((item) => (
+          {leaveHistory.length === 0 ? (
+            <p className={styles.listMeta}>No leave history on your employment record.</p>
+          ) : (
+            leaveHistory.map((item) => (
             <article key={item.id} className={styles.listRow}>
               <div>
                 <h3 className={styles.listTitle}>{item.type}</h3>
@@ -286,13 +322,17 @@ export function AccountantProfilePage() {
               </div>
               <span className={styles.listStatus}>{item.status}</span>
             </article>
-          ))}
+            ))
+          )}
         </div>
       ) : null}
 
       {tab === "Expenses" ? (
         <div className={styles.listCard}>
-          {accountantProfileExpenses.map((item) => (
+          {expenses.length === 0 ? (
+            <p className={styles.listMeta}>No expenses returned for your account.</p>
+          ) : (
+            expenses.map((item) => (
             <article key={item.id} className={styles.listRow}>
               <div>
                 <h3 className={styles.listTitle}>
@@ -303,11 +343,12 @@ export function AccountantProfilePage() {
                 </p>
               </div>
               <div className={styles.listAside}>
-                <strong>{item.amount}</strong>
+                <strong>{item.amountLabel}</strong>
                 <span className={styles.listStatus}>{item.status}</span>
               </div>
             </article>
-          ))}
+            ))
+          )}
         </div>
       ) : null}
 

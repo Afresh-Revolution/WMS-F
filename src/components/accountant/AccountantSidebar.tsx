@@ -24,8 +24,13 @@ import {
 } from "lucide-react";
 import { AfreshLogo } from "@/components/layout/AfreshLogo";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { accountantApi } from "@/lib/api";
-import { asRecord, unwrapAccountantData } from "@/lib/api/accountantMappers";
+import { accountantApi, accountantSettled } from "@/lib/api";
+import {
+  asRecord,
+  mapAccountantNotification,
+  unwrapAccountantData,
+  unwrapAccountantList,
+} from "@/lib/api/accountantMappers";
 import { initials, str } from "@/lib/api/mappers";
 import styles from "./AccountantSidebar.module.css";
 
@@ -65,7 +70,6 @@ const primaryNav: NavItem[] = [
     href: "/accountant/notifications",
     label: "Notifications",
     icon: Bell,
-    badge: "4",
   },
   { href: "/accountant/profile", label: "Profile", icon: UserRound },
 ];
@@ -91,14 +95,24 @@ export function AccountantSidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-  const { data: scopePayload } = useAsyncData(() => accountantApi.scope(), []);
-  const scope = asRecord(unwrapAccountantData(scopePayload));
+  const { data: scopePayload } = useAsyncData(async () => {
+    const [scope, notifications] = await Promise.all([
+      accountantApi.scope(),
+      accountantSettled(accountantApi.notifications.list()),
+    ]);
+    return { scope, notifications };
+  }, []);
+  const scope = asRecord(unwrapAccountantData(scopePayload?.scope));
   const user = asRecord(scope.user ?? scope.profile ?? scope);
-  const displayName = str(user.name ?? user.fullName, "Ravi Kapoor");
-  const displayInitials = str(user.initials, initials(displayName) || "RK");
-  const unread = str(
+  const displayName = str(user.name ?? user.fullName, "Accountant");
+  const displayInitials = str(user.initials, initials(displayName) || "AC");
+  const unreadFromScope = str(
     asRecord(scope.notifications).unread ?? user.unreadNotifications,
   );
+  const unreadFromList = unwrapAccountantList(scopePayload?.notifications).filter(
+    (record) => mapAccountantNotification(record, 0).unread,
+  ).length;
+  const unread = unreadFromScope || (unreadFromList > 0 ? String(unreadFromList) : "");
 
   return (
     <aside className={`${styles.sidebar} ${open ? styles.sidebarOpen : ""}`}>
@@ -123,6 +137,8 @@ export function AccountantSidebar({
       <nav className={styles.nav} aria-label="Accountant">
         {primaryNav.map(({ href, label, icon: Icon, badge }) => {
           const active = isActive(pathname, href);
+          const shownBadge =
+            label === "Notifications" ? unread || undefined : badge;
           return (
             <Link
               key={href}
@@ -132,13 +148,13 @@ export function AccountantSidebar({
             >
               <Icon size={18} strokeWidth={active ? 2.25 : 1.75} />
               <span className={styles.navLabel}>{label}</span>
-              {badge ? (
+              {shownBadge ? (
                 <span
                   className={
                     label === "Notifications" ? styles.badgeAlert : styles.badge
                   }
                 >
-                  {label === "Notifications" && unread ? unread : badge}
+                  {shownBadge}
                 </span>
               ) : null}
             </Link>

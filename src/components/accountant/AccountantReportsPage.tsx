@@ -16,7 +16,10 @@ import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLi
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { accountantApi, accountantSettled } from "@/lib/api";
-import { mapAccountantReports } from "@/lib/api/accountantMappers";
+import {
+  mapAccountantAuditLogs,
+  mapAccountantReports,
+} from "@/lib/api/accountantMappers";
 import {
   accountantExpensesByCategory,
   accountantPayrollTrend,
@@ -161,11 +164,12 @@ const summaryIcons = {
 export function AccountantReportsPage() {
   const { runAction } = usePageActions();
   const { data, loading, error } = useAsyncData(async () => {
-    const [reports, summary] = await Promise.all([
+    const [reports, summary, logs] = await Promise.all([
       accountantApi.reports.get(),
       accountantSettled(accountantApi.reports.summary()),
+      accountantSettled(accountantApi.auditLogs.list()),
     ]);
-    return { reports, summary };
+    return { reports, summary, logs };
   }, []);
 
   const view = useMemo(
@@ -176,6 +180,11 @@ export function AccountantReportsPage() {
         spendMix: accountantSpendMix,
         expensesByCategory: accountantExpensesByCategory,
       }),
+    [data],
+  );
+
+  const logs = useMemo(
+    () => mapAccountantAuditLogs(data?.logs),
     [data],
   );
 
@@ -258,11 +267,19 @@ export function AccountantReportsPage() {
       <div className={styles.chartsRow}>
         <section className={styles.chartCard}>
           <h2 className={styles.chartTitle}>Net payroll trend</h2>
-          <PayrollTrendChart items={view.trend} />
+          {view.trend.length === 0 ? (
+            <p className={styles.emptyChart}>No payroll trend data yet.</p>
+          ) : (
+            <PayrollTrendChart items={view.trend} />
+          )}
         </section>
         <section className={styles.chartCard}>
           <h2 className={styles.chartTitle}>Spend mix</h2>
-          <SpendMixDonut items={view.spendMix} />
+          {view.spendMix.length === 0 ? (
+            <p className={styles.emptyChart}>No spend mix data yet.</p>
+          ) : (
+            <SpendMixDonut items={view.spendMix} />
+          )}
         </section>
       </div>
 
@@ -273,7 +290,35 @@ export function AccountantReportsPage() {
           </span>
           <h2 className={styles.chartTitle}>Expenses by category</h2>
         </div>
-        <ExpensesCategoryChart items={view.expensesByCategory} />
+        {view.expensesByCategory.length === 0 ? (
+          <p className={styles.emptyChart}>No expense category data yet.</p>
+        ) : (
+          <ExpensesCategoryChart items={view.expensesByCategory} />
+        )}
+      </section>
+
+      <section className={styles.chartCard}>
+        <div className={styles.chartTitleRow}>
+          <span className={styles.chartTitleIcon} aria-hidden>
+            <FileText size={16} />
+          </span>
+          <h2 className={styles.chartTitle}>Finance audit log</h2>
+        </div>
+        {logs.length === 0 ? (
+          <p className={styles.emptyChart}>No finance-scoped audit logs yet.</p>
+        ) : (
+          <ul className={styles.auditList}>
+            {logs.map((log) => (
+              <li key={log.id} className={styles.auditRow}>
+                <div>
+                  <p className={styles.auditAction}>{log.action}</p>
+                  <p className={styles.auditMeta}>{log.actor}</p>
+                </div>
+                <span className={styles.auditTime}>{log.time}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

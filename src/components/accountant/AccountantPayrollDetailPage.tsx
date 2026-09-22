@@ -15,11 +15,8 @@ import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLi
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { accountantApi, accountantSettled } from "@/lib/api";
-import { mapAccountantPayrollDetail } from "@/lib/api/accountantMappers";
-import {
-  getAccountantPayrollDetail,
-  type AccountantPayrollStatus,
-} from "@/data/accountantPayroll";
+import { amountValue, mapAccountantPayrollDetail } from "@/lib/api/accountantMappers";
+import { type AccountantPayrollStatus } from "@/data/accountantPayroll";
 import styles from "./AccountantPayrollDetailPage.module.css";
 
 const statusClass: Record<AccountantPayrollStatus, string> = {
@@ -35,10 +32,9 @@ type AccountantPayrollDetailPageProps = {
 export function AccountantPayrollDetailPage({
   periodId,
 }: AccountantPayrollDetailPageProps) {
-  const fallback = getAccountantPayrollDetail(periodId);
   const [status, setStatus] = useState<AccountantPayrollStatus | null>(null);
-  const { runAction, showToast } = usePageActions();
-  const { data, loading, error } = useAsyncData(async () => {
+  const { runAction } = usePageActions();
+  const { data, loading, error, refetch } = useAsyncData(async () => {
     const [run, items] = await Promise.all([
       accountantApi.payroll.runs.get(periodId),
       accountantSettled(accountantApi.payroll.runs.items(periodId)),
@@ -48,8 +44,8 @@ export function AccountantPayrollDetailPage({
   }, [periodId]);
 
   const mapped = useMemo(
-    () => mapAccountantPayrollDetail(data?.run, data?.items, fallback),
-    [data, fallback],
+    () => mapAccountantPayrollDetail(data?.run, data?.items, null),
+    [data],
   );
   const detail = mapped
     ? { ...mapped, status: status ?? mapped.status }
@@ -60,9 +56,30 @@ export function AccountantPayrollDetailPage({
     await runAction(
       "Submit to Admin",
       async () => {
+        await accountantApi.payroll.runs.patch(periodId, {
+          status: "submitted",
+        });
         setStatus("Submitted");
+        refetch();
       },
       `${detail.label} payroll submitted to Admin`,
+    );
+  }
+
+  async function handleRecord(rowId: string, name: string, netPay: string) {
+    await runAction(
+      "Record salary",
+      async () => {
+        await accountantApi.payments.create({
+          category: "Payroll",
+          payee: name,
+          employeeId: rowId,
+          amount: amountValue(netPay),
+          runId: periodId,
+        });
+        refetch();
+      },
+      `Salary payment recorded for ${name}`,
     );
   }
 
@@ -74,9 +91,13 @@ export function AccountantPayrollDetailPage({
           <ArrowLeft size={16} />
           Back to payroll periods
         </Link>
-        <h1 className={styles.title}>Payroll not found</h1>
+        <h1 className={styles.title}>
+          {loading ? "Loading payroll run" : "Payroll not found"}
+        </h1>
         <p className={styles.subtitle}>
-          This payroll period does not exist or is no longer available.
+          {loading
+            ? "Fetching this payroll run from finance."
+            : "This payroll period does not exist or is no longer available."}
         </p>
       </div>
     );
@@ -229,9 +250,7 @@ export function AccountantPayrollDetailPage({
                     <button
                       type="button"
                       className={styles.recordButton}
-                      onClick={() =>
-                        showToast(`Record salary for ${row.name}`, "info")
-                      }
+                      onClick={() => void handleRecord(row.id, row.name, row.netPay)}
                     >
                       <Pencil size={13} />
                       Record

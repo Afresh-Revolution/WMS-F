@@ -423,8 +423,8 @@ export async function applyForLeave(input: LeaveApplyInput & { reason?: string }
     types.find((item) => item.name.toLowerCase() === needle);
 
   const leaveTypeId = selected?.id || rawId;
-  if (!leaveTypeId || !startDate || !endDate || !note) {
-    throw new ApiError(400, "Choose a leave type, dates, and a note.");
+  if (!leaveTypeId || !startDate || !endDate) {
+    throw new ApiError(400, "Choose a leave type and dates.");
   }
 
   const body: Record<string, unknown> = {
@@ -432,8 +432,8 @@ export async function applyForLeave(input: LeaveApplyInput & { reason?: string }
     startDate,
     endDate,
     durationType,
-    note,
   };
+  if (note) body.note = note;
   if (input.attachments?.length) body.attachments = input.attachments;
 
   const kind = accountKind();

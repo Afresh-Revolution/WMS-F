@@ -1,16 +1,14 @@
 "use client";
 
-import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
   Briefcase,
   Camera,
+  ChevronRight,
   Cpu,
   Layers,
   Monitor,
   Plus,
-  RefreshCw,
-  Search,
   Shirt,
   Users,
 } from "lucide-react";
@@ -19,12 +17,13 @@ import {
   type Department,
   type DepartmentFilter,
 } from "@/data/departments";
+import { PageTopBar } from "@/components/layout/PageTopBar";
 import { DepartmentDetailDrawer } from "@/components/departments/DepartmentDetailDrawer";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { superAdminApi, unwrapRecord } from "@/lib/api";
-import { listFrom, mapDepartmentRecord, str } from "@/lib/api/mappers";
+import { listFrom, mapDepartmentRecord, num, str } from "@/lib/api/mappers";
 import styles from "./DepartmentsPage.module.css";
 
 const deptIcons = {
@@ -81,6 +80,15 @@ async function loadHodOptions(): Promise<HodOption[]> {
   return [];
 }
 
+function firstValue(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    if (record[key] !== undefined && record[key] !== null && record[key] !== "") {
+      return record[key];
+    }
+  }
+  return undefined;
+}
+
 export function DepartmentsPage() {
   const [query, setQuery] = useState("");
   const [activeFilter, setActiveFilter] =
@@ -90,25 +98,45 @@ export function DepartmentsPage() {
     useState<Department | null>(null);
 
   const { runAction } = usePageActions();
-  const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.departments.list(),
-    [],
-  );
+  const { data, loading, error, refetch } = useAsyncData(async () => {
+    const departments = await superAdminApi.departments.list();
+    const extras = await Promise.allSettled([
+      superAdminApi.reports.headcount(),
+      superAdminApi.reports.overview(),
+    ]);
+    return {
+      departments,
+      headcount:
+        extras[0].status === "fulfilled" ? extras[0].value : null,
+      overview:
+        extras[1].status === "fulfilled" ? extras[1].value : null,
+    };
+  }, []);
   const { data: hodOptions } = useAsyncData(loadHodOptions, []);
 
   const departments = useMemo(
     () =>
-      listFrom(data ?? undefined).map((record, index) =>
+      listFrom(data?.departments ?? undefined).map((record, index) =>
         mapDepartmentRecord(record, index),
       ),
     [data],
   );
 
   const departmentStats = useMemo(() => {
-    const totalHeadcount = departments.reduce(
-      (sum, dept) => sum + dept.activeCount,
-      0,
+    const summed = departments.reduce((sum, dept) => sum + dept.activeCount, 0);
+    const report = unwrapRecord(data?.headcount ?? data?.overview);
+    const reported = num(
+      firstValue(report, [
+        "headcount",
+        "totalHeadcount",
+        "totalEmployees",
+        "employees",
+        "count",
+      ]),
+      Number.NaN,
     );
+    const totalHeadcount = Number.isFinite(reported) && reported > 0 ? reported : summed;
+    const unassigned = departments.filter((dept) => !dept.hasHod).length;
     return [
       {
         id: "departments",
@@ -118,15 +146,16 @@ export function DepartmentsPage() {
       {
         id: "headcount",
         label: "Total Headcount",
-        value: totalHeadcount.toLocaleString(),
+        value: totalHeadcount.toLocaleString("en-NG"),
+        accent: true,
       },
       {
         id: "unassignedHod",
         label: "HOD Not assigned",
-        value: "0",
+        value: String(unassigned),
       },
     ];
-  }, [departments]);
+  }, [data, departments]);
 
   const filteredDepartments = useMemo(() => {
     return departments.filter((department) => {
@@ -144,20 +173,32 @@ export function DepartmentsPage() {
 
   const addDepartmentFields = useMemo(
     () => [
-      { name: "name", label: "Department name", required: true },
+      {
+        name: "name",
+        label: "Department name",
+        placeholder: "e.g. Product Management",
+        required: true,
+      },
+      {
+        name: "description",
+        label: "Description",
+        type: "textarea" as const,
+        placeholder: "What this department does",
+        rows: 3,
+      },
       {
         name: "hodId",
-        label: "Head of department",
+        label: "Assign HOD",
         type: "select" as const,
+        defaultValue: "",
         options: [
-          { label: "No HOD", value: "" },
+          { label: "Select an employee", value: "" },
           ...(hodOptions ?? []).map((option) => ({
             label: option.label,
             value: option.id,
           })),
         ],
       },
-      { name: "description", label: "Description", type: "textarea" as const },
     ],
     [hodOptions],
   );
@@ -182,131 +223,137 @@ export function DepartmentsPage() {
 
   return (
     <div className={styles.page}>
-      {loading ? <p>Loading departments…</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
-        <div className={styles.headerRow}>
-          <div>
-            <p className={styles.eyebrow}>Departments &amp; how they work</p>
-            <h1 className={styles.title}>AfrESH is organised</h1>
-            <PageDateLabel className={styles.dateLabel} />
-          </div>
-          <div className={styles.headerActions}>
-            <label className={styles.search}>
-              <Search size={15} className={styles.searchIcon} />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search"
-                className={styles.searchInput}
-              />
-              <span className={styles.shortcut}>Ctrl K</span>
-            </label>
+      <PageTopBar
+        searchValue={query}
+        onSearchChange={setQuery}
+        searchPlaceholder="Search"
+        status={
+          loading ? (
+            <p className={styles.statusLine}>Loading departments…</p>
+          ) : error ? (
+            <p className={styles.statusLine} role="alert">
+              {error}
+            </p>
+          ) : null
+        }
+      />
+
+      <div className={styles.headerRow}>
+        <div>
+          <p className={styles.eyebrow}>Departments &amp; org structure</p>
+          <h1 className={styles.title}>How Afresh is organised</h1>
+          <p className={styles.subtitle}>
+            Manage departments, assign heads, and monitor team composition across
+            the company.
+          </p>
+        </div>
+        <button
+          type="button"
+          className={styles.addButton}
+          onClick={() => setAddOpen(true)}
+        >
+          <Plus size={16} strokeWidth={2.5} />
+          Add department
+        </button>
+      </div>
+
+      <div className={styles.stats}>
+        {departmentStats.map((stat) => (
+          <article
+            key={stat.id}
+            className={`${styles.statCard} ${stat.accent ? styles.statCardAccent : ""}`}
+          >
+            <p className={styles.statLabel}>{stat.label}</p>
+            <p className={styles.statValue}>{stat.value}</p>
+          </article>
+        ))}
+      </div>
+
+      <div className={styles.filters}>
+        {departmentFilters.map((filter) => {
+          const active = activeFilter === filter;
+          return (
             <button
+              key={filter}
               type="button"
-              aria-label="Refresh"
-              className={styles.iconButton}
-              onClick={() => refetch()}
+              onClick={() => setActiveFilter(filter)}
+              className={`${styles.filterChip} ${
+                active ? styles.filterChipActive : ""
+              }`}
             >
-              <RefreshCw size={16} />
+              {filter}
             </button>
-            <button
-              type="button"
-              aria-label="Add department"
-              className={styles.iconButton}
-              onClick={() => setAddOpen(true)}
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-        </div>
+          );
+        })}
+      </div>
 
-        <div className={styles.stats}>
-          {departmentStats.map((stat) => (
-            <article key={stat.id} className={styles.statCard}>
-              <p className={styles.statLabel}>{stat.label}</p>
-              <p className={styles.statValue}>{stat.value}</p>
-            </article>
-          ))}
-        </div>
-
-        <div className={styles.filters}>
-          {departmentFilters.map((filter) => {
-            const active = activeFilter === filter;
-            return (
-              <button
-                key={filter}
-                type="button"
-                onClick={() => setActiveFilter(filter)}
-                className={`${styles.filterChip} ${
-                  active ? styles.filterChipActive : styles.filterChipInactive
-                }`}
-              >
-                {filter}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className={styles.grid}>
-          {filteredDepartments.map((department) => {
-            const Icon = deptIcons[department.icon];
-            return (
-              <article key={department.id} className={styles.card}>
-                <div className={styles.cardBody}>
-                  <div className={styles.cardTop}>
-                    <span className={styles.deptIcon}>
-                      <Icon size={18} strokeWidth={1.75} />
-                    </span>
-                    <span className={styles.statusActive}>Active</span>
-                  </div>
-                  <h2 className={styles.deptName}>{department.name}</h2>
-                  <div className={styles.managerRow}>
-                    <span
-                      className={styles.managerAvatar}
-                      style={{ background: department.managerAvatarColor }}
-                    >
-                      {department.managerInitials}
-                    </span>
-                    <p className={styles.managerName}>{department.managerName}</p>
-                  </div>
-                  <div className={styles.metricsRow}>
-                    <p className={styles.activeCount}>
-                      <Users size={14} className={styles.activeIcon} />
-                      {department.activeCount} active
-                    </p>
-                    <div className={styles.progressTrack}>
-                      <div
-                        className={styles.progressFill}
-                        style={{ width: `${department.targetPercent}%` }}
-                      />
-                    </div>
-                    <p className={styles.targetPercent}>
-                      {department.targetPercent}% targets
-                    </p>
-                  </div>
+      <div className={styles.grid}>
+        {filteredDepartments.map((department) => {
+          const Icon = deptIcons[department.icon];
+          return (
+            <article key={department.id} className={styles.card}>
+              <div className={styles.cardBody}>
+                <div className={styles.cardTop}>
+                  <span className={styles.deptIcon}>
+                    <Icon size={18} strokeWidth={1.75} />
+                  </span>
+                  <span
+                    className={
+                      department.status === "Active"
+                        ? styles.statusActive
+                        : styles.statusInactive
+                    }
+                  >
+                    {department.status}
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  className={styles.cardFooter}
-                  onClick={() => viewDepartment(department)}
-                >
-                  View department
-                </button>
-              </article>
-            );
-          })}
+                <h2 className={styles.deptName}>{department.name}</h2>
+                <div className={styles.managerRow}>
+                  <span className={styles.managerAvatar}>
+                    {department.hasHod ? department.managerInitials : "—"}
+                  </span>
+                  <p className={styles.managerName}>{department.managerName}</p>
+                </div>
+                <div className={styles.metricsRow}>
+                  <p className={styles.activeCount}>
+                    <Users size={14} className={styles.activeIcon} />
+                    {department.activeCount} active
+                  </p>
+                  <div className={styles.progressTrack}>
+                    <div
+                      className={styles.progressFill}
+                      style={{ width: `${department.targetPercent}%` }}
+                    />
+                  </div>
+                  <p className={styles.targetPercent}>
+                    {department.targetPercent}% targets
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={styles.cardFooter}
+                onClick={() => viewDepartment(department)}
+              >
+                View department
+                <ChevronRight size={14} />
+              </button>
+            </article>
+          );
+        })}
 
-          {filteredDepartments.length === 0 && (
-            <div className={styles.empty}>No departments match this view.</div>
-          )}
-        </div>
+        {filteredDepartments.length === 0 && !loading && (
+          <div className={styles.empty}>No departments match this view.</div>
+        )}
+      </div>
 
         <SimpleModal
           open={addOpen}
           title="Add department"
-          description="Create a new department."
           fields={addDepartmentFields}
-          submitLabel="Add department"
+          submitLabel="Create department"
+          showClose
+          appearance="soft"
           onClose={() => setAddOpen(false)}
           onSubmit={handleAddDepartment}
         />

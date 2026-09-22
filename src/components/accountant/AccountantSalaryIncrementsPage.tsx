@@ -17,12 +17,8 @@ import { accountantApi } from "@/lib/api";
 import {
   mapAccountantSalaryIncrement,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
-import {
-  accountantSalaryIncrements as fallbackIncrements,
-  type AccountantSalaryIncrement,
-} from "@/data/accountantSalaryIncrements";
+import { type AccountantSalaryIncrement } from "@/data/accountantSalaryIncrements";
 import styles from "./AccountantSalaryIncrementsPage.module.css";
 
 export function AccountantSalaryIncrementsPage() {
@@ -33,11 +29,7 @@ export function AccountantSalaryIncrementsPage() {
   );
 
   const increments = useMemo(
-    () =>
-      withFallback(
-        unwrapAccountantList(data).map(mapAccountantSalaryIncrement),
-        fallbackIncrements,
-      ),
+    () => unwrapAccountantList(data).map(mapAccountantSalaryIncrement),
     [data],
   );
 

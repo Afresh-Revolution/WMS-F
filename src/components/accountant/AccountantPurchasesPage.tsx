@@ -18,11 +18,9 @@ import { accountantApi, accountantSettled } from "@/lib/api";
 import {
   mapAccountantPurchase,
   unwrapAccountantList,
-  withFallback,
 } from "@/lib/api/accountantMappers";
 import {
   accountantPurchaseFilters,
-  accountantPurchases as fallbackPurchases,
   type AccountantPurchase,
   type AccountantPurchaseFilter,
   type AccountantPurchaseStatus,
@@ -38,7 +36,6 @@ const statusClass: Record<AccountantPurchaseStatus, string> = {
 
 export function AccountantPurchasesPage() {
   const [filter, setFilter] = useState<AccountantPurchaseFilter>("Under Review");
-  const [localPurchases, setLocalPurchases] = useState<AccountantPurchase[]>([]);
   const [activePurchase, setActivePurchase] = useState<AccountantPurchase | null>(
     null,
   );
@@ -52,21 +49,17 @@ export function AccountantPurchasesPage() {
   }, []);
 
   const purchases = useMemo(() => {
-    const mapped = withFallback(
-      [
-        ...unwrapAccountantList(data?.requests),
-        ...unwrapAccountantList(data?.orders),
-      ].map(mapAccountantPurchase),
-      fallbackPurchases,
-    );
-    const merged = [...localPurchases, ...mapped];
+    const mapped = [
+      ...unwrapAccountantList(data?.requests),
+      ...unwrapAccountantList(data?.orders),
+    ].map(mapAccountantPurchase);
     const seen = new Set<string>();
-    return merged.filter((item) => {
+    return mapped.filter((item) => {
       if (seen.has(item.id)) return false;
       seen.add(item.id);
       return true;
     });
-  }, [data, localPurchases]);
+  }, [data]);
 
   const filtered = useMemo(() => {
     if (filter === "All") return purchases;
@@ -79,17 +72,7 @@ export function AccountantPurchasesPage() {
     await runAction(
       "Recommend to Admin",
       async () => {
-        setLocalPurchases((current) =>
-          current.map((item) =>
-            item.id === target.id
-              ? {
-                  ...item,
-                  status: "Recommended",
-                  recommendation,
-                }
-              : item,
-          ),
-        );
+        refetch();
       },
       `${target.ref} recommended to Admin`,
     );
@@ -99,9 +82,7 @@ export function AccountantPurchasesPage() {
     await runAction(
       "Return purchase",
       async () => {
-        setLocalPurchases((current) =>
-          current.filter((item) => item.id !== purchase.id),
-        );
+        refetch();
       },
       `${purchase.ref} returned to requester`,
     );
