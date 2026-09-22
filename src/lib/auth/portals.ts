@@ -70,6 +70,8 @@ export function preferredRoleLabel(roles: string[]): string {
   });
 }
 
+export const CHANGE_PASSWORD_PATH = "/change-password";
+
 export function homePathForRole(role: string): string {
   switch (portalForRole(role)) {
     case "accountant":
@@ -89,6 +91,12 @@ export function homePathForRole(role: string): string {
 
 export function portalForPath(pathname: string): AppPortal | null {
   if (pathname === "/sign-out" || pathname.startsWith("/sign-out/")) {
+    return null;
+  }
+  if (
+    pathname === CHANGE_PASSWORD_PATH ||
+    pathname.startsWith(`${CHANGE_PASSWORD_PATH}/`)
+  ) {
     return null;
   }
   if (pathname === "/accountant" || pathname.startsWith("/accountant/")) {

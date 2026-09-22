@@ -8,6 +8,7 @@ export type CurrentUser = {
   role: string;
   initials: string;
   employeeId?: string;
+  mustChangePassword?: boolean;
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -163,12 +164,23 @@ export function parseAuthUser(payload: unknown): CurrentUser | null {
 
   if (!name && !email && !initials) return null;
 
+  const mustChangePassword = Boolean(
+    user.mustChangePassword ??
+      user.must_change_password ??
+      user.forcePasswordReset ??
+      user.force_password_reset ??
+      data.mustChangePassword ??
+      data.must_change_password ??
+      root.mustChangePassword,
+  );
+
   return {
     id,
     email,
     name,
     role: formatRoleLabel(role),
     initials,
+    mustChangePassword,
     ...(employeeId ? { employeeId } : {}),
   };
 }

@@ -30,7 +30,7 @@ import {
 } from "@/lib/api";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
-import { listFrom, mapEmployee, readTemporaryPassword, str, type MappedEmployee } from "@/lib/api/mappers";
+import { firstNameFrom, listFrom, mapEmployee, readTemporaryPassword, str, type MappedEmployee } from "@/lib/api/mappers";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { canAddUsers } from "@/lib/auth/portals";
 import { portalHref } from "@/lib/portalPaths";
@@ -237,7 +237,9 @@ export function EmployeesPage() {
     try {
       const created = await createStaffEmployee(values);
       const temporaryPassword =
-        readTemporaryPassword(created) || "No temporary password was returned.";
+        readTemporaryPassword(created) ||
+        firstNameFrom(values.fullName || values.firstName) ||
+        "No temporary password was returned.";
       showCreatedCredentials({
         name: values.fullName.trim(),
         email: values.email.trim(),

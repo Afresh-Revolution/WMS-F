@@ -140,8 +140,9 @@ export function TemporaryPasswordDialog() {
         </h2>
         <p style={bodyStyle}>
           {credentials.name || "This person"} was added
-          {credentials.email ? ` (${credentials.email})` : ""}. Copy the
-          password, then press Cancel. This modal stays until you cancel it.
+          {credentials.email ? ` (${credentials.email})` : ""}. Their first
+          login password is their first name. They must change it after
+          signing in. Copy it, then press Cancel.
         </p>
         <label style={labelStyle}>
           Password

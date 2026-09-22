@@ -383,6 +383,21 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
+export function firstNameFrom(value: unknown): string {
+  if (typeof value === "string") {
+    return value.trim().split(/\s+/).filter(Boolean)[0] || "";
+  }
+  const record = asRecord(value);
+  if (!record) return "";
+  return firstNameFrom(
+    record.firstName ??
+      record.first_name ??
+      record.fullName ??
+      record.full_name ??
+      record.name,
+  );
+}
+
 export function readTemporaryPassword(payload: unknown): string {
   const keyPattern = /temp|plain|generated|initial|login|temporary/i;
 

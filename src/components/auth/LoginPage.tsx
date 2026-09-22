@@ -11,7 +11,7 @@ import {
   DEFAULT_LOGIN_OPTIONS,
   type LoginOptions,
 } from "@/lib/api";
-import { homePathForRole } from "@/lib/auth/portals";
+import { CHANGE_PASSWORD_PATH, homePathForRole } from "@/lib/auth/portals";
 import {
   cacheCurrentUser,
   parseAuthUser,
@@ -57,7 +57,11 @@ export function LoginPage() {
     } catch {
       /* Use the cached/JWT identity if /auth/me is unavailable. */
     }
-    router.replace(homePathForRole(user?.role ?? ""));
+    router.replace(
+      user?.mustChangePassword
+        ? CHANGE_PASSWORD_PATH
+        : homePathForRole(user?.role ?? ""),
+    );
   }
 
   useEffect(() => {

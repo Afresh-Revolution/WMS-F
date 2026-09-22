@@ -451,6 +451,10 @@ export const managerApi = {
 
   listNyscInterns(query?: ManagerListParams) {
     return firstNyscRoute([
+      () =>
+        apiRequest<ApiListResponse<Record<string, unknown>>>(
+          `/hod/nysc-interns${buildQuery(query)}`,
+        ).then(unwrapList),
       () => list("/nysc-interns", query),
       () => list("/nysc", query),
       () =>
@@ -467,6 +471,11 @@ export const managerApi = {
   createNyscIntern(body: unknown) {
     return firstNyscRoute([
       () =>
+        apiRequest<unknown>("/hod/nysc-interns", {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
         apiRequest<unknown>(managerPath("/nysc-interns"), {
           method: "POST",
           body,
@@ -478,6 +487,11 @@ export const managerApi = {
         }).then(unwrapData),
       () =>
         apiRequest<unknown>(managerPath("/nysc-interns/members"), {
+          method: "POST",
+          body,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>("/hod/nysc", {
           method: "POST",
           body,
         }).then(unwrapData),
@@ -500,7 +514,12 @@ export const managerApi = {
   },
 
   updateNyscIntern(id: Id, body: unknown) {
-    return withSharedFallback(
+    return firstNyscRoute([
+      () =>
+        apiRequest<unknown>(`/hod/nysc-interns/${id}`, {
+          method: "PATCH",
+          body,
+        }).then(unwrapData),
       () =>
         apiRequest<unknown>(managerPath(`/nysc-interns/${id}`), {
           method: "PATCH",
@@ -511,11 +530,16 @@ export const managerApi = {
           method: "PATCH",
           body,
         }).then(unwrapData),
-    );
+    ]);
   },
 
   assignNyscSupervisor(id: Id, body: unknown) {
-    return withSharedFallback(
+    return firstNyscRoute([
+      () =>
+        apiRequest<unknown>(`/hod/nysc-interns/${id}/supervisor`, {
+          method: "POST",
+          body,
+        }).then(unwrapData),
       () =>
         apiRequest<unknown>(managerPath(`/nysc-interns/${id}/supervisor`), {
           method: "POST",
@@ -526,14 +550,15 @@ export const managerApi = {
           method: "POST",
           body,
         }).then(unwrapData),
-    );
+    ]);
   },
 
   exportNyscInterns(query?: ManagerListParams) {
-    return withSharedFallback(
+    return firstNyscRoute([
+      () => apiRequest<unknown>(`/hod/nysc-interns/export${buildQuery(query)}`),
       () => apiRequest<unknown>(managerPath("/nysc-interns/export", query)),
       () => apiRequest<unknown>(`/nysc-interns/export${buildQuery(query)}`),
-    );
+    ]);
   },
 };
 
