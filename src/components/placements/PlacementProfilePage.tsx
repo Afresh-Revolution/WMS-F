@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ArrowLeft,
   BookOpen,
@@ -17,8 +18,10 @@ import {
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { superAdminApi, unwrapRecord } from "@/lib/api";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
+import { managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import { mapPlacement } from "@/lib/api/mappers";
+import { portalHref } from "@/lib/portalPaths";
 import styles from "./PlacementProfilePage.module.css";
 
 function display(value: string) {
@@ -27,9 +30,14 @@ function display(value: string) {
 
 export function PlacementProfilePage({ id }: { id: string }) {
   const { user } = useCurrentUser();
+  const pathname = usePathname();
+  const manager = useManagerPortal();
   const { data, loading, error } = useAsyncData(
-    () => superAdminApi.nyscInterns.get(id),
-    [id],
+    () =>
+      manager
+        ? managerApi.getNyscIntern(id)
+        : superAdminApi.nyscInterns.get(id),
+    [id, manager],
   );
 
   const member = useMemo(() => {
@@ -64,7 +72,7 @@ export function PlacementProfilePage({ id }: { id: string }) {
         </div>
       </div>
 
-      <Link href="/nysc-interns" className={styles.backLink}>
+      <Link href={portalHref(pathname, "/nysc-interns")} className={styles.backLink}>
         <ArrowLeft size={16} />
         Back to placements
       </Link>

@@ -1,4 +1,5 @@
 import { ApiError, apiRequest, buildQuery } from "./client";
+import { nyscInternsManageApi } from "./intern";
 import { unwrapList, type ApiListResponse, type Id } from "./types";
 
 export type ManagerListParams = Record<string, unknown>;
@@ -61,35 +62,6 @@ async function firstWorkingRoute<T>(
   }
   if (lastError instanceof Error) throw lastError;
   throw new ApiError(404, notFoundMessage);
-}
-
-async function firstNyscRoute<T>(attempts: Array<() => Promise<T>>): Promise<T> {
-  let lastError: unknown;
-  let managerRouteMissing = false;
-  for (const [index, attempt] of attempts.entries()) {
-    try {
-      return await attempt();
-    } catch (error) {
-      lastError = error;
-      if (isMissingRoute(error)) {
-        if (index === 0) managerRouteMissing = true;
-        continue;
-      }
-      if (isForbidden(error) && managerRouteMissing && index < attempts.length - 1) {
-        continue;
-      }
-      throw error;
-    }
-  }
-  if (lastError instanceof ApiError && lastError.status === 403) {
-    throw new ApiError(
-      403,
-      "NYSC create is not enabled for this manager account on the live server yet.",
-      lastError.body,
-    );
-  }
-  if (lastError instanceof Error) throw lastError;
-  throw new ApiError(404, "NYSC API was not found.");
 }
 
 export const managerApi = {
@@ -450,115 +422,45 @@ export const managerApi = {
   },
 
   listNyscInterns(query?: ManagerListParams) {
-    return firstNyscRoute([
-      () =>
-        apiRequest<ApiListResponse<Record<string, unknown>>>(
-          `/hod/nysc-interns${buildQuery(query)}`,
-        ).then(unwrapList),
-      () => list("/nysc-interns", query),
-      () => list("/nysc", query),
-      () =>
-        apiRequest<ApiListResponse<Record<string, unknown>>>(
-          `/nysc-interns${buildQuery(query)}`,
-        ).then(unwrapList),
-      () =>
-        apiRequest<ApiListResponse<Record<string, unknown>>>(
-          `/hr/nysc-interns${buildQuery(query)}`,
-        ).then(unwrapList),
-    ]);
+    return nyscInternsManageApi.list(query).then((payload) =>
+      unwrapList<Record<string, unknown>>(payload),
+    );
+  },
+
+  getNyscIntern(id: Id) {
+    return nyscInternsManageApi.get(id).then(unwrapData);
   },
 
   createNyscIntern(body: unknown) {
-    return firstNyscRoute([
-      () =>
-        apiRequest<unknown>("/hod/nysc-interns", {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>(managerPath("/nysc-interns"), {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>(managerPath("/nysc"), {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>(managerPath("/nysc-interns/members"), {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>("/hod/nysc", {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>("/nysc-interns", {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>("/hr/nysc-interns", {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>("/super-admin/nysc-interns", {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-    ]);
+    return nyscInternsManageApi
+      .create((body ?? {}) as Record<string, unknown>)
+      .then(unwrapData);
   },
 
   updateNyscIntern(id: Id, body: unknown) {
-    return firstNyscRoute([
-      () =>
-        apiRequest<unknown>(`/hod/nysc-interns/${id}`, {
-          method: "PATCH",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>(managerPath(`/nysc-interns/${id}`), {
-          method: "PATCH",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>(`/nysc-interns/${id}`, {
-          method: "PATCH",
-          body,
-        }).then(unwrapData),
-    ]);
+    return nyscInternsManageApi
+      .patch(id, (body ?? {}) as Record<string, unknown>)
+      .then(unwrapData);
   },
 
   assignNyscSupervisor(id: Id, body: unknown) {
-    return firstNyscRoute([
-      () =>
-        apiRequest<unknown>(`/hod/nysc-interns/${id}/supervisor`, {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>(managerPath(`/nysc-interns/${id}/supervisor`), {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-      () =>
-        apiRequest<unknown>(`/nysc-interns/${id}/supervisor`, {
-          method: "POST",
-          body,
-        }).then(unwrapData),
-    ]);
+    const record =
+      body && typeof body === "object"
+        ? (body as Record<string, unknown>)
+        : {};
+    const employeeId = String(
+      record.employeeId ??
+        record.supervisorEmployeeId ??
+        record.supervisorId ??
+        "",
+    );
+    return nyscInternsManageApi
+      .assignSupervisor(id, employeeId)
+      .then(unwrapData);
   },
 
   exportNyscInterns(query?: ManagerListParams) {
-    return firstNyscRoute([
-      () => apiRequest<unknown>(`/hod/nysc-interns/export${buildQuery(query)}`),
-      () => apiRequest<unknown>(managerPath("/nysc-interns/export", query)),
-      () => apiRequest<unknown>(`/nysc-interns/export${buildQuery(query)}`),
-    ]);
+    return nyscInternsManageApi.export(query);
   },
 };
 

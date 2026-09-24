@@ -1,0 +1,42 @@
+.track {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 4px;
+  border-radius: 999px;
+  background: #f6ebe4;
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  height: 36px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  color: #57534e;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.item:hover {
+  color: #44403c;
+}
+
+.itemActive {
+  background: var(--afresh-orange);
+  color: #fff;
+  font-weight: 600;
+}
+
+.itemActive:hover {
+  background: var(--afresh-orange-dark);
+  color: #fff;
+}

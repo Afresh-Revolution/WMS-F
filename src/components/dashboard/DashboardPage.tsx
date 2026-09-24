@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { GpsCheckInCard } from "@/components/attendance/GpsCheckInCard";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { superAdminApi, unwrapRecord } from "@/lib/api";
+import { superAdminApi, unwrapRecord, listStaffEmployees } from "@/lib/api";
 import {
   listFrom,
   mapAuditEvent,
@@ -50,9 +50,37 @@ function firstValue(record: Record<string, unknown>, keys: string[]): unknown {
 }
 
 function metricText(value: unknown, fallback = "0"): string {
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  const count = countFrom(value);
+  if (count !== undefined) return String(count);
   const text = str(value);
   return text || fallback;
+}
+
+function countFrom(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "boolean") return undefined;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/,/g, "").trim());
+    return value.trim() && Number.isFinite(parsed) ? parsed : undefined;
+  }
+  if (Array.isArray(value)) return value.length;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    for (const key of ["total", "count", "value", "size", "length"]) {
+      const nested = countFrom(record[key]);
+      if (nested !== undefined) return nested;
+    }
+  }
+  return undefined;
+}
+
+function firstCount(record: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    if (record[key] === undefined || record[key] === null) continue;
+    const count = countFrom(record[key]);
+    if (count !== undefined) return count;
+  }
+  return undefined;
 }
 
 function serviceLabel(payload: unknown, fallback: string) {
@@ -276,6 +304,8 @@ export function DashboardPage() {
       permissionsList,
       departments,
       bills,
+      staff,
+      headcountReport,
     ] = await Promise.all([
       settled(superAdminApi.dashboard.stats()),
       settled(superAdminApi.health()),
@@ -302,6 +332,8 @@ export function DashboardPage() {
       settled(superAdminApi.permissions.list()),
       settled(superAdminApi.departments.list()),
       settled(superAdminApi.bills.list({ limit: 50 })),
+      settled(listStaffEmployees()),
+      settled(superAdminApi.reports.headcount()),
     ]);
     return {
       overview,
@@ -330,6 +362,8 @@ export function DashboardPage() {
       permissionsList,
       departments,
       bills,
+      staff,
+      headcountReport,
     };
   }, []);
 
@@ -347,22 +381,32 @@ export function DashboardPage() {
     const merged = {
       ...metrics,
       ...unwrapRecord(data?.stats),
+      ...unwrapRecord(data?.headcountReport),
       ...security,
       ...overview,
     };
+    const staffCount = Array.isArray(data?.staff) ? data.staff.length : 0;
+    const reportedUsers = firstCount(merged, [
+      "totalUsers",
+      "total_users",
+      "userCount",
+      "user_count",
+      "totalEmployees",
+      "total_employees",
+      "staffCount",
+      "staff_count",
+      "totalStaff",
+      "headcount",
+      "totalHeadcount",
+      "employees",
+      "users",
+      "staff",
+    ]);
     return [
       {
         id: "users",
         label: "Total users",
-        value: metricText(
-          firstValue(merged, [
-            "totalUsers",
-            "users",
-            "userCount",
-            "totalEmployees",
-            "employees",
-          ]),
-        ),
+        value: String(Math.max(reportedUsers ?? 0, staffCount)),
         meta: "All roles",
         accent: true,
       },

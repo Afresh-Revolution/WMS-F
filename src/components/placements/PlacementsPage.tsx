@@ -11,10 +11,10 @@ import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { usePageActions } from "@/hooks/usePageActions";
-import { loadManagerLookups, lookupsApi, managerApi, nyscInternsManageApi, superAdminApi } from "@/lib/api";
-import { firstNameFrom, listFrom, mapDepartment, mapPlacement, readTemporaryPassword, str } from "@/lib/api/mappers";
+import { loadManagerLookups, lookupsApi, managerApi, internSettled, nyscInternsManageApi, superAdminApi, ApiError, extractErrorCode } from "@/lib/api";
+import { firstNameFrom, listFrom, mapDepartment, mapPlacement, num, readTemporaryPassword, str } from "@/lib/api/mappers";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
-import { asInternRecord } from "@/lib/api/internMappers";
+import { asInternRecord, unwrapInternData } from "@/lib/api/internMappers";
 import { portalHref } from "@/lib/portalPaths";
 import styles from "./PlacementsPage.module.css";
 
@@ -55,6 +55,12 @@ function internId(record: Record<string, unknown>) {
 }
 
 function isActivePlacementConflict(error: unknown) {
+  if (
+    error instanceof ApiError &&
+    extractErrorCode(error.body) === "ACTIVE_PLACEMENT_EXISTS"
+  ) {
+    return true;
+  }
   return (
     error instanceof Error &&
     /already has an active placement/i.test(error.message)
@@ -76,31 +82,26 @@ function defaultPlacementDates() {
 }
 
 function memberWriteBody(values: Record<string, string>) {
-  const supervisorId = values.employeeId.trim();
-  const supervisorName = values.supervisorName.trim();
-  const departmentName = values.departmentName.trim();
-  const school = values.school.trim();
-  const course = values.courseOfStudy.trim();
   return {
     fullName: values.name.trim(),
-    name: values.name.trim(),
     type: values.type === "INTERN" ? "INTERN" : "NYSC",
+    institution: values.school.trim(),
+    courseOfStudy: values.courseOfStudy.trim(),
     startDate: values.startDate,
     endDate: values.endDate,
     departmentId: values.departmentId,
-    ...(departmentName ? { department: departmentName } : {}),
-    ...(school ? { institution: school, school } : {}),
-    ...(course ? { courseOfStudy: course } : {}),
     ...(values.email.trim() ? { email: values.email.trim() } : {}),
     ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
-    ...(supervisorId
-      ? {
-          supervisorEmployeeId: supervisorId,
-          supervisorId,
-          supervisor: supervisorName || supervisorId,
-          employeeId: supervisorId,
-        }
-      : {}),
+  };
+}
+
+function memberPatchBody(values: Record<string, string>) {
+  return {
+    fullName: values.name.trim(),
+    institution: values.school.trim(),
+    courseOfStudy: values.courseOfStudy.trim(),
+    ...(values.email.trim() ? { email: values.email.trim() } : {}),
+    ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
   };
 }
 
@@ -123,12 +124,26 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   }, [initialFilter]);
 
   const statusParam = statusQuery[activeFilter];
+  const listParams = {
+    limit: 200,
+    ...(statusParam ? { status: statusParam } : {}),
+  };
 
   const { data, loading, error, refetch } = useAsyncData(
     () =>
       manager
-        ? managerApi.listNyscInterns()
-        : superAdminApi.nyscInterns.list(),
+        ? managerApi.listNyscInterns(listParams)
+        : superAdminApi.nyscInterns.list(listParams),
+    [manager, statusParam],
+  );
+
+  const { data: dashboardPayload } = useAsyncData(
+    () =>
+      internSettled(
+        manager
+          ? nyscInternsManageApi.dashboard()
+          : superAdminApi.nyscInterns.dashboard(),
+      ),
     [manager],
   );
 
@@ -226,6 +241,41 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   }, [data]);
 
   const placementStats = useMemo(() => {
+    const dash = asInternRecord(unwrapInternData(dashboardPayload));
+    if (
+      dashboardPayload != null &&
+      (dash.activeMembers != null ||
+        dash.activeNYSC != null ||
+        dash.activeInterns != null ||
+        dash.endingSoon != null)
+    ) {
+      return [
+        {
+          id: "active",
+          label: "Active Members",
+          value: String(num(dash.activeMembers)),
+          badge: "Current",
+        },
+        {
+          id: "exiting",
+          label: "Exiting in 60 Days",
+          value: String(num(dash.endingSoon)),
+          badge: "Alert",
+        },
+        {
+          id: "nysc",
+          label: "NYSC Members",
+          value: String(num(dash.activeNYSC)),
+          badge: "Active",
+        },
+        {
+          id: "interns",
+          label: "Interns",
+          value: String(num(dash.activeInterns)),
+          badge: "Active",
+        },
+      ];
+    }
     const active = placementMembers.filter((m) => m.status === "Active").length;
     const exiting = placementMembers.filter((m) => m.status === "Exiting soon").length;
     const nysc = placementMembers.filter((m) => m.type === "NYSC").length;
@@ -236,7 +286,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       { id: "nysc", label: "NYSC Members", value: String(nysc), badge: "Active" },
       { id: "interns", label: "Interns", value: String(interns), badge: "Active" },
     ];
-  }, [placementMembers]);
+  }, [dashboardPayload, placementMembers]);
 
   const filteredMembers = useMemo(() => {
     return placementMembers.filter((member) => {
@@ -263,7 +313,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
           );
           return;
         }
-        await nyscInternsManageApi.export(
+        await superAdminApi.nyscInterns.export(
           statusParam ? { status: statusParam } : undefined,
         );
       },
@@ -277,7 +327,9 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     const listMembers = manager
       ? managerApi.listNyscInterns.bind(managerApi)
       : superAdminApi.nyscInterns.list;
-    const payload = await listMembers(needle ? { email: needle } : undefined);
+    const payload = await listMembers(
+      needle ? { q: needle, search: needle, limit: 200 } : { limit: 200 },
+    );
     const records = listFrom(payload ?? undefined);
     const match = records.find((record) => {
       const recEmail = internEmail(record);
@@ -289,7 +341,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     });
     if (match) return internId(match);
 
-    const all = listFrom((await listMembers()) ?? undefined);
+    const all = listFrom((await listMembers({ limit: 200 })) ?? undefined);
     const fallback = all.find((record) => {
       const recEmail = internEmail(record);
       const recPhone = internPhone(record);
@@ -313,9 +365,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       await managerApi.assignNyscSupervisor(id, { employeeId: supervisorId });
       return;
     }
-    await superAdminApi.nyscInterns.action(id, "supervisor", {
-      employeeId: supervisorId,
-    });
+    await superAdminApi.nyscInterns.assignSupervisor(id, supervisorId);
   }
 
   async function handleAddMember(values: Record<string, string>) {
@@ -343,15 +393,8 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       showToast("End date must be after the start date.", "error");
       throw new Error("End date must be after the start date.");
     }
-    const body = memberWriteBody({
-      ...values,
-      departmentName:
-        departmentOptions.find((item) => item.value === values.departmentId)
-          ?.label ?? "",
-      supervisorName:
-        supervisorOptions.find((item) => item.value === values.employeeId)
-          ?.label ?? "",
-    });
+    const body = memberWriteBody(values);
+    const patchBody = memberPatchBody(values);
     try {
       const created = manager
         ? await managerApi.createNyscIntern(body)
@@ -395,9 +438,9 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       }
 
       if (manager) {
-        await managerApi.updateNyscIntern(existingId, body);
+        await managerApi.updateNyscIntern(existingId, patchBody);
       } else {
-        await superAdminApi.nyscInterns.patch(existingId, body);
+        await superAdminApi.nyscInterns.patch(existingId, patchBody);
       }
       try {
         await assignSupervisor({ id: existingId }, values.employeeId);

@@ -2,6 +2,7 @@ export {
   apiRequest,
   buildQuery,
   ApiError,
+  extractErrorCode,
   extractErrorMessage,
   getSessionToken,
   getAccessToken,
@@ -38,7 +39,13 @@ export { reportsApi, auditLogsApi } from "./reports";
 export { superAdminApi, saRequest } from "./superAdmin";
 
 export { accountantApi, accountantSettled } from "./accountant";
-export { internApi, internSettled, nyscInternsManageApi } from "./intern";
+export {
+  internApi,
+  internSettled,
+  nyscInternsManageApi,
+  hrNyscInternsApi,
+  createNyscInternsManageApi,
+} from "./intern";
 export { attendanceApi, attendanceSettled } from "./attendance";
 export type { GpsCheckInBody } from "./attendance";
 
