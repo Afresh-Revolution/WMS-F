@@ -10,6 +10,7 @@ import {
   Undo2,
   Wallet,
 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { AddPurchaseRecommendationModal } from "@/components/accountant/AddPurchaseRecommendationModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -126,13 +127,7 @@ export function AccountantPurchasesPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 

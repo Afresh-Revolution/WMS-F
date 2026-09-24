@@ -4,11 +4,9 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Check,
+  Clock3,
   Download,
-  ScrollText,
   Search,
-  X,
 } from "lucide-react";
 import {
   type AuditFilter,
@@ -130,9 +128,25 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
       <div className={styles.page}>
         <div className={styles.topBar}>
           <PageDateLabel className={styles.dateLabel} />
+          {loading ? <p className={styles.dateLabel}>Loading logs…</p> : null}
+          {error ? (
+            <p className={styles.dateLabel} role="alert">
+              {error}
+            </p>
+          ) : null}
           <div className={styles.topActions}>
+            <label className={styles.topSearch}>
+              <Search size={15} className={styles.topSearchIcon} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search"
+                className={styles.topSearchInput}
+              />
+              <kbd className={styles.searchShortcut}>⌘K</kbd>
+            </label>
             <NotificationsLink className={styles.iconButton} />
-            <ProfileLink className={styles.avatarChip}>DO</ProfileLink>
+            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
 
@@ -178,7 +192,7 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
 
         <div className={styles.tableWrap}>
           <div className={styles.tableHeader}>
-            <ScrollText size={15} strokeWidth={2} />
+            <Clock3 size={15} strokeWidth={2.25} />
             <span>{filtered.length} events</span>
           </div>
 
@@ -226,11 +240,6 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
                             : styles.outcomeSuccess
                         }`}
                       >
-                        {event.outcome === "Failed" ? (
-                          <X size={12} strokeWidth={2.5} />
-                        ) : (
-                          <Check size={12} strokeWidth={2.5} />
-                        )}
                         {event.outcome}
                       </span>
                     </td>

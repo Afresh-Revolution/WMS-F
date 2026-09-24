@@ -313,15 +313,7 @@ export function SalaryIncrementsPage() {
               <article
                 key={increment.id}
                 className={styles.listRow}
-                role="button"
-                tabIndex={0}
                 onClick={() => setSelectedIncrement(increment)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    setSelectedIncrement(increment);
-                  }
-                }}
               >
                 <div className={styles.rowIdentity}>
                   <span className={styles.avatar}>{increment.initials}</span>
@@ -357,7 +349,17 @@ export function SalaryIncrementsPage() {
                   <span className={statusClass[increment.status]}>
                     {statusLabels[increment.status]}
                   </span>
-                  <ChevronRight size={18} className={styles.chevron} />
+                  <button
+                    type="button"
+                    className={styles.openButton}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedIncrement(increment);
+                    }}
+                    aria-label={`View ${increment.name} increment`}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
                 </div>
               </article>
             );
@@ -383,6 +385,7 @@ export function SalaryIncrementsPage() {
       {selectedIncrement ? (
         <SalaryIncrementDrawer
           increment={selectedIncrement}
+          manager={manager}
           onClose={() => setSelectedIncrement(null)}
           onUpdated={refetch}
         />

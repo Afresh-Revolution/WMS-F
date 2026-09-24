@@ -1,17 +1,15 @@
 "use client";
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   AlertCircle,
-  CalendarDays,
+  AlertTriangle,
   Circle,
   Eye,
-  Gavel,
   Plus,
   Search,
-  X,
 } from "lucide-react";
 import {
   actionTypeOptions,
@@ -27,6 +25,7 @@ import {
 import { listFrom, mapDisciplineCase, mapEmployee } from "@/lib/api/mappers";
 import { DisciplineRecordModal } from "./DisciplineRecordModal";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import { usePageActions } from "@/hooks/usePageActions";
 import { portalHref } from "@/lib/portalPaths";
 import styles from "./DisciplinePage.module.css";
@@ -69,10 +68,6 @@ export function DisciplinePage({
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(
     viewRecordId ?? null,
   );
-  const [employee, setEmployee] = useState("");
-  const [actionType, setActionType] = useState("Warning");
-  const [description, setDescription] = useState("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const { data, loading, error, refetch } = useAsyncData(
     () => listDisciplinaryRecords(),
@@ -90,6 +85,65 @@ export function DisciplinePage({
         .map((record) => mapEmployee(record))
         .filter((person) => person.id && person.name),
     [employeeData],
+  );
+
+  const createFields = useMemo<ModalField[]>(
+    () => [
+      {
+        name: "employeeId",
+        label: "Employee",
+        type: "select",
+        required: true,
+        fullWidth: true,
+        defaultValue: "",
+        options: [
+          {
+            label: employeesLoading
+              ? "Loading employees…"
+              : employees.length
+                ? "Select employee"
+                : "No employees found",
+            value: "",
+          },
+          ...employees.map((person) => ({
+            label: person.title
+              ? `${person.name} — ${person.title}`
+              : person.name,
+            value: person.id,
+          })),
+        ],
+      },
+      {
+        name: "actionType",
+        label: "Action type",
+        type: "select",
+        required: true,
+        fullWidth: true,
+        defaultValue: "Warning",
+        options: actionTypeOptions.map((type) => ({
+          label: type,
+          value: type,
+        })),
+      },
+      {
+        name: "description",
+        label: "Description",
+        type: "textarea",
+        required: true,
+        fullWidth: true,
+        rows: 4,
+        placeholder: "Describe the incident and action taken",
+      },
+      {
+        name: "date",
+        label: "Date",
+        type: "date",
+        required: true,
+        fullWidth: true,
+        placeholder: "mm/dd/yyyy",
+      },
+    ],
+    [employeeData, employees, employeesLoading],
   );
 
   const disciplineCases = useMemo((): DisciplineCase[] => {
@@ -138,31 +192,8 @@ export function DisciplinePage({
     setSelectedRecordId(viewRecordId ?? null);
   }, [viewRecordId]);
 
-  useEffect(() => {
-    if (!isModalOpen) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") closeModal();
-    }
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [isModalOpen]);
-
-  function resetForm() {
-    setEmployee("");
-    setActionType("Warning");
-    setDescription("");
-    setDate(new Date().toISOString().slice(0, 10));
-  }
-
   function closeModal() {
     setIsModalOpen(false);
-    resetForm();
     if (pathname.endsWith("/discipline/create") || pathname.endsWith("/discipline/new")) {
       router.push(portalHref(pathname, "/discipline"));
     }
@@ -192,25 +223,29 @@ export function DisciplinePage({
     router.push(portalHref(pathname, filterRoutes[filter]));
   }
 
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    void runAction("Create disciplinary record", async () => {
+  async function handleCreate(values: Record<string, string>) {
+    const employeeId = values.employeeId.trim();
+    const description = values.description.trim();
+    if (!employeeId) {
+      throw new Error("Choose an employee.");
+    }
+    if (!description) {
+      throw new Error("Describe the incident and action taken.");
+    }
+    await runAction("Create disciplinary record", async () => {
       await createDisciplinaryRecord({
-        employeeId: employee,
-        actionType,
+        employeeId,
+        actionType: values.actionType,
         description,
-        date,
+        date: values.date,
       });
       await refetch();
-      closeModal();
-    }).catch(() => undefined);
+    });
   }
 
   return (
     <>
-      <div
-        className={`${styles.page} ${isModalOpen ? styles.pageDimmed : ""}`}
-      >
+      <div className={styles.page}>
         <div className={styles.topBar}>
           <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading cases…</p> : null}
@@ -340,118 +375,19 @@ export function DisciplinePage({
         />
       )}
 
-      {isModalOpen && (
-        <div className={styles.overlay} onClick={closeModal}>
-          <div
-            className={styles.modal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="discipline-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className={styles.modalHeader}>
-              <div className={styles.modalTitleRow}>
-                <span className={styles.modalIcon} aria-hidden>
-                  <Gavel size={16} strokeWidth={2} />
-                </span>
-                <h2 id="discipline-modal-title" className={styles.modalTitle}>
-                  New disciplinary action
-                </h2>
-              </div>
-              <button
-                type="button"
-                aria-label="Close"
-                className={styles.closeButton}
-                onClick={closeModal}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit}>
-              <div className={styles.modalBody}>
-                <label className={styles.field}>
-                  <span className={styles.label}>Employee</span>
-                  <select
-                    className={styles.select}
-                    value={employee}
-                    onChange={(e) => setEmployee(e.target.value)}
-                    required
-                  >
-                    <option value="" disabled>
-                      {employeesLoading
-                        ? "Loading employees…"
-                        : employees.length
-                          ? "Select employee"
-                          : "No employees found"}
-                    </option>
-                    {employees.map((person) => (
-                      <option key={person.id} value={person.id}>
-                        {person.title
-                          ? `${person.name} — ${person.title}`
-                          : person.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className={styles.field}>
-                  <span className={styles.label}>Action type</span>
-                  <select
-                    className={styles.select}
-                    value={actionType}
-                    onChange={(e) => setActionType(e.target.value)}
-                  >
-                    {actionTypeOptions.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className={styles.field}>
-                  <span className={styles.label}>Description</span>
-                  <textarea
-                    className={styles.textarea}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Describe the incident and action taken"
-                    required
-                  />
-                </label>
-
-                <label className={styles.field}>
-                  <span className={styles.label}>Date</span>
-                  <div className={styles.dateField}>
-                    <input
-                      type="date"
-                      className={styles.dateInput}
-                      value={date}
-                      onChange={(e) => setDate(e.target.value)}
-                      required
-                    />
-                    <CalendarDays size={16} className={styles.dateIcon} />
-                  </div>
-                </label>
-              </div>
-
-              <div className={styles.modalFooter}>
-                <button
-                  type="button"
-                  className={styles.cancelButton}
-                  onClick={closeModal}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className={styles.submitButton}>
-                  Create record
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {isModalOpen ? (
+        <SimpleModal
+          open={isModalOpen}
+          title="New disciplinary action"
+          titleIcon={<AlertTriangle size={18} strokeWidth={2.25} />}
+          fields={createFields}
+          submitLabel="Create record"
+          showClose
+          appearance="soft"
+          onClose={closeModal}
+          onSubmit={handleCreate}
+        />
+      ) : null}
     </>
   );
 }

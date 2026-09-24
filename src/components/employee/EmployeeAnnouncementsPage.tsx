@@ -4,8 +4,8 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { employeeProfile } from "@/data/employeeHome";
 import {
   getStaffAnnouncement,
   getStaffUnreadCount,
@@ -27,6 +27,7 @@ type EmployeeAnnouncement = {
 };
 
 export function EmployeeAnnouncementsPage() {
+  const { user } = useCurrentUser();
   const [openedId, setOpenedId] = useState<string | null>(null);
   const [localRead, setLocalRead] = useState<Set<string>>(new Set());
 
@@ -85,7 +86,7 @@ export function EmployeeAnnouncementsPage() {
           </label>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.profileButton}>
-            {employeeProfile.initials}
+            {user?.initials || "—"}
           </ProfileLink>
         </div>
       </header>

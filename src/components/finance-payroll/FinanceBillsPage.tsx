@@ -28,11 +28,55 @@ const statusClass: Record<BillStatus, string> = {
   Paid: styles.statusPaid,
 };
 
+const billCategoryOptions = [
+  { label: "Utilities", value: "Utilities" },
+  { label: "IT Infrastructure", value: "IT Infrastructure" },
+  { label: "Health Insurance", value: "Health Insurance" },
+  { label: "Pension Remittance", value: "Pension Remittance" },
+  { label: "Statutory Tax", value: "Statutory Tax" },
+  { label: "Office Supplies", value: "Office Supplies" },
+];
+
 const createFields = [
-  { name: "vendor", label: "Vendor", required: true },
-  { name: "category", label: "Category", required: true },
-  { name: "amount", label: "Amount", required: true, placeholder: "₦ 0" },
-  { name: "dueDate", label: "Due date", type: "date" as const, required: true },
+  {
+    name: "vendor",
+    label: "Vendor",
+    required: true,
+    fullWidth: true,
+    placeholder: "Vendor name",
+  },
+  {
+    name: "invoiceNumber",
+    label: "Invoice number",
+    fullWidth: true,
+    placeholder: "e.g. INV-2026-080",
+  },
+  {
+    name: "amount",
+    label: "Amount (₦)",
+    type: "number" as const,
+    required: true,
+    pair: "amount",
+    defaultValue: "0",
+    min: 0,
+  },
+  {
+    name: "dueDate",
+    label: "Due date",
+    type: "date" as const,
+    required: true,
+    pair: "amount",
+    placeholder: "mm/dd/yyyy",
+  },
+  {
+    name: "category",
+    label: "Category",
+    type: "select" as const,
+    required: true,
+    fullWidth: true,
+    defaultValue: "Utilities",
+    options: billCategoryOptions,
+  },
 ];
 
 function isAwaitingApproval(status: BillStatus): boolean {
@@ -104,8 +148,28 @@ export function FinanceBillsPage() {
   }, [activeFilter, bills, query]);
 
   async function handleCreate(values: Record<string, string>) {
+    const vendor = values.vendor.trim();
+    const invoiceNumber = values.invoiceNumber.trim();
+    const category = values.category.trim();
+    const dueDate = values.dueDate;
+    const amount = Number(values.amount);
+    if (!vendor) {
+      throw new Error("Enter a vendor name.");
+    }
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error("Enter a valid amount.");
+    }
     await runAction("Add bill", async () => {
-      await superAdminApi.bills.create(values);
+      await superAdminApi.bills.create({
+        vendor,
+        vendorName: vendor,
+        invoice: invoiceNumber,
+        invoiceNumber,
+        ref: invoiceNumber,
+        amount,
+        dueDate,
+        category,
+      });
       refetch();
     });
   }
@@ -343,9 +407,10 @@ export function FinanceBillsPage() {
       <SimpleModal
         open={createOpen}
         title="Add bill"
-        description="Record a vendor bill or invoice for approval."
         fields={createFields}
         submitLabel="Add bill"
+        showClose
+        appearance="soft"
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />

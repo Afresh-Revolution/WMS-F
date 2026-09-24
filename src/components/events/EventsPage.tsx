@@ -13,7 +13,7 @@ import {
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
-import { listFrom, mapEvent } from "@/lib/api/mappers";
+import { listFrom, mapDepartment, mapEvent } from "@/lib/api/mappers";
 import { portalHref } from "@/lib/portalPaths";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./EventsPage.module.css";
@@ -49,23 +49,28 @@ const badgeClass = {
   meta: styles.badgeMeta,
 } as const;
 
-const createFields: ModalField[] = [
-  { name: "title", label: "Event title", required: true },
-  { name: "date", label: "Date", type: "date", required: true },
-  { name: "audience", label: "Audience", required: true },
-  { name: "description", label: "Description", type: "textarea" },
-  {
-    name: "category",
-    label: "Category",
-    type: "select",
-    defaultValue: "Upcoming",
-    options: [
-      { label: "Upcoming", value: "Upcoming" },
-      { label: "Sponsorship", value: "Sponsorship" },
-      { label: "Completed", value: "Completed" },
-    ],
-  },
+const eventTypeOptions = [
+  { label: "Internal", value: "Internal" },
+  { label: "External", value: "External" },
+  { label: "Company-wide", value: "Company-wide" },
 ];
+
+function eventTypeFromItem(event: EventItem): string {
+  const tag = event.tags.find(
+    (item) =>
+      item.tone === "internal" ||
+      item.tone === "external" ||
+      item.tone === "company",
+  );
+  if (tag?.tone === "external") return "External";
+  if (tag?.tone === "company") return "Company-wide";
+  return "Internal";
+}
+
+function createdEventId(payload: unknown): string {
+  const record = unwrapRecord(payload);
+  return String(record.id ?? record._id ?? "");
+}
 
 type EventsPageProps = {
   initialFilter?: EventFilter;
@@ -99,10 +104,38 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
           ),
     [filterParam, manager],
   );
+  const { data: departmentData } = useAsyncData(
+    () =>
+      manager
+        ? managerApi.listDepartments({ limit: 200 })
+        : superAdminApi.departments.list({ limit: 200 }),
+    [manager],
+  );
 
   const events = useMemo(() => {
     return listFrom(data ?? undefined).map((record) => mapEvent(record));
   }, [data]);
+
+  const audienceOptions = useMemo(() => {
+    const departments = listFrom(departmentData ?? undefined)
+      .map(mapDepartment)
+      .filter((item) => item.name)
+      .map((item) => ({ label: item.name, value: item.name }));
+    const options = [
+      { label: "All departments", value: "All departments" },
+      ...departments.filter((item) => item.value !== "All departments"),
+    ];
+    if (
+      editingEvent?.audience &&
+      !options.some((item) => item.value === editingEvent.audience)
+    ) {
+      options.push({
+        label: editingEvent.audience,
+        value: editingEvent.audience,
+      });
+    }
+    return options;
+  }, [departmentData, editingEvent]);
 
   const currentStats = useMemo(() => {
     const summary = unwrapRecord(data);
@@ -163,22 +196,65 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
     router.push(portalHref(pathname, filterRoutes[filter]));
   }
 
-  async function handleSave(values: Record<string, string>) {
-    if (editingEvent) {
-      await runAction("Update event", async () => {
-        await (manager
-          ? managerApi.updateEvent(editingEvent.id, values)
-          : superAdminApi.events.patch(editingEvent.id, values));
-        refetch();
-      });
-    } else {
-      await runAction("Create event", async () => {
-        await (manager
-          ? managerApi.createEvent(values)
-          : superAdminApi.events.create(values));
-        refetch();
-      });
+  async function persistEvent(values: Record<string, string>, publish: boolean) {
+    const title = values.title.trim();
+    if (!title) {
+      throw new Error("Enter an event title.");
     }
+    const body = {
+      title,
+      type: values.type,
+      eventType: values.type,
+      date: values.date,
+      audience: values.audience,
+      targetAudience: values.audience,
+      description: values.description.trim(),
+      status: publish ? "published" : "draft",
+      isDraft: !publish,
+      notify: publish,
+      sendNotification: publish,
+      category: "Upcoming",
+    };
+    if (editingEvent) {
+      await runAction(publish ? "Publish event" : "Update event", async () => {
+        await (manager
+          ? managerApi.updateEvent(editingEvent.id, body)
+          : superAdminApi.events.patch(editingEvent.id, body));
+        if (publish) {
+          await (manager
+            ? managerApi.sendEvent(editingEvent.id)
+            : superAdminApi.events.action(editingEvent.id, "send"));
+        }
+        refetch();
+      });
+      return;
+    }
+    await runAction(publish ? "Publish & notify" : "Save draft", async () => {
+      const created = await (manager
+        ? managerApi.createEvent(body)
+        : superAdminApi.events.create(body));
+      if (publish) {
+        const id = createdEventId(created);
+        if (id) {
+          try {
+            await (manager
+              ? managerApi.sendEvent(id)
+              : superAdminApi.events.action(id, "send"));
+          } catch {
+            /* create already requested notify */
+          }
+        }
+      }
+      refetch();
+    });
+  }
+
+  async function handleSave(values: Record<string, string>) {
+    await persistEvent(values, !editingEvent);
+  }
+
+  async function handleSaveDraft(values: Record<string, string>) {
+    await persistEvent(values, false);
   }
 
   async function sendEvent(event: EventItem) {
@@ -205,23 +281,54 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
     setEditingEvent(null);
   }
 
-  const modalFields: ModalField[] = editingEvent
-    ? createFields.map((field) => ({
-        ...field,
-        defaultValue:
-          field.name === "category"
-            ? editingEvent.category
-            : field.name === "title"
-              ? editingEvent.title
-              : field.name === "date"
-                ? editingEvent.date
-                : field.name === "audience"
-                  ? editingEvent.audience
-                  : field.name === "description"
-                    ? editingEvent.description
-                    : field.defaultValue,
-      }))
-    : createFields;
+  const modalFields: ModalField[] = useMemo(
+    () => [
+      {
+        name: "title",
+        label: "Event title",
+        required: true,
+        fullWidth: true,
+        defaultValue: editingEvent?.title ?? "",
+      },
+      {
+        name: "type",
+        label: "Type",
+        type: "select",
+        pair: "meta",
+        defaultValue: editingEvent
+          ? eventTypeFromItem(editingEvent)
+          : "Internal",
+        options: eventTypeOptions,
+      },
+      {
+        name: "date",
+        label: "Date",
+        type: "date",
+        required: true,
+        pair: "meta",
+        placeholder: "mm/dd/yyyy",
+        defaultValue: editingEvent?.date ?? "",
+      },
+      {
+        name: "audience",
+        label: "Target audience",
+        type: "select",
+        required: true,
+        fullWidth: true,
+        defaultValue: editingEvent?.audience || "All departments",
+        options: audienceOptions,
+      },
+      {
+        name: "description",
+        label: "Description",
+        type: "textarea",
+        fullWidth: true,
+        rows: 3,
+        defaultValue: editingEvent?.description ?? "",
+      },
+    ],
+    [audienceOptions, editingEvent],
+  );
 
   return (
     <>
@@ -361,11 +468,18 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
       <SimpleModal
         open={modalOpen}
         title={editingEvent ? "Edit event" : "Create event"}
-        description="Broadcast an event to HODs and departments."
         fields={modalFields}
-        submitLabel={editingEvent ? "Save changes" : "Create event"}
+        submitLabel={editingEvent ? "Save changes" : "Publish & notify"}
+        submitIcon={
+          editingEvent ? false : <Send size={15} strokeWidth={2.25} />
+        }
+        secondaryLabel={editingEvent ? undefined : "Save draft"}
+        hideCancel={!editingEvent}
+        showClose
+        appearance="soft"
         onClose={closeModal}
         onSubmit={handleSave}
+        onSecondary={editingEvent ? undefined : handleSaveDraft}
       />
     </>
   );

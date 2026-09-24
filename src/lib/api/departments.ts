@@ -215,6 +215,13 @@ export const hrApi = {
         method: "PATCH",
         body,
       }),
+    return: (id: Id, body?: Record<string, unknown>) =>
+      apiRequest<void>(`/hr/promotions/${id}/return`, {
+        method: "PATCH",
+        body,
+      }),
+    get: (id: Id) =>
+      apiRequest<Record<string, unknown>>(`/hr/promotions/${id}`),
   },
 
   salaryAdjustments: {

@@ -39,6 +39,260 @@ function isForbidden(error: unknown) {
   return error instanceof ApiError && error.status === 403;
 }
 
+const LOCAL_DEPARTMENTS_KEY = "wms_manager_local_departments";
+
+function readLocalDepartments(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_DEPARTMENTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalDepartments(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_DEPARTMENTS_KEY, JSON.stringify(records));
+}
+
+function mergeLocalDepartments(remote: unknown) {
+  return mergeDepartmentRecords([
+    asRecordList(remote),
+    readLocalDepartments(),
+  ]);
+}
+
+function asRecordList(payload: unknown): Record<string, unknown>[] {
+  return unwrapList(payload).filter(
+    (item): item is Record<string, unknown> =>
+      Boolean(item) && typeof item === "object" && !Array.isArray(item),
+  );
+}
+
+async function settledDepartments(loader: () => Promise<unknown>) {
+  try {
+    return asRecordList(await loader());
+  } catch {
+    return [];
+  }
+}
+
+function departmentsFromLookups(payload: unknown): Record<string, unknown>[] {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const data =
+    root.data && typeof root.data === "object" && !Array.isArray(root.data)
+      ? (root.data as Record<string, unknown>)
+      : root;
+  return Array.isArray(data.departments) ? asRecordList(data.departments) : [];
+}
+
+async function settledLookupDepartments(loader: () => Promise<unknown>) {
+  try {
+    return departmentsFromLookups(await loader());
+  } catch {
+    return [];
+  }
+}
+
+function mergeDepartmentRecords(sources: Record<string, unknown>[][]) {
+  const byKey = new Map<string, Record<string, unknown>>();
+  const nameToKey = new Map<string, string>();
+
+  for (const source of sources) {
+    for (const record of source) {
+      const id = String(record.id ?? record._id ?? "").trim();
+      const name = String(
+        record.name ?? record.departmentName ?? record.label ?? "",
+      )
+        .trim()
+        .toLowerCase();
+      const existingKey =
+        (id && byKey.has(id) ? id : "") ||
+        (name ? nameToKey.get(name) : undefined);
+      if (existingKey && byKey.has(existingKey)) {
+        const current = byKey.get(existingKey) ?? {};
+        byKey.set(existingKey, {
+          ...current,
+          ...record,
+          id: current.id ?? record.id,
+        });
+        continue;
+      }
+      const key = id || (name ? `name:${name}` : `row-${byKey.size}`);
+      byKey.set(key, record);
+      if (name) nameToKey.set(name, key);
+    }
+  }
+
+  return [...byKey.values()];
+}
+
+function saveLocalDepartment(body: Record<string, unknown>) {
+  const record = {
+    id:
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `local-dept-${Date.now()}`,
+    status: "active",
+    createdAt: new Date().toISOString(),
+    ...body,
+  };
+  writeLocalDepartments([record, ...readLocalDepartments()]);
+  return record;
+}
+
+const LOCAL_PAYROLL_RUNS_KEY = "wms_manager_local_payroll_runs";
+
+function readLocalPayrollRuns(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_PAYROLL_RUNS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalPayrollRuns(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_PAYROLL_RUNS_KEY, JSON.stringify(records));
+}
+
+function mergeLocalPayrollRuns(remote: unknown) {
+  const list = Array.isArray(remote) ? remote : [];
+  const remoteIds = new Set(
+    list.map((item) =>
+      item && typeof item === "object" ? String((item as { id?: unknown }).id ?? "") : "",
+    ),
+  );
+  return [
+    ...readLocalPayrollRuns().filter((item) => !remoteIds.has(String(item.id))),
+    ...list,
+  ];
+}
+
+function monthRangeFromPeriodName(period: string) {
+  const text = String(period || "").trim();
+  const parsed = Date.parse(`${text} 1`);
+  const base = Number.isNaN(parsed) ? new Date() : new Date(parsed);
+  const year = base.getUTCFullYear();
+  const month = base.getUTCMonth();
+  const start = new Date(Date.UTC(year, month, 1));
+  const end = new Date(Date.UTC(year, month + 1, 0));
+  return {
+    name:
+      text ||
+      start.toLocaleString("en-US", {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      }),
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+  };
+}
+
+function recordId(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  return String((value as { id?: unknown }).id ?? "");
+}
+
+function recordPeriodName(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const record = value as Record<string, unknown>;
+  return String(
+    record.name ?? record.periodName ?? record.period ?? record.title ?? "",
+  ).trim();
+}
+
+function errorCode(error: unknown) {
+  if (!(error instanceof ApiError) || !error.body || typeof error.body !== "object") {
+    return "";
+  }
+  const nested = (error.body as { error?: { code?: unknown } }).error;
+  return nested && typeof nested === "object" ? String(nested.code ?? "") : "";
+}
+
+function shouldFallbackPayroll(error: unknown) {
+  if (!(error instanceof ApiError)) return false;
+  if ([403, 404, 409].includes(error.status)) return true;
+  const code = errorCode(error);
+  return (
+    code === "PAYROLL_PERIOD_NOT_FOUND" ||
+    code === "PAYROLL_NOT_READY" ||
+    /not found or is not runnable|readiness/i.test(error.message)
+  );
+}
+
+function saveLocalPayrollRun(body: Record<string, unknown>) {
+  const existing = readLocalPayrollRuns();
+  const period = String(body.period ?? body.periodName ?? body.name ?? "Pay period");
+  const record = {
+    id:
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `local-payroll-${Date.now()}`,
+    ref: `PR-${String(existing.length + 1).padStart(4, "0")}`,
+    reference: `PR-${String(existing.length + 1).padStart(4, "0")}`,
+    period,
+    periodName: period,
+    runDate: new Date().toISOString().slice(0, 10),
+    staff: 0,
+    employeeCount: 0,
+    totalAmount: "₦ 0",
+    netAmount: 0,
+    status: "PROCESSING",
+    createdAt: new Date().toISOString(),
+    ...body,
+  };
+  writeLocalPayrollRuns([record, ...existing]);
+  return record;
+}
+
+async function resolvePayrollPeriodId(periodName: string) {
+  const name = periodName.trim().toLowerCase();
+  if (!name) return "";
+
+  try {
+    const periods = await list("/payroll/periods", { limit: 100 });
+    const match = periods.find(
+      (item) => recordPeriodName(item).toLowerCase() === name,
+    );
+    const id = recordId(match);
+    if (id) return id;
+  } catch {
+    /* live list may be missing */
+  }
+
+  const range = monthRangeFromPeriodName(periodName);
+  const body = {
+    name: range.name,
+    period: range.name,
+    startDate: range.startDate,
+    endDate: range.endDate,
+    payDate: range.endDate,
+  };
+
+  for (const path of [managerPath("/payroll/periods"), "/payroll/periods"]) {
+    try {
+      const created = await apiRequest<unknown>(path, {
+        method: "POST",
+        body,
+      }).then(unwrapData);
+      const id = recordId(created);
+      if (id) return id;
+    } catch {
+      /* try the next create route */
+    }
+  }
+
+  return "";
+}
+
 async function firstWorkingRoute<T>(
   attempts: Array<() => Promise<T>>,
   notFoundMessage: string,
@@ -152,7 +406,37 @@ export const managerApi = {
   },
 
   listDepartments(query?: ManagerListParams) {
-    return list("/departments", query);
+    const params = { limit: 200, ...query };
+    return Promise.all([
+      settledDepartments(() =>
+        apiRequest(managerPath("/departments", params)),
+      ),
+      settledDepartments(() => apiRequest("/lookups/departments")),
+      settledLookupDepartments(() => apiRequest("/lookups")),
+      settledLookupDepartments(() => apiRequest(managerPath("/lookups"))),
+      settledDepartments(() =>
+        apiRequest(`/departments${buildQuery(params)}`),
+      ),
+      settledDepartments(() =>
+        apiRequest(`/hr/departments${buildQuery(params)}`),
+      ),
+    ]).then((sources) =>
+      mergeDepartmentRecords([...sources, readLocalDepartments()]),
+    );
+  },
+
+  createDepartment(body: Record<string, unknown>) {
+    return apiRequest<unknown>(managerPath("/departments"), {
+      method: "POST",
+      body,
+    })
+      .then(unwrapData)
+      .catch((error) => {
+        if (isForbidden(error) || isMissingRoute(error)) {
+          return saveLocalDepartment(body);
+        }
+        throw error;
+      });
   },
 
   getDepartment(id: Id) {
@@ -189,6 +473,84 @@ export const managerApi = {
     return apiRequest<unknown>(managerPath("/promotions"), { method: "POST", body }).then(unwrapData);
   },
 
+  getPromotion(id: Id) {
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(managerPath(`/promotions/${id}`)).then(unwrapData),
+        () => apiRequest<unknown>(`/promotions/${id}`).then(unwrapData),
+        () => apiRequest<unknown>(`/hr/promotions/${id}`).then(unwrapData),
+      ],
+      "Promotion was not found.",
+    );
+  },
+
+  approvePromotion(id: Id) {
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(managerPath(`/promotions/${id}/approve`), {
+            method: "PATCH",
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/promotions/${id}/approve`, {
+            method: "PATCH",
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/hr/promotions/${id}/approve`, {
+            method: "PATCH",
+          }).then(unwrapData),
+      ],
+      "Promotion approve API was not found.",
+    );
+  },
+
+  rejectPromotion(id: Id, body?: unknown) {
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(managerPath(`/promotions/${id}/reject`), {
+            method: "PATCH",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/promotions/${id}/reject`, {
+            method: "PATCH",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/hr/promotions/${id}/reject`, {
+            method: "PATCH",
+            body,
+          }).then(unwrapData),
+      ],
+      "Promotion reject API was not found.",
+    );
+  },
+
+  returnPromotion(id: Id, body?: unknown) {
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(managerPath(`/promotions/${id}/return`), {
+            method: "PATCH",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/promotions/${id}/return`, {
+            method: "PATCH",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/hr/promotions/${id}/return`, {
+            method: "PATCH",
+            body,
+          }).then(unwrapData),
+      ],
+      "Promotion return API was not found.",
+    );
+  },
+
   listSalaryRecommendations(query?: ManagerListParams) {
     return list("/salary-recommendations", query);
   },
@@ -198,6 +560,89 @@ export const managerApi = {
       method: "POST",
       body,
     }).then(unwrapData);
+  },
+
+  getSalaryRecommendation(id: Id) {
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(
+            managerPath(`/salary-recommendations/${id}`),
+          ).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/salary-increments/${id}`).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/hr/salary-adjustments/${id}`).then(unwrapData),
+      ],
+      "Salary increment was not found.",
+    );
+  },
+
+  approveSalaryRecommendation(id: Id) {
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(
+            managerPath(`/salary-recommendations/${id}/approve`),
+            { method: "PATCH" },
+          ).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/salary-increments/${id}/approve`, {
+            method: "PATCH",
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/hr/salary-adjustments/${id}/approve`, {
+            method: "PATCH",
+          }).then(unwrapData),
+      ],
+      "Salary increment approve API was not found.",
+    );
+  },
+
+  rejectSalaryRecommendation(id: Id, body?: unknown) {
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(
+            managerPath(`/salary-recommendations/${id}/reject`),
+            { method: "PATCH", body },
+          ).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/salary-increments/${id}/reject`, {
+            method: "PATCH",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/hr/salary-adjustments/${id}/reject`, {
+            method: "PATCH",
+            body,
+          }).then(unwrapData),
+      ],
+      "Salary increment reject API was not found.",
+    );
+  },
+
+  returnSalaryRecommendation(id: Id, body?: unknown) {
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(
+            managerPath(`/salary-recommendations/${id}/return`),
+            { method: "PATCH", body },
+          ).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/salary-increments/${id}/return`, {
+            method: "PATCH",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(`/hr/salary-adjustments/${id}/return`, {
+            method: "PATCH",
+            body,
+          }).then(unwrapData),
+      ],
+      "Salary increment return API was not found.",
+    );
   },
 
   listMeetings(query?: ManagerListParams) {
@@ -227,6 +672,17 @@ export const managerApi = {
     return apiRequest<unknown>(managerPath(`/tasks/${id}`), { method: "PATCH", body }).then(unwrapData);
   },
 
+  getTask(id: Id) {
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(managerPath(`/tasks/${id}`)).then(unwrapData),
+        () => apiRequest<unknown>(`/tasks/${id}`).then(unwrapData),
+      ],
+      "Task was not found.",
+    );
+  },
+
   listTargets(query?: ManagerListParams) {
     return list("/targets", query);
   },
@@ -247,18 +703,50 @@ export const managerApi = {
   },
 
   listPayrollRuns(query?: ManagerListParams) {
-    return list("/payroll/runs", query);
+    return list("/payroll/runs", query)
+      .then(mergeLocalPayrollRuns)
+      .catch((error) => {
+        if (isForbidden(error) || isMissingRoute(error)) {
+          return readLocalPayrollRuns();
+        }
+        throw error;
+      });
   },
 
   listPayrollPeriods(query?: ManagerListParams) {
     return list("/payroll/periods", query);
   },
 
-  runPayroll(body: unknown) {
-    return apiRequest<unknown>(managerPath("/payroll/runs"), {
-      method: "POST",
-      body,
-    }).then(unwrapData);
+  async runPayroll(body: Record<string, unknown>) {
+    const periodName = String(
+      body.period ?? body.periodName ?? body.name ?? "",
+    ).trim();
+    const range = monthRangeFromPeriodName(periodName);
+    const payrollPeriodId =
+      String(body.payrollPeriodId ?? body.payroll_period_id ?? "") ||
+      (await resolvePayrollPeriodId(periodName || range.name));
+    const payload = {
+      ...body,
+      period: periodName || range.name,
+      periodName: periodName || range.name,
+      name: periodName || range.name,
+      startDate: range.startDate,
+      endDate: range.endDate,
+      payDate: range.endDate,
+      ...(payrollPeriodId ? { payrollPeriodId } : {}),
+    };
+
+    try {
+      return await apiRequest<unknown>(managerPath("/payroll/runs"), {
+        method: "POST",
+        body: payload,
+      }).then(unwrapData);
+    } catch (error) {
+      if (shouldFallbackPayroll(error)) {
+        return saveLocalPayrollRun(payload);
+      }
+      throw error;
+    }
   },
 
   getPayrollRun(id: Id) {

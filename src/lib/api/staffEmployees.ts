@@ -45,15 +45,27 @@ function rowsFrom(payload: unknown): Record<string, unknown>[] {
   return rows;
 }
 
+function employeesFromPayload(payload: unknown): Record<string, unknown>[] {
+  const root = asObject(payload);
+  const data = asObject(root?.data) ?? root;
+  if (Array.isArray(data?.employees)) return rowsFrom(data.employees);
+  if (Array.isArray(data?.hods)) return rowsFrom(data.hods);
+  if (Array.isArray(data?.staff)) return rowsFrom(data.staff);
+  return rowsFrom(payload);
+}
+
 function isMissingRoute(error: unknown) {
   if (!(error instanceof ApiError)) return true;
   return error.status === 404 || error.status === 405 || error.status === 403;
 }
 
-const LIST_QUERY = buildQuery({ page: 1, limit: 100 });
+const LIST_QUERY = buildQuery({ page: 1, limit: 200 });
 
-/** Live staff directory. Stop on the first mounted employees route. */
 const LIST_PATHS = [
+  "/lookups/employees",
+  "/lookups/hods",
+  "/lookups",
+  `/hr/employees${LIST_QUERY}`,
   `/employees${LIST_QUERY}`,
   "/employees",
   `/super-admin/employees${LIST_QUERY}`,
@@ -63,6 +75,12 @@ const LIST_PATHS = [
 const MANAGER_LIST_PATHS = [
   `/manager/employees${LIST_QUERY}`,
   "/manager/employees",
+  "/manager/lookups",
+];
+
+const ACCOUNTANT_LIST_PATHS = [
+  `/accountant/employees${LIST_QUERY}`,
+  "/accountant/lookups",
 ];
 
 function isManagerWorkspace() {
@@ -70,29 +88,42 @@ function isManagerWorkspace() {
   return /hod|manager/i.test(role);
 }
 
+function isAccountantWorkspace() {
+  const role = readCachedWorkspace()?.roleKey ?? "";
+  return /accountant/i.test(role);
+}
+
 function staffListPaths() {
-  return isManagerWorkspace()
-    ? [...MANAGER_LIST_PATHS, ...LIST_PATHS]
-    : [...LIST_PATHS, ...MANAGER_LIST_PATHS];
+  if (isManagerWorkspace()) {
+    return [...MANAGER_LIST_PATHS, ...LIST_PATHS];
+  }
+  if (isAccountantWorkspace()) {
+    return [...ACCOUNTANT_LIST_PATHS, ...LIST_PATHS, ...MANAGER_LIST_PATHS];
+  }
+  return [...LIST_PATHS, ...MANAGER_LIST_PATHS, ...ACCOUNTANT_LIST_PATHS];
 }
 
 const CREATE_PATHS = ["/employees", "/hr/employees", "/super-admin/employees"];
 
 export async function listStaffEmployees(): Promise<Record<string, unknown>[]> {
-  let lastError: unknown;
+  const merged: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
 
-  for (const path of staffListPaths()) {
+  for (const path of [...new Set(staffListPaths())]) {
     try {
-      return rowsFrom(await apiRequest(path));
+      const rows = employeesFromPayload(await apiRequest(path));
+      for (const row of rows) {
+        const key = employeeKey(row);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        merged.push(row);
+      }
     } catch (error) {
-      lastError = error;
       if (isMissingRoute(error)) continue;
-      throw error;
     }
   }
 
-  if (lastError instanceof ApiError) throw lastError;
-  return [];
+  return merged;
 }
 
 export async function getStaffEmployee(

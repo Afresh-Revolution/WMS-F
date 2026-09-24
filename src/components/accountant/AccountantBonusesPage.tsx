@@ -4,6 +4,7 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Bell, Gift, Plus, Search } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import {
   RecordBonusModal,
@@ -16,45 +17,31 @@ import {
   mapAccountantBonus,
   unwrapAccountantList,
 } from "@/lib/api/accountantMappers";
-import {
-  accountantBonusEmployees,
-  accountantBonusesPeriod,
-  formatNaira,
-} from "@/data/accountantBonuses";
+import { formatNaira, type AccountantBonus } from "@/data/accountantBonuses";
+import { asRecord } from "@/lib/api";
 import styles from "./AccountantBonusesPage.module.css";
 
 export function AccountantBonusesPage() {
   const [recordOpen, setRecordOpen] = useState(false);
+  const [recorded, setRecorded] = useState<AccountantBonus[]>([]);
   const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(async () => {
-    const [payments, register, dashboard] = await Promise.all([
-      accountantApi.payroll.payments(),
-      accountantSettled(accountantApi.payments.list({ category: "bonus" })),
+    const [records, dashboard] = await Promise.all([
+      accountantApi.bonuses.list(),
       accountantSettled(accountantApi.payroll.dashboard()),
     ]);
-    return { payments, register, dashboard };
+    return { records, dashboard };
   }, []);
 
   const bonuses = useMemo(() => {
-    const mapped = [
-      ...unwrapAccountantList(data?.payments),
-      ...unwrapAccountantList(data?.register),
-    ]
-      .filter((record) => {
-        const haystack = `${record.type ?? ""} ${record.category ?? ""} ${record.bonusType ?? ""} ${record.note ?? ""}`.toLowerCase();
-        return (
-          haystack.includes("bonus") ||
-          Number(record.bonus ?? record.bonusAmount ?? 0) > 0
-        );
-      })
-      .map(mapAccountantBonus);
+    const mapped = unwrapAccountantList(data?.records).map(mapAccountantBonus);
     const seen = new Set<string>();
-    return mapped.filter((item) => {
-      if (seen.has(item.id)) return false;
+    return [...recorded, ...mapped].filter((item) => {
+      if (!item.id || seen.has(item.id)) return false;
       seen.add(item.id);
       return true;
     });
-  }, [data]);
+  }, [data, recorded]);
 
   const total = useMemo(
     () => bonuses.reduce((sum, bonus) => sum + bonus.amount, 0),
@@ -62,26 +49,39 @@ export function AccountantBonusesPage() {
   );
 
   async function handleRecordBonus(values: RecordBonusValues) {
-    const employee = accountantBonusEmployees.find(
-      (item) => item.id === values.employeeId,
-    );
+    const employee = {
+      id: values.employeeId,
+      name: values.employeeName,
+      department: values.department,
+      initials: values.initials,
+      avatarColor: values.avatarColor,
+    };
     const amount = Number(values.amount);
-    if (!employee || !Number.isFinite(amount) || amount <= 0) {
+    if (!employee.id || !employee.name || !Number.isFinite(amount) || amount <= 0) {
       throw new Error("Enter a valid employee and amount");
     }
 
     await runAction(
       "Record bonus",
       async () => {
-        await accountantApi.payments.create({
+        const created = await accountantApi.bonuses.create({
           category: "Bonus",
           type: values.type,
+          bonusType: values.type,
           employeeId: employee.id,
           employeeName: employee.name,
+          name: employee.name,
           payee: employee.name,
+          department: employee.department,
+          initials: employee.initials,
+          avatarColor: employee.avatarColor,
           amount,
           note: values.note || "Bonus recorded",
         });
+        setRecorded((current) => [
+          mapAccountantBonus(asRecord(created)),
+          ...current,
+        ]);
         refetch();
       },
       `Bonus recorded for ${employee.name}`,
@@ -112,13 +112,7 @@ export function AccountantBonusesPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 
@@ -127,8 +121,8 @@ export function AccountantBonusesPage() {
           <p className={styles.eyebrow}>Accountant · Bonuses</p>
           <h1 className={styles.title}>Bonuses</h1>
           <p className={styles.subtitle}>
-            Record bonuses for the {accountantBonusesPeriod} payroll run. Bonuses
-            feed directly into the payroll schedule.
+            Record bonuses for the current payroll run. Bonuses feed directly
+            into the payroll schedule.
           </p>
         </div>
         <button
@@ -147,7 +141,7 @@ export function AccountantBonusesPage() {
             <Gift size={18} />
           </span>
           <p className={styles.totalLabel}>
-            Total bonuses · {accountantBonusesPeriod}
+            Total bonuses
           </p>
         </div>
         <p className={styles.totalValue}>{formatNaira(total)}</p>

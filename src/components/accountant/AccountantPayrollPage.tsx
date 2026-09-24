@@ -10,6 +10,7 @@ import {
   Search,
   Wallet,
 } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { CreatePayrollPeriodModal } from "@/components/accountant/CreatePayrollPeriodModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -19,9 +20,7 @@ import {
   mapAccountantPayrollPeriod,
   unwrapAccountantList,
 } from "@/lib/api/accountantMappers";
-import {
-  type AccountantPayrollStatus,
-} from "@/data/accountantPayroll";
+import { type AccountantPayrollStatus } from "@/data/accountantPayroll";
 import styles from "./AccountantPayrollPage.module.css";
 
 const statusClass: Record<AccountantPayrollStatus, string> = {
@@ -96,13 +95,7 @@ export function AccountantPayrollPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 

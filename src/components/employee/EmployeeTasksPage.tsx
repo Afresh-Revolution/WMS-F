@@ -4,11 +4,12 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CalendarDays, Search, UserRound, X } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { usePageActions } from "@/hooks/usePageActions";
-import { employeeProfile, employeeTasks } from "@/data/employeeHome";
-import { employeeApi } from "@/lib/api";
-import { listFrom, num, str } from "@/lib/api/mappers";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
+import { usePageActions } from "@/hooks/usePageActions";
+import { employeeApi } from "@/lib/api";
+import { listFrom, nestedStr, num, str } from "@/lib/api/mappers";
+import type { EmployeeTaskStatus } from "@/data/employeeHome";
 import styles from "./EmployeeTasksPage.module.css";
 
 type TaskFilter = "All" | "In Progress" | "In Review" | "Overdue" | "Completed";
@@ -33,6 +34,63 @@ const filters: TaskFilter[] = [
   "Completed",
 ];
 
+function mapStatus(value: unknown): EmployeeTaskStatus {
+  const raw = str(value).toLowerCase();
+  if (raw.includes("overdue")) return "Overdue";
+  if (raw.includes("review")) return "In Review";
+  if (raw.includes("progress") || raw.includes("active")) return "In Progress";
+  if (raw.includes("complete") || raw.includes("done")) return "Completed";
+  return "Not Started";
+}
+
+function mapPriority(value: unknown): string {
+  const raw = str(value).toLowerCase();
+  if (raw.includes("high")) return "High";
+  if (raw.includes("low")) return "Low";
+  return raw ? str(value) : "Medium";
+}
+
+function formatDue(value: unknown): string {
+  const raw = str(value);
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function timingFromDue(value: unknown, status: EmployeeTaskStatus): string {
+  const date = new Date(str(value));
+  if (Number.isNaN(date.getTime())) return "";
+  const diff = Math.round(
+    (date.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) /
+      (24 * 60 * 60 * 1000),
+  );
+  if (status === "Completed") return "";
+  if (diff < 0) return `${Math.abs(diff)}d overdue`;
+  if (diff === 0) return "Due today";
+  return `${diff}d left`;
+}
+
+function mapTask(record: Record<string, unknown>, index: number): EmployeeTask {
+  const due = str(record.dueDate ?? record.due_date ?? record.due);
+  const status = mapStatus(record.status);
+  return {
+    id: str(record.id, String(index + 1)),
+    title: str(record.title ?? record.name),
+    priority: mapPriority(record.priority),
+    status,
+    description: str(record.description ?? record.detail),
+    assignedBy: nestedStr(
+      record.assignedBy ?? record.createdBy ?? record.owner,
+      ["name", "fullName"],
+      "",
+    ),
+    due: formatDue(due),
+    timing: timingFromDue(due, status),
+    progress: num(record.progress ?? record.percent, 0),
+  };
+}
+
 function priorityClass(priority: string) {
   if (priority === "High") return styles.priorityHigh;
   if (priority === "Low") return styles.priorityLow;
@@ -52,13 +110,14 @@ export function EmployeeTasksPage({
 }: {
   initialFilter?: TaskFilter;
 }) {
+  const { user } = useCurrentUser();
   const [filter, setFilter] = useState<TaskFilter>(initialFilter);
   const [selectedTask, setSelectedTask] = useState<EmployeeTask | null>(null);
   const [draftStatus, setDraftStatus] = useState("In Progress");
   const [draftProgress, setDraftProgress] = useState(0);
   const { runAction } = usePageActions();
-  const { data: liveTasks } = useAsyncData(
-    () => employeeApi.tasks.list({ limit: 50 }).catch(() => []),
+  const { data, loading, error, refetch } = useAsyncData(
+    () => employeeApi.tasks.list({ limit: 50 }),
     [],
   );
 
@@ -75,36 +134,23 @@ export function EmployeeTasksPage({
     };
   }, [selectedTask]);
 
-  const catalog = useMemo((): EmployeeTask[] => {
-    const rows = listFrom(liveTasks ?? undefined);
-    if (!rows.length) return [...employeeTasks];
-    return rows.map((row, index) => ({
-      id: str(row.id, `task-${index}`),
-      title: str(row.title ?? row.name, "Task"),
-      priority: str(row.priority, "Medium"),
-      status: str(row.status, "Not Started"),
-      description: str(row.description ?? row.notes),
-      assignedBy: str(row.assignedByName ?? row.assignedBy ?? row.createdByName, "—"),
-      due: str(row.dueDate ?? row.due_date ?? row.due, "—"),
-      timing: str(row.timing ?? row.dueLabel, ""),
-      progress: num(row.progress ?? row.progressPercent, 0),
-    }));
-  }, [liveTasks]);
-
-  const tasks = useMemo(
-    () => catalog.filter((task) => filter === "All" || task.status === filter),
-    [catalog, filter],
-  );
+  const tasks = useMemo(() => {
+    const records = listFrom((data ?? undefined) as never);
+    return records
+      .map((record, index) => mapTask(record, index))
+      .filter((task) => filter === "All" || task.status === filter);
+  }, [data, filter]);
 
   async function updateProgress(values: Record<string, string>) {
     if (!selectedTask) return;
     await runAction(
       "Update task",
       async () => {
-        await employeeApi.tasks.update(selectedTask.id, {
+        await employeeApi.tasks.updateProgress(selectedTask.id, {
           status: values.status,
           progress: Number(values.progress),
         });
+        refetch();
       },
       "Task progress updated",
     );
@@ -133,6 +179,12 @@ export function EmployeeTasksPage({
     <div className={styles.page}>
       <header className={styles.topBar}>
         <PageDateLabel />
+        {loading ? <p className={styles.empty}>Loading tasks…</p> : null}
+        {error ? (
+          <p className={styles.empty} role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />
@@ -141,7 +193,7 @@ export function EmployeeTasksPage({
           </label>
           <NotificationsLink className={styles.iconButton} />
           <ProfileLink className={styles.profileButton}>
-            {employeeProfile.initials}
+            {user?.initials || "—"}
           </ProfileLink>
         </div>
       </header>
@@ -166,50 +218,58 @@ export function EmployeeTasksPage({
       </div>
 
       <section className={styles.taskList}>
-        {tasks.map((task) => (
-          <article key={task.id} className={styles.taskCard}>
-            <div className={styles.taskTop}>
-              <div className={styles.taskTitle}>
-                <h2>{task.title}</h2>
-                <span className={`${styles.badge} ${priorityClass(task.priority)}`}>
-                  {task.priority}
-                </span>
-                <span className={`${styles.badge} ${statusClass(task.status)}`}>
-                  {task.status}
-                </span>
+        {tasks.length === 0 ? (
+          <p className={styles.empty}>No tasks in this view.</p>
+        ) : (
+          tasks.map((task) => (
+            <article key={task.id} className={styles.taskCard}>
+              <div className={styles.taskTop}>
+                <div className={styles.taskTitle}>
+                  <h2>{task.title}</h2>
+                  <span className={`${styles.badge} ${priorityClass(task.priority)}`}>
+                    {task.priority}
+                  </span>
+                  <span className={`${styles.badge} ${statusClass(task.status)}`}>
+                    {task.status}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.updateButton}
+                  onClick={() => openProgress(task)}
+                >
+                  Update progress
+                </button>
               </div>
-              <button
-                type="button"
-                className={styles.updateButton}
-                onClick={() => openProgress(task)}
+              <p className={styles.description}>{task.description}</p>
+              <div className={styles.meta}>
+                {task.assignedBy ? (
+                  <span>
+                    <UserRound size={12} />
+                    Assigned by {task.assignedBy}
+                  </span>
+                ) : null}
+                {task.due ? (
+                  <span>
+                    <CalendarDays size={12} />
+                    Due {task.due}
+                  </span>
+                ) : null}
+                {task.timing ? <span>{task.timing}</span> : null}
+              </div>
+              <div
+                className={styles.progressTrack}
+                role="progressbar"
+                aria-label={`${task.title} progress`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={task.progress}
               >
-                Update progress
-              </button>
-            </div>
-            <p className={styles.description}>{task.description}</p>
-            <div className={styles.meta}>
-              <span>
-                <UserRound size={12} />
-                Assigned by {task.assignedBy}
-              </span>
-              <span>
-                <CalendarDays size={12} />
-                Due {task.due}
-              </span>
-              {task.timing ? <span>{task.timing}</span> : null}
-            </div>
-            <div
-              className={styles.progressTrack}
-              role="progressbar"
-              aria-label={`${task.title} progress`}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={task.progress}
-            >
-              <span style={{ width: `${task.progress}%` }} />
-            </div>
-          </article>
-        ))}
+                <span style={{ width: `${task.progress}%` }} />
+              </div>
+            </article>
+          ))
+        )}
       </section>
 
       {selectedTask ? (

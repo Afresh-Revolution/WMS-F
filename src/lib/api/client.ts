@@ -211,8 +211,13 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
     "A user with that email already exists. Refresh the directory to see them.",
   MEETING_TYPE_NOT_FOUND:
     "Meeting type was not found. Create the meeting without a meeting type.",
+  SECRETARY_ORGANIZATION_REQUIRED:
+    "This secretary account is missing an organization. The meeting was saved on the shared calendar instead.",
   PASSWORD_CHANGE_REQUIRED:
     "Change your password before updating other account details.",
+  INVALID_CURRENT_PASSWORD: "Current password is incorrect.",
+  PASSWORD_POLICY_VIOLATION:
+    "New password must be at least 10 characters and include uppercase, lowercase, a number, and a symbol.",
   ANNOUNCEMENT_REQUIRED_FIELDS: "Title and message are required.",
   ANNOUNCEMENT_AUDIENCE_REQUIRED: "Choose who should receive this announcement.",
   ANNOUNCEMENT_DEPARTMENT_REQUIRED: "Pick a department for this audience.",
@@ -405,7 +410,15 @@ export function extractErrorMessage(payload: unknown, fallback: string): string 
       }
 
       if (typeof details === "object" && details !== null) {
-        const detailMessage = (details as Record<string, unknown>).message;
+        const detailRecord = details as Record<string, unknown>;
+        const policyErrors = detailRecord.errors;
+        if (Array.isArray(policyErrors) && policyErrors.length > 0) {
+          const joined = policyErrors
+            .filter((item) => isUsefulErrorMessage(item))
+            .join(" ");
+          if (joined) return rewriteKnownApiMessage(joined, code);
+        }
+        const detailMessage = detailRecord.message;
         if (isUsefulErrorMessage(detailMessage)) {
           return rewriteKnownApiMessage(detailMessage, code);
         }

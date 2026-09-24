@@ -122,6 +122,12 @@
   gap: 12px;
 }
 
+.empty {
+  margin: 8px 0 0;
+  color: #78716c;
+  font-size: 13px;
+}
+
 .taskCard {
   padding: 16px 18px 13px;
   border: 1px solid #ebe6e1;

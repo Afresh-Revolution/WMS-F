@@ -3,21 +3,15 @@
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
-  Clock3,
   Download,
-  FileSpreadsheet,
-  LineChart,
   Search,
-  Upload,
+  TrendingUp,
   Users,
 } from "lucide-react";
-import {
-  quickExports,
-} from "@/data/reports";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { ApiError, managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
+import { managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
 import { downloadApiBlob } from "@/lib/export/downloadBlob";
 import { listFrom, nestedStr, num, str } from "@/lib/api/mappers";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
@@ -25,26 +19,17 @@ import styles from "./ReportsPage.module.css";
 
 type GrowthPoint = { month: string; value: number };
 type DeptPoint = { label: string; value: number; color: string };
-type AttendancePoint = { day: string; value: number };
 
-const kpiBadgeClass = {
-  up: styles.kpiBadge,
-  down: styles.kpiBadgeDown,
-  meta: styles.kpiBadgeMeta,
-  good: styles.kpiBadge,
-} as const;
-
-const deptColors = ["#ed5a28", "#c2410c", "#fdba74", "#9a3412", "#fed7aa"];
-
-const quickExportActions: Record<
-  (typeof quickExports)[number],
-  () => Promise<Record<string, unknown>>
-> = {
-  "Full headcount roster": () => superAdminApi.reports.headcount(),
-  "This month's attendance": () => superAdminApi.reports.attendance(),
-  "Leave balances snapshot": () => superAdminApi.reports.leave(),
-  "Payroll summary": () => superAdminApi.reports.payroll(),
-};
+const deptColors = [
+  "#ed5a28",
+  "#f06a3a",
+  "#e24d1c",
+  "#c2410c",
+  "#ea580c",
+  "#9a3412",
+  "#fdba74",
+  "#fb923c",
+];
 
 function flattenExportRow(record: Record<string, unknown>) {
   const row: Record<string, unknown> = {};
@@ -105,56 +90,52 @@ function metricText(value: unknown, keys: string[], suffix = "") {
   return `${value}${suffix}`;
 }
 
-async function managerQuickExportPayload(
-  label: (typeof quickExports)[number],
-) {
-  switch (label) {
-    case "Full headcount roster":
-      return managerApi.listEmployees({ limit: 500 });
-    case "This month's attendance":
-      return managerApi.listAttendance({ period: "current", limit: 500 });
-    case "Leave balances snapshot":
-      return managerApi.listLeave({ limit: 500 });
-    case "Payroll summary":
-      try {
-        return await managerApi.listPayrollRuns({ limit: 100 });
-      } catch (error) {
-        if (
-          error instanceof ApiError &&
-          (error.status === 404 || error.status === 405)
-        ) {
-          return managerApi.getReports();
-        }
-        throw error;
-      }
+function withPercent(text: string) {
+  if (text === "—" || /%/.test(text)) return text;
+  return `${text}%`;
+}
+
+function formatKpiValue(value: unknown, keys: string[], suffix = "") {
+  const text = metricText(value, keys, suffix);
+  if (text === "—") return text;
+  const numeric = Number(String(text).replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(numeric) || String(text).includes("%")) return text;
+  return numeric.toLocaleString("en-US");
+}
+
+function chartTicks(min: number, max: number) {
+  const span = Math.max(max - min, 1);
+  const step = span <= 50 ? 10 : span <= 200 ? 50 : 100;
+  const niceMin = Math.floor(min / step) * step;
+  const niceMax = Math.ceil(max / step) * step;
+  const ticks: number[] = [];
+  for (let tick = niceMin; tick <= niceMax; tick += step) {
+    ticks.push(tick);
   }
+  return ticks.length ? ticks : [min, max];
 }
 
 function HeadcountChart({ data }: { data: GrowthPoint[] }) {
-  const width = 440;
-  const height = 200;
-  const padLeft = 44;
-  const padRight = 16;
-  const padTop = 12;
-  const padBottom = 28;
+  const width = 520;
+  const height = 260;
+  const padLeft = 48;
+  const padRight = 12;
+  const padTop = 16;
+  const padBottom = 32;
   const values = data.map((d) => d.value);
   if (values.length === 0) {
-    return <p className={styles.subtitle}>No headcount growth data yet.</p>;
+    return <p className={styles.emptyChart}>No headcount growth data yet.</p>;
   }
-  const min = Math.min(...values, 0);
-  const max = Math.max(...values, min + 1);
-  const yTicks = [min, min + (max - min) / 2, max].map((tick) =>
-    Math.round(tick),
-  );
+  const yTicks = chartTicks(Math.min(...values), Math.max(...values));
+  const min = yTicks[0] ?? Math.min(...values);
+  const max = yTicks[yTicks.length - 1] ?? Math.max(...values);
+  const range = Math.max(max - min, 1);
   const span = Math.max(values.length - 1, 1);
 
   const points = values.map((value, i) => {
-    const x =
-      padLeft + (i * (width - padLeft - padRight)) / span;
+    const x = padLeft + (i * (width - padLeft - padRight)) / span;
     const y =
-      height -
-      padBottom -
-      ((value - min) / (max - min)) * (height - padTop - padBottom);
+      height - padBottom - ((value - min) / range) * (height - padTop - padBottom);
     return `${x},${y}`;
   });
 
@@ -165,9 +146,7 @@ function HeadcountChart({ data }: { data: GrowthPoint[] }) {
     <svg viewBox={`0 0 ${width} ${height}`} className={styles.chart} aria-hidden>
       {yTicks.map((tick) => {
         const y =
-          height -
-          padBottom -
-          ((tick - min) / (max - min)) * (height - padTop - padBottom);
+          height - padBottom - ((tick - min) / range) * (height - padTop - padBottom);
         return (
           <g key={tick}>
             <line
@@ -175,16 +154,16 @@ function HeadcountChart({ data }: { data: GrowthPoint[] }) {
               y1={y}
               x2={width - padRight}
               y2={y}
-              stroke="#f5f5f4"
+              stroke="#f3efe9"
               strokeWidth="1"
             />
-            <text x={padLeft - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#a8a29e">
+            <text x={padLeft - 8} y={y + 4} textAnchor="end" fontSize="11" fill="#c4bdb6">
               {tick}
             </text>
           </g>
         );
       })}
-      <polyline points={area} fill="rgba(237, 90, 40, 0.12)" stroke="none" />
+      <polyline points={area} fill="rgba(237, 90, 40, 0.16)" stroke="none" />
       <polyline
         points={line}
         fill="none"
@@ -199,8 +178,8 @@ function HeadcountChart({ data }: { data: GrowthPoint[] }) {
           x={padLeft + (i * (width - padLeft - padRight)) / span}
           y={height - 8}
           textAnchor="middle"
-          fontSize="11"
-          fill="#a8a29e"
+          fontSize="12"
+          fill="#c4bdb6"
         >
           {item.month}
         </text>
@@ -210,8 +189,11 @@ function HeadcountChart({ data }: { data: GrowthPoint[] }) {
 }
 
 function DepartmentDonut({ data }: { data: DeptPoint[] }) {
+  if (data.length === 0) {
+    return <p className={styles.emptyChart}>No department headcount yet.</p>;
+  }
   const total = data.reduce((sum, item) => sum + item.value, 0) || 1;
-  const radius = 58;
+  const radius = 72;
   const circumference = 2 * Math.PI * radius;
   const slices = data.map((item, index) => {
     const length = (item.value / total) * circumference;
@@ -223,32 +205,24 @@ function DepartmentDonut({ data }: { data: DeptPoint[] }) {
 
   return (
     <div className={styles.donutWrap}>
-      <svg width="160" height="160" viewBox="0 0 160 160" aria-hidden>
-        <g transform="rotate(-90 80 80)">
+      <svg width="220" height="220" viewBox="0 0 220 220" aria-hidden>
+        <g transform="rotate(-90 110 110)">
           {slices.map((item) => (
-              <circle
-                key={item.label}
-                cx="80"
-                cy="80"
-                r={radius}
-                fill="transparent"
-                stroke={item.color}
-                strokeWidth="22"
-                strokeDasharray={`${item.length} ${circumference - item.length}`}
-                strokeDashoffset={-item.offset}
-              />
-            ))}
+            <circle
+              key={item.label}
+              cx="110"
+              cy="110"
+              r={radius}
+              fill="transparent"
+              stroke={item.color}
+              strokeWidth="32"
+              strokeDasharray={`${item.length} ${circumference - item.length}`}
+              strokeDashoffset={-item.offset}
+            />
+          ))}
         </g>
-        <circle cx="80" cy="80" r="38" fill="#fff" />
+        <circle cx="110" cy="110" r="48" fill="#fff" />
       </svg>
-      <div className={styles.legend}>
-        {data.map((item) => (
-          <span key={item.label} className={styles.legendItem}>
-            <span className={styles.swatch} style={{ background: item.color }} />
-            {item.label}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }
@@ -273,11 +247,6 @@ export function ReportsPage() {
       manager ? managerApi.getReports() : superAdminApi.reports.departments(),
     [manager],
   );
-  const { data: attendanceData } = useAsyncData(
-    () =>
-      manager ? managerApi.getReports() : superAdminApi.reports.attendance(),
-    [manager],
-  );
   const { data: savedData } = useAsyncData(
     () => (manager ? Promise.resolve(null) : superAdminApi.reports.saved.list()),
     [manager],
@@ -286,51 +255,40 @@ export function ReportsPage() {
   const reportKpis = useMemo(() => {
     const data = unwrapRecord(overview);
     const headcount = data.headcount;
-    const attendance = data.attendance;
     return [
       {
         id: "headcount",
         label: "Total Headcount",
-        value: metricText(headcount ?? data.totalHeadcount, [
+        value: formatKpiValue(headcount ?? data.totalHeadcount, [
           "total",
           "active",
           "count",
         ]),
         badge: str(data.headcountChange, ""),
-        tone: "up" as const,
-      },
-      {
-        id: "attendance",
-        label: "Avg Attendance",
-        value: metricText(
-          attendance ?? data.avgAttendance,
-          ["attendanceRate", "rate", "present"],
-          typeof attendance === "object" ? "%" : "",
-        ),
-        badge: str(data.attendanceWindow, ""),
-        tone: "meta" as const,
       },
       {
         id: "attrition",
         label: "Attrition Rate",
-        value: metricText(data.attrition ?? data.attritionRate, [
-          "rate",
-          "value",
-          "percent",
-        ]),
+        value: withPercent(
+          metricText(data.attrition ?? data.attritionRate, [
+            "rate",
+            "value",
+            "percent",
+          ]),
+        ),
         badge: str(data.attritionChange, ""),
-        tone: "down" as const,
       },
       {
         id: "accuracy",
         label: "Report Accuracy",
-        value: metricText(data.accuracy ?? data.reportAccuracy, [
-          "value",
-          "percent",
-          "score",
-        ]),
+        value: withPercent(
+          metricText(data.accuracy ?? data.reportAccuracy, [
+            "value",
+            "percent",
+            "score",
+          ]),
+        ),
         badge: str(data.accuracyNote, ""),
-        tone: "good" as const,
       },
     ];
   }, [overview]);
@@ -342,7 +300,7 @@ export function ReportsPage() {
     ).map((record) => ({
       month: str(record.month ?? record.label),
       value: num(record.value ?? record.count),
-    }));
+    })).filter((item) => item.month);
   }, [growthData]);
 
   const departmentHeadcount = useMemo((): DeptPoint[] => {
@@ -353,18 +311,8 @@ export function ReportsPage() {
       label: str(record.label ?? record.name ?? record.department),
       value: num(record.value ?? record.count),
       color: str(record.color, deptColors[index % deptColors.length]),
-    }));
+    })).filter((item) => item.label);
   }, [deptData]);
-
-  const weeklyAttendance = useMemo((): AttendancePoint[] => {
-    const payload = unwrapRecord(attendanceData);
-    return listFrom(
-      (payload.days ?? payload.weekly ?? payload.data ?? attendanceData) as never,
-    ).map((record) => ({
-      day: str(record.day ?? record.label),
-      value: num(record.value ?? record.percent),
-    }));
-  }, [attendanceData]);
 
   const savedReports = useMemo(() => listFrom(savedData ?? undefined), [savedData]);
 
@@ -395,19 +343,6 @@ export function ReportsPage() {
       await downloadApiBlob(
         superAdminApi.reports.exportPath(),
         "workforce-report.csv",
-      );
-    });
-  }
-
-  function runQuickExport(label: (typeof quickExports)[number]) {
-    void runAction(`Export ${label}`, async () => {
-      const payload = manager
-        ? await managerQuickExportPayload(label)
-        : await quickExportActions[label]();
-      const rows = exportableRows(payload);
-      exportRows(
-        rows,
-        `${label.toLowerCase().replace(/\s+/g, "-")}.csv`,
       );
     });
   }
@@ -456,11 +391,11 @@ export function ReportsPage() {
           </div>
           <div className={styles.headerActions}>
             <button type="button" className={styles.csvButton} onClick={exportCsvOverview}>
-              <FileSpreadsheet size={15} strokeWidth={2} />
+              <Download size={15} strokeWidth={2.25} />
               CSV
             </button>
             <button type="button" className={styles.exportButton} onClick={exportFullReport}>
-              <Upload size={15} strokeWidth={2} />
+              <Download size={15} strokeWidth={2.25} />
               Export report
             </button>
           </div>
@@ -469,11 +404,13 @@ export function ReportsPage() {
         <div className={styles.kpis}>
           {reportKpis.map((kpi) => (
             <article key={kpi.id} className={styles.kpiCard}>
-              <div className={styles.kpiTop}>
-                <p className={styles.kpiLabel}>{kpi.label}</p>
-                <span className={kpiBadgeClass[kpi.tone]}>{kpi.badge}</span>
+              <p className={styles.kpiLabel}>{kpi.label}</p>
+              <div className={styles.kpiRow}>
+                <p className={styles.kpiValue}>{kpi.value}</p>
+                {kpi.badge ? (
+                  <span className={styles.kpiBadge}>{kpi.badge}</span>
+                ) : null}
               </div>
-              <p className={styles.kpiValue}>{kpi.value}</p>
             </article>
           ))}
         </div>
@@ -497,7 +434,7 @@ export function ReportsPage() {
           <div className={styles.grid}>
             <section className={styles.card}>
               <h2 className={styles.cardTitle}>
-                <LineChart size={16} strokeWidth={2} />
+                <TrendingUp size={16} strokeWidth={2.25} />
                 Headcount growth
               </h2>
               <HeadcountChart data={headcountGrowth} />
@@ -505,59 +442,10 @@ export function ReportsPage() {
 
             <section className={styles.card}>
               <h2 className={styles.cardTitle}>
-                <Clock3 size={16} strokeWidth={2} />
-                Weekly attendance %
-              </h2>
-              <div className={styles.barChart}>
-                <div className={styles.barYAxis}>
-                  {[100, 75, 50, 25, 0].map((tick) => (
-                    <span key={tick} className={styles.barYTick}>
-                      {tick}
-                    </span>
-                  ))}
-                </div>
-                <div className={styles.bars}>
-                  {weeklyAttendance.map((item) => (
-                    <div key={item.day} className={styles.barCol}>
-                      <div className={styles.barTrack}>
-                        <div
-                          className={styles.bar}
-                          style={{ height: `${item.value}%` }}
-                        />
-                      </div>
-                      <span className={styles.barLabel}>{item.day}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
-            <section className={styles.card}>
-              <h2 className={styles.cardTitle}>
-                <Users size={16} strokeWidth={2} />
+                <Users size={16} strokeWidth={2.25} />
                 Headcount by department
               </h2>
               <DepartmentDonut data={departmentHeadcount} />
-            </section>
-
-            <section className={styles.card}>
-              <h2 className={styles.cardTitle}>Quick exports</h2>
-              <p className={styles.cardHint}>
-                Generate a fresh export in one click.
-              </p>
-              <div className={styles.exportList}>
-                {quickExports.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className={styles.exportRow}
-                    onClick={() => runQuickExport(item)}
-                  >
-                    {item}
-                    <Download size={16} strokeWidth={2} />
-                  </button>
-                ))}
-              </div>
             </section>
           </div>
         ) : (

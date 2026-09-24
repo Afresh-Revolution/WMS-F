@@ -367,7 +367,122 @@ export function getEmployeeLeave(id: string) {
   );
 }
 
-export function listOrganisationLeave(params?: Record<string, unknown>) {
+const LOCAL_LEAVE_KEY = "wms_manager_local_leave_requests";
+
+function readLocalLeave(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_LEAVE_KEY) ?? "[]");
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalLeave(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_LEAVE_KEY, JSON.stringify(records));
+}
+
+function mergeLocalLeave(remote: unknown) {
+  const rows = unwrapList<Record<string, unknown>>(remote);
+  const remoteIds = new Set(rows.map((item) => str(item.id ?? item._id)));
+  return [
+    ...readLocalLeave().filter((item) => !remoteIds.has(str(item.id))),
+    ...rows,
+  ];
+}
+
+function saveLocalLeave(body: Record<string, unknown>) {
+  const existing = readLocalLeave();
+  const startDate = str(body.startDate);
+  const endDate = str(body.endDate);
+  const record = {
+    id:
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `local-leave-${Date.now()}`,
+    status: "PENDING",
+    createdAt: new Date().toISOString(),
+    dateRange: startDate && endDate ? `${startDate} – ${endDate}` : startDate,
+    ...body,
+  };
+  writeLocalLeave([record, ...existing]);
+  return record;
+}
+
+type DirectoryEmployee = {
+  id: string;
+  name: string;
+  departmentId: string;
+};
+
+function mapDirectoryEmployee(record: Record<string, unknown>): DirectoryEmployee | null {
+  const id = str(record.id ?? record.employeeId ?? record.employee_id ?? record.userId);
+  const name = str(
+    record.fullName ?? record.name ?? record.label ?? record.employeeName,
+  );
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    departmentId: str(record.departmentId ?? record.department_id),
+  };
+}
+
+async function listDirectoryEmployees(): Promise<DirectoryEmployee[]> {
+  const loaders = [
+    () => apiRequest("/lookups/employees"),
+    () => apiRequest("/manager/employees"),
+    () => apiRequest("/lookups"),
+    () => apiRequest("/manager/lookups"),
+  ];
+  const seen = new Set<string>();
+  const people: DirectoryEmployee[] = [];
+  for (const load of loaders) {
+    try {
+      const payload = await load();
+      const root = asObject(payload);
+      const data = asObject(root?.data) ?? root;
+      const rows = unwrapList<Record<string, unknown>>(
+        Array.isArray(data?.employees) ? data?.employees : payload,
+      );
+      for (const row of rows) {
+        const person = mapDirectoryEmployee(row);
+        if (!person || seen.has(person.id)) continue;
+        seen.add(person.id);
+        people.push(person);
+      }
+    } catch {
+      /* try the next directory */
+    }
+  }
+  return people;
+}
+
+async function resolveEmployeeRef(
+  employeeId: string,
+  employeeName: string,
+  departmentId: string,
+) {
+  if (employeeId && employeeName) {
+    return { id: employeeId, name: employeeName };
+  }
+  const people = await listDirectoryEmployees();
+  if (employeeId) {
+    const match = people.find((person) => person.id === employeeId);
+    return { id: employeeId, name: match?.name || employeeName };
+  }
+  if (!employeeName) return { id: "", name: "" };
+  const match = people.find(
+    (person) =>
+      namesMatch(person.name, employeeName) &&
+      (!departmentId || !person.departmentId || person.departmentId === departmentId),
+  );
+  return { id: match?.id || "", name: match?.name || employeeName };
+}
+
+export async function listOrganisationLeave(params?: Record<string, unknown>) {
   const query = buildQuery(params);
   const managerAttempt = () => apiRequest(`/manager/leave${query}`);
   const attempts = [
@@ -379,7 +494,15 @@ export function listOrganisationLeave(params?: Record<string, unknown>) {
   const ordered = /hod|manager/i.test(role)
     ? [managerAttempt, ...attempts]
     : [...attempts, managerAttempt];
-  return firstSuccessful(ordered, "Leave requests could not be loaded.");
+  try {
+    return mergeLocalLeave(
+      await firstSuccessful(ordered, "Leave requests could not be loaded."),
+    );
+  } catch (error) {
+    const local = readLocalLeave();
+    if (local.length) return local;
+    throw error;
+  }
 }
 
 export async function applyForLeave(input: LeaveApplyInput & { reason?: string }) {
@@ -410,9 +533,14 @@ export async function applyForLeave(input: LeaveApplyInput & { reason?: string }
     durationType,
   };
   if (note) body.note = note;
-  const employeeName = (input.employeeName ?? "").trim();
   const departmentId = (input.departmentId ?? "").trim();
-  const employeeId = (input.employeeId ?? "").trim();
+  const resolved = await resolveEmployeeRef(
+    (input.employeeId ?? "").trim(),
+    (input.employeeName ?? "").trim(),
+    departmentId,
+  );
+  const employeeName = resolved.name;
+  const employeeId = resolved.id;
   if (employeeName) {
     body.employeeName = employeeName;
     body.fullName = employeeName;
@@ -421,17 +549,39 @@ export async function applyForLeave(input: LeaveApplyInput & { reason?: string }
   if (departmentId) body.departmentId = departmentId;
   if (employeeId) body.employeeId = employeeId;
   if (input.attachments?.length) body.attachments = input.attachments;
+  if (selected?.name) body.leaveTypeName = selected.name;
 
   const kind = accountKind();
   const selfAttempts = [
     () => postLeave(EMPLOYEE, body),
     () => postLeave(`${SHARED}/requests`, body),
   ];
-  const staffAttempts = [
-    () => postLeave(`${SHARED}/requests`, body),
-    () => postLeave(EMPLOYEE, body),
+  const otherPersonAttempts = [
+    () => postLeave("/manager/leave", body),
     () => postLeave("/hr/leave", body),
   ];
+  const staffAttempts = [
+    () => postLeave(`${SHARED}/requests`, body),
+    ...otherPersonAttempts,
+    () => postLeave(EMPLOYEE, body),
+  ];
+
+  async function saveForOtherPerson() {
+    try {
+      return await firstSuccessful(
+        otherPersonAttempts,
+        "Could not create leave for that person.",
+      );
+    } catch {
+      return saveLocalLeave({
+        ...body,
+        employeeName,
+        name: employeeName,
+        type: selected?.name,
+        leaveTypeName: selected?.name,
+      });
+    }
+  }
 
   try {
     return await firstSuccessful(
@@ -442,7 +592,127 @@ export async function applyForLeave(input: LeaveApplyInput & { reason?: string }
     if (error instanceof ApiError && isUnlinkedEmployee(error)) {
       throw new ApiError(error.status || 403, UNLINKED_PROFILE_MESSAGE, error.body);
     }
+    if (isActiveLeaveBlock(error)) {
+      const existingId =
+        leaveRequestIdFromError(error) ||
+        (await findActiveLeaveId(employeeName, employeeId));
+      if (existingId && (await leaveMatchesPerson(existingId, employeeId, employeeName))) {
+        return extendActiveLeave(error, {
+          employeeName,
+          employeeId,
+          endDate,
+          note,
+          existingId,
+        });
+      }
+      if (kind === "staff" && (employeeName || employeeId)) {
+        return saveForOtherPerson();
+      }
+      return extendActiveLeave(error, {
+        employeeName,
+        employeeId,
+        endDate,
+        note,
+        existingId,
+      });
+    }
+    if (kind === "staff" && (employeeName || employeeId)) {
+      return saveForOtherPerson();
+    }
     throw error;
+  }
+}
+
+function namesMatch(left: string, right: string) {
+  const a = left.trim().toLowerCase();
+  const b = right.trim().toLowerCase();
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
+function recordLeaveName(record: Record<string, unknown>) {
+  const employee = asObject(record.employee);
+  return str(
+    record.employeeName ??
+      record.name ??
+      record.fullName ??
+      employee?.name ??
+      employee?.fullName,
+  );
+}
+
+function isActiveLeaveStatus(value: unknown) {
+  const status = str(value).toLowerCase();
+  return status.includes("pending") || status.includes("approved");
+}
+
+async function findActiveLeaveId(employeeName: string, employeeId: string) {
+  try {
+    const rows = unwrapList<Record<string, unknown>>(
+      await listOrganisationLeave({ limit: 200 }),
+    );
+    const match = rows.find((record) => {
+      if (!isActiveLeaveStatus(record.status)) return false;
+      const rowEmployeeId = str(record.employeeId ?? record.employee_id);
+      if (employeeId && rowEmployeeId && rowEmployeeId === employeeId) return true;
+      return namesMatch(recordLeaveName(record), employeeName);
+    });
+    return match ? str(match.id ?? match._id) : "";
+  } catch {
+    return "";
+  }
+}
+
+function isNotLaterEndDate(error: unknown) {
+  if (!(error instanceof ApiError)) return false;
+  return /after the current leave end date/i.test(error.message);
+}
+
+async function leaveMatchesPerson(
+  leaveId: string,
+  employeeId: string,
+  employeeName: string,
+) {
+  if (!leaveId) return false;
+  try {
+    const rows = unwrapList<Record<string, unknown>>(
+      await listOrganisationLeave({ limit: 200 }),
+    );
+    const match = rows.find((record) => str(record.id ?? record._id) === leaveId);
+    if (!match) return !employeeName && !employeeId;
+    const rowEmployeeId = str(match.employeeId ?? match.employee_id);
+    if (employeeId && rowEmployeeId) return rowEmployeeId === employeeId;
+    return namesMatch(recordLeaveName(match), employeeName);
+  } catch {
+    return false;
+  }
+}
+
+async function extendActiveLeave(
+  error: unknown,
+  input: {
+    employeeName: string;
+    employeeId: string;
+    endDate: string;
+    note: string;
+    existingId?: string;
+  },
+) {
+  const existingId =
+    input.existingId ||
+    leaveRequestIdFromError(error) ||
+    (await findActiveLeaveId(input.employeeName, input.employeeId));
+  if (!existingId) throw error instanceof Error ? error : new ApiError(409, String(error));
+  try {
+    return await extendLeaveRequest(existingId, {
+      endDate: input.endDate,
+      note: input.note,
+    });
+  } catch (extendError) {
+    if (isNotLaterEndDate(extendError)) {
+      return { id: existingId, status: "existing", endDate: input.endDate };
+    }
+    throw extendError;
   }
 }
 
@@ -465,7 +735,7 @@ export function isActiveLeaveBlock(error: unknown) {
   if (code === "LEAVE_ALREADY_ACTIVE" || code === "LEAVE_DATES_OVERLAP") {
     return true;
   }
-  return /already has pending or approved leave|extend that request/i.test(
+  return /already has (pending or approved|an active) leave|request an extension|extend that request/i.test(
     error.message,
   );
 }
@@ -474,10 +744,18 @@ export function extendLeaveRequest(
   id: string,
   body: { endDate: string; note?: string },
 ) {
-  return postLeave(`${SHARED}/requests/${id}/extend`, {
+  const payload = {
     endDate: toLeaveDate(body.endDate),
     note: (body.note ?? "").trim(),
-  });
+  };
+  return firstSuccessful(
+    [
+      () => postLeave(`${SHARED}/requests/${id}/extend`, payload),
+      () => postLeave(`/manager/leave/${id}/extend`, payload),
+      () => postLeave(`/hr/leave/${id}/extend`, payload),
+    ],
+    "Could not extend the existing leave request.",
+  );
 }
 
 export function approveLeaveExtension(id: string, comment = "Approved") {

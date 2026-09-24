@@ -132,18 +132,14 @@ export function LeavePage() {
             employees: [],
             locations: [],
           }))
-        : lookupsApi
-            .departments()
-            .then((payload) => ({
-              departments: listFrom(payload),
-              employees: [],
-              locations: [],
-            }))
-            .catch(() => ({
-              departments: [],
-              employees: [],
-              locations: [],
-            })),
+        : Promise.all([
+            lookupsApi.departments().catch(() => []),
+            lookupsApi.employees().catch(() => []),
+          ]).then(([departments, employees]) => ({
+            departments: listFrom(departments),
+            employees: listFrom(employees),
+            locations: [],
+          })),
     [manager],
   );
 
@@ -177,10 +173,33 @@ export function LeavePage() {
       .map((item) => ({ label: item.name, value: item.id }));
   }, [lookupData]);
 
+  const employeeOptions = useMemo(() => {
+    return listFrom(lookupData?.employees ?? undefined)
+      .map((record) => {
+        const id = String(
+          record.id ?? record.employeeId ?? record.employee_id ?? record.userId ?? "",
+        );
+        const name = String(
+          record.fullName ?? record.name ?? record.label ?? record.employeeName ?? "",
+        ).trim();
+        if (!id || !name) return null;
+        return { label: name, value: id };
+      })
+      .filter((option): option is { label: string; value: string } => Boolean(option));
+  }, [lookupData]);
+
   const createFields = useMemo(() => {
     const types = Array.isArray(typeData) ? typeData : [];
     return [
-      { name: "employeeName", label: "Employee name", required: true },
+      employeeOptions.length > 0
+        ? {
+            name: "employeeId",
+            label: "Employee",
+            type: "select" as const,
+            required: true,
+            options: employeeOptions,
+          }
+        : { name: "employeeName", label: "Employee name", required: true },
       {
         name: "departmentId",
         label: "Department",
@@ -200,7 +219,7 @@ export function LeavePage() {
         };
       }),
     ];
-  }, [departmentOptions, typeData]);
+  }, [departmentOptions, employeeOptions, typeData]);
 
   const visibleRequests = useMemo(() => {
     const source = activeTab === "My leave" ? myLeave : leaveRequests;
@@ -256,13 +275,17 @@ export function LeavePage() {
 
   async function handleRequestLeave(values: Record<string, string>) {
     await runAction("Request leave", async () => {
+      const selectedEmployee = employeeOptions.find(
+        (option) => option.value === values.employeeId,
+      );
       const input = {
         leaveTypeId: values.leaveTypeId,
         startDate: values.startDate,
         endDate: values.endDate,
         durationType: "FULL_DAY" as const,
         note: values.reason,
-        employeeName: values.employeeName,
+        employeeId: values.employeeId,
+        employeeName: selectedEmployee?.label || values.employeeName,
         departmentId: values.departmentId,
       };
       try {

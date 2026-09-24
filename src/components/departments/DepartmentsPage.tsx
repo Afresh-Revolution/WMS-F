@@ -103,7 +103,7 @@ export function DepartmentsPage() {
   const { data, loading, error, refetch } = useAsyncData(async () => {
     if (manager) {
       return {
-        departments: await managerApi.listDepartments(),
+        departments: await managerApi.listDepartments({ limit: 200 }),
         headcount: null,
         overview: null,
       };
@@ -224,7 +224,12 @@ export function DepartmentsPage() {
       const description = values.description.trim();
       const hodId = values.hodId.trim();
       if (description) body.description = description;
-      if (hodId) body.hodId = hodId;
+      if (hodId) {
+        body.hodId = hodId;
+        const hodLabel = (hodOptions ?? []).find((option) => option.id === hodId)
+          ?.label;
+        if (hodLabel) body.hodName = hodLabel.split(" (")[0];
+      }
       await superAdminApi.departments.create(body);
       refetch();
     });
@@ -256,14 +261,16 @@ export function DepartmentsPage() {
             the company.
           </p>
         </div>
-        <button
-          type="button"
-          className={styles.addButton}
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus size={16} strokeWidth={2.5} />
-          Add department
-        </button>
+        {manager ? null : (
+          <button
+            type="button"
+            className={styles.addButton}
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            Add department
+          </button>
+        )}
       </div>
 
       <div className={styles.stats}>
@@ -356,16 +363,18 @@ export function DepartmentsPage() {
         )}
       </div>
 
-        <SimpleModal
-          open={addOpen}
-          title="Add department"
-          fields={addDepartmentFields}
-          submitLabel="Create department"
-          showClose
-          appearance="soft"
-          onClose={() => setAddOpen(false)}
-          onSubmit={handleAddDepartment}
-        />
+        {manager ? null : (
+          <SimpleModal
+            open={addOpen}
+            title="Add department"
+            fields={addDepartmentFields}
+            submitLabel="Create department"
+            showClose
+            appearance="soft"
+            onClose={() => setAddOpen(false)}
+            onSubmit={handleAddDepartment}
+          />
+        )}
 
         {selectedDepartment ? (
           <DepartmentDetailDrawer

@@ -2,7 +2,7 @@
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
-import { Download, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { CircleDollarSign, Download, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
@@ -27,41 +27,78 @@ const statusClass: Record<ExpenseStatus, string> = {
   Rejected: styles.statusRejected,
 };
 
+const expenseCategoryOptions = [
+  { label: "Meals", value: "Meals" },
+  { label: "Transport", value: "Transport" },
+  { label: "Accommodation", value: "Accommodation" },
+  { label: "Fuel", value: "Fuel" },
+  { label: "Office Supplies", value: "Office Supplies" },
+  { label: "Communication", value: "Communication" },
+  { label: "Travel", value: "Travel" },
+  { label: "Client Entertainment", value: "Client Entertainment" },
+  { label: "Training", value: "Training" },
+  { label: "Software", value: "Software" },
+  { label: "Equipment", value: "Equipment" },
+  { label: "Medical", value: "Medical" },
+  { label: "Internet", value: "Internet" },
+  { label: "Other", value: "Other" },
+];
+
 const createFields = [
-  { name: "description", label: "Description", required: true },
+  {
+    name: "description",
+    label: "Description",
+    required: true,
+    fullWidth: true,
+    placeholder: "What was this expense for?",
+  },
+  {
+    name: "amount",
+    label: "Amount (₦)",
+    type: "number" as const,
+    required: true,
+    pair: "amount",
+    defaultValue: "0.00",
+    min: 0,
+    step: "0.01",
+  },
+  {
+    name: "date",
+    label: "Date",
+    type: "date" as const,
+    required: true,
+    pair: "amount",
+    placeholder: "mm/dd/yyyy",
+  },
   {
     name: "category",
     label: "Category",
     type: "select" as const,
+    required: true,
+    fullWidth: true,
     defaultValue: "Meals",
-    options: [
-      { label: "Meals", value: "Meals" },
-      { label: "Transport", value: "Transport" },
-      { label: "Accommodation", value: "Accommodation" },
-      { label: "Fuel", value: "Fuel" },
-      { label: "Office Supplies", value: "Office Supplies" },
-      { label: "Communication", value: "Communication" },
-      { label: "Travel", value: "Travel" },
-      { label: "Client Entertainment", value: "Client Entertainment" },
-      { label: "Training", value: "Training" },
-      { label: "Software", value: "Software" },
-      { label: "Equipment", value: "Equipment" },
-      { label: "Medical", value: "Medical" },
-      { label: "Internet", value: "Internet" },
-      { label: "Other", value: "Other" },
-    ],
+    options: expenseCategoryOptions,
   },
-  { name: "date", label: "Date", type: "date" as const, required: true },
-  { name: "amount", label: "Amount", required: true, placeholder: "₦ 0" },
+  {
+    name: "notes",
+    label: "Notes",
+    type: "textarea" as const,
+    fullWidth: true,
+    rows: 2,
+    placeholder: "Optional context",
+  },
 ];
 
 function expenseWriteBody(values: Record<string, string>) {
   const amount = Number(String(values.amount ?? "").replace(/[^\d.]/g, ""));
+  const notes = values.notes.trim();
   return {
     description: values.description.trim(),
     category: values.category.trim() || "Other",
     date: values.date,
     amount,
+    notes,
+    note: notes,
   };
 }
 
@@ -336,9 +373,11 @@ export function FinanceExpensesPage() {
       <SimpleModal
         open={createOpen}
         title="Submit expense claim"
-        description="Add a reimbursable expense. A receipt is optional."
         fields={createFields}
         submitLabel="Submit claim"
+        submitIcon={<CircleDollarSign size={16} strokeWidth={2.25} />}
+        showClose
+        appearance="soft"
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />

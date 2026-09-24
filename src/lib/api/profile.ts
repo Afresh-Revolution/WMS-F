@@ -1,7 +1,16 @@
-import { apiRequest, buildQuery } from "./client";
+import { apiRequest, buildQuery, ApiError } from "./client";
 import type { ApiListResponse, Id } from "./types";
 
 export type ProfileRecord = Record<string, unknown>;
+
+function passwordPayload(body: { currentPassword: string; newPassword: string }) {
+  return {
+    currentPassword: body.currentPassword,
+    newPassword: body.newPassword,
+    current_password: body.currentPassword,
+    new_password: body.newPassword,
+  };
+}
 
 export const profileApi = {
   get: () => apiRequest<ProfileRecord>("/profile"),
@@ -12,10 +21,29 @@ export const profileApi = {
   patch: (body: Record<string, unknown>) =>
     apiRequest<ProfileRecord>("/profile", { method: "PATCH", body }),
 
-  changePassword: (body: {
+  changePassword: async (body: {
     currentPassword: string;
     newPassword: string;
-  }) => apiRequest<void>("/profile/password", { method: "PUT", body }),
+  }) => {
+    const payload = passwordPayload(body);
+    try {
+      return await apiRequest<void>("/auth/change-password", {
+        method: "POST",
+        body: payload,
+      });
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 404 || error.status === 405)
+      ) {
+        return apiRequest<void>("/profile/password", {
+          method: "PUT",
+          body: payload,
+        });
+      }
+      throw error;
+    }
+  },
 
   uploadAvatar: (file: File) => {
     const form = new FormData();

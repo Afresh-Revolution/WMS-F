@@ -273,6 +273,7 @@
 .empty {
   margin: 0;
   padding: 28px 22px;
+  text-align: center;
   border: 1px dashed #ebe6e1;
   border-radius: 16px;
   background: #fff;

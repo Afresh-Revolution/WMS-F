@@ -112,10 +112,13 @@ function mapMeeting(record: Record<string, unknown>, index: number): ManagedMeet
     location,
     virtual,
     attendees: num(record.attendeeCount, attendeeRecords.length),
-    audience: mapAudience(record.audience ?? record.for),
+    audience: mapAudience(record.audience ?? record.for ?? record.description),
     organiser:
       nestedStr(
-        record.organiser ?? record.organizer ?? record.createdBy,
+        record.organiser ??
+          record.organizer ??
+          record.organizerName ??
+          record.createdBy,
         ["name", "fullName"],
       ) || undefined,
     virtualLink:
@@ -233,7 +236,7 @@ export function SecretaryMeetingsPage() {
       virtual: Boolean(form.virtualLink) || location.toLowerCase().includes("virtual"),
       attendees: 2,
       audience: mapAudience(form.for),
-      organiser: form.organiser,
+      organiser: form.organiser.trim() || undefined,
       virtualLink: form.virtualLink.trim() || undefined,
     };
     await runAction("Schedule meeting", async () => {
@@ -241,15 +244,21 @@ export function SecretaryMeetingsPage() {
       const endsAt = new Date(
         new Date(startsAt).getTime() + Number(mins) * 60_000,
       ).toISOString();
+      const startAt = new Date(startsAt).toISOString();
       await secretaryApi.createMeeting({
         title: next.title,
-        start: new Date(startsAt).toISOString(),
+        description: next.audience,
+        start: startAt,
+        startAt,
         end: endsAt,
+        endAt: endsAt,
         date,
         time: form.time || "10:00",
         durationMinutes: Number(mins),
         location,
         meetingLink: next.virtualLink,
+        organiser: form.organiser.trim() || undefined,
+        organizerName: form.organiser.trim() || undefined,
         audience: next.audience === "For HOD" ? "HOD" : "ADMIN",
         reminders: [],
         attendees: [],
@@ -474,7 +483,13 @@ export function SecretaryMeetingsPage() {
                   <input
                     name="organiser"
                     value={form.organiser}
-                    readOnly
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        organiser: event.target.value,
+                      }))
+                    }
+                    placeholder="e.g. Nina Patel"
                   />
                 </label>
               </div>

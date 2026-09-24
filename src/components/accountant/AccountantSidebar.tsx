@@ -23,6 +23,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { AfreshLogo } from "@/components/layout/AfreshLogo";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { accountantApi, accountantSettled } from "@/lib/api";
 import {
@@ -95,6 +96,7 @@ export function AccountantSidebar({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const { user: currentUser } = useCurrentUser();
   const { data: scopePayload } = useAsyncData(async () => {
     const [scope, notifications] = await Promise.all([
       accountantApi.scope(),
@@ -104,8 +106,14 @@ export function AccountantSidebar({
   }, []);
   const scope = asRecord(unwrapAccountantData(scopePayload?.scope));
   const user = asRecord(scope.user ?? scope.profile ?? scope);
-  const displayName = str(user.name ?? user.fullName, "Accountant");
-  const displayInitials = str(user.initials, initials(displayName) || "AC");
+  const displayName = str(
+    user.name ?? user.fullName ?? currentUser?.name,
+    currentUser?.name || "Accountant",
+  );
+  const displayInitials = str(
+    user.initials ?? currentUser?.initials,
+    initials(displayName) || "—",
+  );
   const unreadFromScope = str(
     asRecord(scope.notifications).unread ?? user.unreadNotifications,
   );

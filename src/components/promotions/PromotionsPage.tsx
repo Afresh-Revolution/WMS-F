@@ -4,11 +4,13 @@ import { useMemo, useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import {
   promotionFilters,
+  type Promotion,
   type PromotionFilter,
   type PromotionStatus,
 } from "@/data/promotions";
 import { PageTopBar } from "@/components/layout/PageTopBar";
 import { SimpleModal } from "@/components/ui/SimpleModal";
+import { PromotionRecommendationDrawer } from "@/components/promotions/PromotionRecommendationDrawer";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { listStaffEmployees, managerApi, superAdminApi } from "@/lib/api";
@@ -54,6 +56,9 @@ export function PromotionsPage() {
   const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<PromotionFilter>("All");
   const [createOpen, setCreateOpen] = useState(false);
+  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(
+    null,
+  );
   const [query, setQuery] = useState("");
 
   const { runAction } = usePageActions();
@@ -279,7 +284,11 @@ export function PromotionsPage() {
           <p className={styles.empty}>No promotions match this filter.</p>
         ) : (
           filteredPromotions.map((promotion) => (
-            <article key={promotion.id} className={styles.listRow}>
+            <article
+              key={promotion.id}
+              className={styles.listRow}
+              onClick={() => setSelectedPromotion(promotion)}
+            >
               <div className={styles.rowIdentity}>
                 <span className={styles.avatar}>{promotion.initials}</span>
                 <div className={styles.rowBody}>
@@ -312,7 +321,17 @@ export function PromotionsPage() {
                 <span className={statusClass[promotion.status]}>
                   {statusLabels[promotion.status]}
                 </span>
-                <ChevronRight size={18} className={styles.chevron} />
+                <button
+                  type="button"
+                  className={styles.openButton}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedPromotion(promotion);
+                  }}
+                  aria-label={`View ${promotion.name} recommendation`}
+                >
+                  <ChevronRight size={18} />
+                </button>
               </div>
             </article>
           ))
@@ -333,6 +352,15 @@ export function PromotionsPage() {
         onSubmit={handleSubmitPromotion}
         onSecondary={handleDraftPromotion}
       />
+
+      {selectedPromotion ? (
+        <PromotionRecommendationDrawer
+          promotion={selectedPromotion}
+          manager={manager}
+          onClose={() => setSelectedPromotion(null)}
+          onUpdated={refetch}
+        />
+      ) : null}
     </div>
   );
 }

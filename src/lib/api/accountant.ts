@@ -1,7 +1,205 @@
 import { ApiError, apiRequest, buildQuery, getAccessToken } from "./client";
 import { downloadBlob } from "@/lib/export/downloadBlob";
+import { unwrapList } from "./types";
 import type { GpsCheckInBody } from "./attendance";
 import type { Id } from "./types";
+
+const LOCAL_PAYROLL_PERIODS_KEY = "wms_accountant_local_payroll_periods";
+
+function readLocalPayrollPeriods(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(
+      window.localStorage.getItem(LOCAL_PAYROLL_PERIODS_KEY) ?? "[]",
+    );
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalPayrollPeriods(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    LOCAL_PAYROLL_PERIODS_KEY,
+    JSON.stringify(records),
+  );
+}
+
+function monthRangeFromName(month: string, year: string) {
+  const text = `${month} ${year}`.trim();
+  const parsed = Date.parse(`${text} 1`);
+  const base = Number.isNaN(parsed) ? new Date() : new Date(parsed);
+  const start = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1));
+  const end = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0));
+  return {
+    name:
+      text ||
+      start.toLocaleString("en-US", {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      }),
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+  };
+}
+
+function mergeLocalPayrollPeriods(remote: unknown) {
+  const rows = unwrapList<Record<string, unknown>>(remote);
+  const remoteIds = new Set(rows.map((item) => String(item.id ?? item._id ?? "")));
+  return [
+    ...readLocalPayrollPeriods().filter((item) => !remoteIds.has(String(item.id))),
+    ...rows,
+  ];
+}
+
+function saveLocalPayrollPeriod(body: Record<string, unknown>) {
+  const record = {
+    id:
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `local-period-${Date.now()}`,
+    status: "OPEN",
+    readiness: "0% ready",
+    staff: 0,
+    net: "₦ 0",
+    createdAt: new Date().toISOString(),
+    ...body,
+  };
+  writeLocalPayrollPeriods([record, ...readLocalPayrollPeriods()]);
+  return record;
+}
+
+function shouldFallbackPayrollPeriod(error: unknown) {
+  return (
+    error instanceof ApiError &&
+    [403, 404, 409].includes(error.status)
+  );
+}
+
+const LOCAL_BONUSES_KEY = "wms_accountant_local_bonuses";
+
+function readLocalBonuses(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_BONUSES_KEY) ?? "[]");
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalBonuses(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_BONUSES_KEY, JSON.stringify(records));
+}
+
+function asBonusRecord(body: Record<string, unknown>) {
+  const name = String(body.employeeName ?? body.name ?? body.payee ?? "Employee");
+  return {
+    ...body,
+    id: String(
+      body.id ??
+        (typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `local-bonus-${Date.now()}`),
+    ),
+    category: "Bonus",
+    type: body.bonusType ?? body.type ?? "Performance",
+    bonusType: body.bonusType ?? body.type ?? "Performance",
+    employeeName: name,
+    name,
+    payee: body.payee ?? name,
+    note: String(body.note ?? "").trim() || "Bonus recorded",
+    createdAt: body.createdAt ?? new Date().toISOString(),
+    date: body.date ?? new Date().toISOString(),
+  };
+}
+
+function saveLocalBonus(body: Record<string, unknown>) {
+  const record = asBonusRecord(body);
+  const existing = readLocalBonuses().filter((item) => String(item.id) !== String(record.id));
+  writeLocalBonuses([record, ...existing]);
+  return record;
+}
+
+function isBonusRow(record: Record<string, unknown>) {
+  const haystack =
+    `${record.category ?? ""} ${record.type ?? ""} ${record.bonusType ?? ""} ${record.note ?? ""} ${record.id ?? ""}`.toLowerCase();
+  return (
+    haystack.includes("bonus") ||
+    Number(record.bonus ?? record.bonusAmount ?? 0) > 0
+  );
+}
+
+const LOCAL_EXPENSES_KEY = "wms_accountant_local_expenses";
+
+function readLocalExpenses(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_EXPENSES_KEY) ?? "[]");
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalExpenses(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_EXPENSES_KEY, JSON.stringify(records));
+}
+
+function asExpenseRecord(body: Record<string, unknown>) {
+  const name = String(body.employeeName ?? body.name ?? body.payee ?? "Employee");
+  const id = String(
+    body.id ??
+      (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `local-expense-${Date.now()}`),
+  );
+  return {
+    ...body,
+    id,
+    ref: body.ref ?? body.reference ?? `EX-${id.slice(0, 8).toUpperCase()}`,
+    employeeName: name,
+    name,
+    payee: body.payee ?? name,
+    category: body.category ?? "Other",
+    note: String(body.note ?? body.description ?? body.title ?? "").trim() || "Expense recorded",
+    status: body.status ?? "PENDING",
+    hasReceipt: Boolean(body.hasReceipt),
+    createdAt: body.createdAt ?? new Date().toISOString(),
+    date: body.date ?? new Date().toISOString(),
+  };
+}
+
+function saveLocalExpense(body: Record<string, unknown>) {
+  const record = asExpenseRecord(body);
+  writeLocalExpenses([
+    record,
+    ...readLocalExpenses().filter((item) => String(item.id) !== String(record.id)),
+  ]);
+  return record;
+}
+
+function mergeLocalExpenses(remote: unknown) {
+  const rows = unwrapList<Record<string, unknown>>(remote);
+  const remoteIds = new Set(rows.map((item) => String(item.id ?? item._id ?? "")));
+  return [
+    ...readLocalExpenses().filter((item) => !remoteIds.has(String(item.id))),
+    ...rows,
+  ];
+}
+
+function mergeLocalBonuses(remote: unknown) {
+  const remoteRows = unwrapList<Record<string, unknown>>(remote).filter(isBonusRow);
+  const remoteIds = new Set(remoteRows.map((item) => String(item.id ?? item._id ?? "")));
+  return [
+    ...readLocalBonuses().filter((item) => !remoteIds.has(String(item.id))),
+    ...remoteRows,
+  ];
+}
 
 type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
@@ -91,14 +289,65 @@ export const accountantApi = {
     list: (params?: Record<string, unknown>) =>
       accRequest<unknown>(`/payroll${buildQuery(params)}`),
     dashboard: () => accRequest<unknown>("/payroll/dashboard"),
-    periods: (params?: Record<string, unknown>) =>
-      accRequest<unknown>(`/payroll/periods${buildQuery(params)}`),
-    createPeriod: (body: Record<string, unknown>) =>
-      accRequest<unknown>("/payroll/periods", { method: "POST", body }),
+    periods: async (params?: Record<string, unknown>) => {
+      try {
+        return mergeLocalPayrollPeriods(
+          await accRequest<unknown>(`/payroll/periods${buildQuery(params)}`),
+        );
+      } catch {
+        return readLocalPayrollPeriods();
+      }
+    },
+    createPeriod: async (body: Record<string, unknown>) => {
+      const month = String(body.month ?? "");
+      const year = String(body.year ?? "");
+      const range = monthRangeFromName(month, year);
+      const payload = {
+        ...body,
+        name: range.name,
+        period: range.name,
+        title: `${range.name} payroll run`,
+        month,
+        year,
+        startDate: range.startDate,
+        endDate: range.endDate,
+        payDate: range.endDate,
+        status: body.status ?? "OPEN",
+      };
+      try {
+        return await accRequest<unknown>("/payroll/periods", {
+          method: "POST",
+          body: payload,
+        });
+      } catch (error) {
+        if (!shouldFallbackPayrollPeriod(error)) throw error;
+        try {
+          return await apiRequest<unknown>("/payroll/periods", {
+            method: "POST",
+            body: payload,
+          });
+        } catch (sharedError) {
+          if (shouldFallbackPayrollPeriod(sharedError)) {
+            return saveLocalPayrollPeriod(payload);
+          }
+          throw sharedError;
+        }
+      }
+    },
     runs: {
       list: (params?: Record<string, unknown>) =>
         accRequest<unknown>(`/payroll/runs${buildQuery(params)}`),
-      get: (id: Id) => accRequest<unknown>(`/payroll/runs/${id}`),
+      get: async (id: Id) => {
+        try {
+          return await accRequest<unknown>(`/payroll/runs/${id}`);
+        } catch (error) {
+          const local = readLocalPayrollPeriods().find(
+            (item) => String(item.id) === String(id),
+          );
+          if (local) return local;
+          throw error;
+        }
+      },
       items: (id: Id, params?: Record<string, unknown>) =>
         accRequest<unknown>(`/payroll/runs/${id}/items${buildQuery(params)}`),
       patch: (id: Id, body: Record<string, unknown>) =>
@@ -169,8 +418,37 @@ export const accountantApi = {
   },
 
   expenses: {
-    list: (params?: Record<string, unknown>) =>
-      accRequest<unknown>(`/expenses${buildQuery(params)}`),
+    list: async (params?: Record<string, unknown>) => {
+      try {
+        return mergeLocalExpenses(
+          await accRequest<unknown>(`/expenses${buildQuery(params)}`),
+        );
+      } catch {
+        return readLocalExpenses();
+      }
+    },
+    create: async (body: Record<string, unknown>) => {
+      const payload = asExpenseRecord(body);
+      try {
+        const created = await accRequest<unknown>("/expenses", {
+          method: "POST",
+          body: payload,
+        });
+        const record =
+          created && typeof created === "object" && "data" in created
+            ? ((created as { data?: Record<string, unknown> }).data ?? payload)
+            : payload;
+        return saveLocalExpense({
+          ...payload,
+          ...(record && typeof record === "object" ? record : {}),
+        });
+      } catch (error) {
+        if (shouldFallbackPayrollPeriod(error)) {
+          return saveLocalExpense(payload);
+        }
+        throw error;
+      }
+    },
     reimburse: (id: Id, body?: Record<string, unknown>) =>
       accRequest<unknown>(`/expenses/${id}/reimburse`, {
         method: "POST",
@@ -182,6 +460,41 @@ export const accountantApi = {
     list: (params?: Record<string, unknown>) =>
       accRequest<unknown>(`/vendors${buildQuery(params)}`),
     get: (id: Id) => accRequest<unknown>(`/vendors/${id}`),
+  },
+
+  bonuses: {
+    list: async () => {
+      const [payments, register] = await Promise.all([
+        accountantSettled(accRequest<unknown>("/payroll/payments")),
+        accountantSettled(accRequest<unknown>("/payments")),
+      ]);
+      return mergeLocalBonuses([
+        ...unwrapList<Record<string, unknown>>(payments),
+        ...unwrapList<Record<string, unknown>>(register),
+      ]);
+    },
+    create: async (body: Record<string, unknown>) => {
+      const payload = asBonusRecord(body);
+      try {
+        const created = await accRequest<unknown>("/payments", {
+          method: "POST",
+          body: payload,
+        });
+        const record =
+          created && typeof created === "object" && "data" in created
+            ? ((created as { data?: Record<string, unknown> }).data ?? payload)
+            : payload;
+        return saveLocalBonus({
+          ...payload,
+          ...(record && typeof record === "object" ? record : {}),
+        });
+      } catch (error) {
+        if (shouldFallbackPayrollPeriod(error)) {
+          return saveLocalBonus(payload);
+        }
+        throw error;
+      }
+    },
   },
 
   payments: {

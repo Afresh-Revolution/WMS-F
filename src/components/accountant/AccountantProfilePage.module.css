@@ -549,6 +549,13 @@
   color: #fff;
 }
 
+.empty {
+  margin: 0;
+  padding: 8px 0;
+  color: #a8a29e;
+  font-size: 13px;
+}
+
 @media (max-width: 900px) {
   .overviewGrid {
     grid-template-columns: 1fr;

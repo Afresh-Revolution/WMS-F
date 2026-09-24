@@ -287,8 +287,16 @@
 
 .panelTitle {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--afresh-orange);
+}
+
+.breakdownTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--afresh-orange);
 }
 
@@ -323,9 +331,9 @@
 .table th {
   padding: 10px 12px;
   text-align: left;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #c4bdb6;
   border-bottom: 1px solid #f3efe9;
@@ -334,6 +342,7 @@
 .table td {
   padding: 14px 12px;
   font-size: 14px;
+  font-weight: 500;
   color: #44403c;
   border-bottom: 1px solid #f6f3ef;
   vertical-align: middle;
@@ -345,27 +354,54 @@
 
 .numeric {
   text-align: right !important;
+  font-size: 14px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
-.countPresent {
-  color: #16a34a;
+.breakdownTable th {
+  padding: 12px 16px;
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.1em;
+  color: #c4bdb6;
+  background: #fcfaf8;
+}
+
+.breakdownTable td {
+  padding: 13px 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.deptName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--afresh-ink);
+}
+
+.countPresent,
+.countLate,
+.countAbsent,
+.countLeave {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.countPresent {
+  color: #5f8f62;
 }
 
 .countLate {
-  color: var(--afresh-orange);
-  font-weight: 600;
+  color: #c4a24a;
 }
 
 .countAbsent {
-  color: #dc2626;
-  font-weight: 600;
+  color: #e07a72;
 }
 
 .countLeave {
-  color: #a8a29e;
-  font-weight: 600;
+  color: #b0a8a2;
 }
 
 .toolbar {
@@ -432,7 +468,7 @@
 .employeeName {
   margin: 0;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--afresh-ink);
 }
 

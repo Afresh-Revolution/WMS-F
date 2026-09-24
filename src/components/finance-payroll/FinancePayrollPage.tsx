@@ -13,6 +13,7 @@ import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTab
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { SimpleModal } from "@/components/ui/SimpleModal";
+import { payrollMonthOptions } from "@/data/accountantPayroll";
 import {
   payrollSectionTabs,
   type PayRun,
@@ -31,8 +32,30 @@ const statusClass: Record<PayRunStatus, string> = {
   Completed: styles.statusCompleted,
 };
 
+const now = new Date();
+const defaultPayMonth = now.toLocaleString("en-US", { month: "long" });
+const defaultPayYear = String(now.getFullYear());
+
 const runPayrollFields = [
-  { name: "period", label: "Pay period", required: true, placeholder: "July 2026" },
+  {
+    name: "month",
+    label: "Pay month",
+    type: "select" as const,
+    required: true,
+    defaultValue: defaultPayMonth,
+    options: payrollMonthOptions.map((month) => ({ label: month, value: month })),
+    group: "Pay period",
+  },
+  {
+    name: "year",
+    label: "Year",
+    type: "number" as const,
+    required: true,
+    defaultValue: defaultPayYear,
+    min: 2000,
+    max: 2100,
+    group: "Pay period",
+  },
   { name: "notes", label: "Notes", type: "textarea" as const },
 ];
 
@@ -109,13 +132,19 @@ export function FinancePayrollPage() {
 
   async function handleRunPayroll(values: Record<string, string>) {
     await runAction("Run payroll", async () => {
+      const period = `${values.month} ${values.year}`.trim();
       if (manager) {
         await managerApi.runPayroll({
-          period: values.period,
+          period,
+          month: values.month,
+          year: values.year,
           notes: values.notes,
         });
       } else {
-        await superAdminApi.payroll.collectionAction("run", values);
+        await superAdminApi.payroll.collectionAction("run", {
+          ...values,
+          period,
+        });
       }
       refetch();
     });

@@ -1,15 +1,19 @@
 "use client";
 
-import { FormEvent, useEffect, useId } from "react";
+import { FormEvent, useEffect, useId, useMemo } from "react";
 import { Plus, X } from "lucide-react";
-import {
-  accountantExpenseCategories,
-  accountantExpenseEmployees,
-} from "@/data/accountantExpenses";
+import { accountantExpenseCategories } from "@/data/accountantExpenses";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { listStaffEmployees } from "@/lib/api";
+import { mapEmployee } from "@/lib/api/mappers";
 import styles from "./RecordExpenseModal.module.css";
 
 export type RecordExpenseValues = {
   employeeId: string;
+  employeeName: string;
+  department: string;
+  initials: string;
+  avatarColor: string;
   category: string;
   amount: string;
   note: string;
@@ -29,6 +33,14 @@ export function RecordExpenseModal({
 }: RecordExpenseModalProps) {
   const titleId = useId();
   const descriptionId = useId();
+  const { data: staffPayload } = useAsyncData(
+    () => listStaffEmployees().catch(() => []),
+    [],
+  );
+  const employees = useMemo(
+    () => (staffPayload ?? []).map(mapEmployee).filter((item) => item.id),
+    [staffPayload],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -48,8 +60,14 @@ export function RecordExpenseModal({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const employeeId = String(form.get("employeeId") ?? "");
+    const employee = employees.find((item) => item.id === employeeId);
     const values: RecordExpenseValues = {
-      employeeId: String(form.get("employeeId") ?? ""),
+      employeeId,
+      employeeName: employee?.name ?? "",
+      department: employee?.department ?? "",
+      initials: employee?.initials ?? "",
+      avatarColor: employee?.avatarColor ?? "",
       category: String(form.get("category") ?? ""),
       amount: String(form.get("amount") ?? "").trim(),
       note: String(form.get("note") ?? "").trim(),
@@ -96,14 +114,14 @@ export function RecordExpenseModal({
             <span>
               Employee <em>*</em>
             </span>
-            <select
-              name="employeeId"
-              defaultValue={accountantExpenseEmployees[0]?.id}
-              required
-            >
-              {accountantExpenseEmployees.map((employee) => (
+            <select name="employeeId" defaultValue="" required>
+              <option value="" disabled>
+                {employees.length ? "Select employee" : "No employees available"}
+              </option>
+              {employees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
                   {employee.name}
+                  {employee.department ? ` · ${employee.department}` : ""}
                 </option>
               ))}
             </select>

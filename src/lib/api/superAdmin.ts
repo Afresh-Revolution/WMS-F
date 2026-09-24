@@ -331,6 +331,13 @@ export const superAdminApi = {
           method: "PATCH",
           body,
         }),
+      return: (id: Id, body?: Record<string, unknown>) =>
+        saRequest<void>(`/hr/promotions/${id}/return`, {
+          method: "PATCH",
+          body,
+        }),
+      get: (id: Id) =>
+        saRequest<Record<string, unknown>>(`/hr/promotions/${id}`),
     },
     salaryAdjustments: {
       list: (params?: Record<string, unknown>) =>

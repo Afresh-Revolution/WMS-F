@@ -6,7 +6,7 @@ import { Check, TrendingUp, X } from "lucide-react";
 import type { SalaryIncrement } from "@/data/salaryIncrements";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { mapSalaryIncrement } from "@/lib/api/mappers";
 import styles from "./SalaryIncrementDrawer.module.css";
 
@@ -59,11 +59,16 @@ function formatPercent(increment: SalaryIncrement) {
   return `${sign}${percent.toFixed(1)}%`;
 }
 
-async function loadIncrement(id: string) {
+async function loadIncrement(id: string, manager: boolean) {
   try {
-    return await superAdminApi.salaryIncrements.get(id);
+    if (manager) return await managerApi.getSalaryRecommendation(id);
+    try {
+      return await superAdminApi.salaryIncrements.get(id);
+    } catch {
+      return await superAdminApi.hr.salaryAdjustments.get(id);
+    }
   } catch {
-    return await superAdminApi.hr.salaryAdjustments.get(id);
+    return null;
   }
 }
 
@@ -84,19 +89,21 @@ async function tryActions(attempts: Array<() => Promise<unknown>>) {
 
 type SalaryIncrementDrawerProps = {
   increment: SalaryIncrement;
+  manager?: boolean;
   onClose: () => void;
   onUpdated: () => void;
 };
 
 export function SalaryIncrementDrawer({
   increment,
+  manager = false,
   onClose,
   onUpdated,
 }: SalaryIncrementDrawerProps) {
   const { runAction } = usePageActions();
   const { data, loading, error } = useAsyncData(
-    () => loadIncrement(increment.id),
-    [increment.id],
+    () => loadIncrement(increment.id, manager),
+    [increment.id, manager],
   );
 
   const detail = useMemo(() => {
@@ -127,7 +134,7 @@ export function SalaryIncrementDrawer({
     };
   }, [onClose]);
 
-  const canDecide = detail.status !== "Approved";
+  const canDecide = detail.status === "Under admin review";
   const statusClass =
     detail.status === "Approved"
       ? styles.statusApproved
@@ -137,31 +144,56 @@ export function SalaryIncrementDrawer({
 
   async function handleApprove() {
     await runAction("Approve increment", async () => {
-      await tryActions([
-        () => superAdminApi.hr.salaryAdjustments.approve(detail.id),
-        () => superAdminApi.salaryIncrements.action(detail.id, "approve"),
-        () =>
-          superAdminApi.salaryIncrements.patch(detail.id, {
-            status: "approved",
-          }),
-      ]);
+      await tryActions(
+        manager
+          ? [() => managerApi.approveSalaryRecommendation(detail.id)]
+          : [
+              () => superAdminApi.hr.salaryAdjustments.approve(detail.id),
+              () => superAdminApi.salaryIncrements.action(detail.id, "approve"),
+              () =>
+                superAdminApi.salaryIncrements.patch(detail.id, {
+                  status: "approved",
+                }),
+            ],
+      );
       onUpdated();
       onClose();
     });
   }
 
   async function handleReturn() {
-    await runAction("Return for revision", async () => {
-      await tryActions([
-        () => superAdminApi.hr.salaryAdjustments.return(detail.id),
-        () => superAdminApi.hr.salaryAdjustments.reject(detail.id),
-        () => superAdminApi.salaryIncrements.action(detail.id, "return"),
-        () => superAdminApi.salaryIncrements.action(detail.id, "reject"),
-        () =>
-          superAdminApi.salaryIncrements.patch(detail.id, {
-            status: "draft",
-          }),
-      ]);
+    await runAction("Return for correction", async () => {
+      await tryActions(
+        manager
+          ? [() => managerApi.returnSalaryRecommendation(detail.id)]
+          : [
+              () => superAdminApi.hr.salaryAdjustments.return(detail.id),
+              () => superAdminApi.salaryIncrements.action(detail.id, "return"),
+              () =>
+                superAdminApi.salaryIncrements.patch(detail.id, {
+                  status: "draft",
+                }),
+            ],
+      );
+      onUpdated();
+      onClose();
+    });
+  }
+
+  async function handleReject() {
+    await runAction("Reject increment", async () => {
+      await tryActions(
+        manager
+          ? [() => managerApi.rejectSalaryRecommendation(detail.id)]
+          : [
+              () => superAdminApi.hr.salaryAdjustments.reject(detail.id),
+              () => superAdminApi.salaryIncrements.action(detail.id, "reject"),
+              () =>
+                superAdminApi.salaryIncrements.patch(detail.id, {
+                  status: "rejected",
+                }),
+            ],
+      );
       onUpdated();
       onClose();
     });
@@ -260,7 +292,14 @@ export function SalaryIncrementDrawer({
               className={styles.secondary}
               onClick={() => void handleReturn()}
             >
-              Return for revision
+              Return for correction
+            </button>
+            <button
+              type="button"
+              className={styles.reject}
+              onClick={() => void handleReject()}
+            >
+              Reject
             </button>
           </div>
         ) : null}

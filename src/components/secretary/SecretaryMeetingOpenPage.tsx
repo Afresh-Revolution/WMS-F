@@ -95,7 +95,10 @@ function mapMeeting(record: Record<string, unknown>, id: string): ManagedMeeting
       Boolean(record.virtual ?? record.meetingLink) ||
       location.toLowerCase().includes("virtual"),
     attendees: people.length,
-    audience: mapAudience(record.audience ?? record.for, "For Admin"),
+    audience: mapAudience(
+      record.audience ?? record.for ?? record.description,
+      "For Admin",
+    ),
     organiser: nestedStr(
       record.organiser ?? record.organizer ?? record.organizerName ?? record.createdBy,
       ["name", "fullName"],

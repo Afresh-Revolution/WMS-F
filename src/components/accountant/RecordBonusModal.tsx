@@ -1,16 +1,19 @@
 "use client";
 
-import { FormEvent, useEffect, useId } from "react";
+import { FormEvent, useEffect, useId, useMemo } from "react";
 import { Plus, X } from "lucide-react";
-import {
-  accountantBonusEmployees,
-  accountantBonusTypes,
-  accountantBonusesPeriod,
-} from "@/data/accountantBonuses";
+import { accountantBonusTypes } from "@/data/accountantBonuses";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { listStaffEmployees } from "@/lib/api";
+import { mapEmployee } from "@/lib/api/mappers";
 import styles from "./RecordBonusModal.module.css";
 
 export type RecordBonusValues = {
   employeeId: string;
+  employeeName: string;
+  department: string;
+  initials: string;
+  avatarColor: string;
   type: string;
   amount: string;
   note: string;
@@ -29,6 +32,14 @@ export function RecordBonusModal({
 }: RecordBonusModalProps) {
   const titleId = useId();
   const descriptionId = useId();
+  const { data: staffPayload } = useAsyncData(
+    () => listStaffEmployees().catch(() => []),
+    [open],
+  );
+  const employees = useMemo(
+    () => (staffPayload ?? []).map(mapEmployee).filter((item) => item.id),
+    [staffPayload],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -48,8 +59,14 @@ export function RecordBonusModal({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const employeeId = String(form.get("employeeId") ?? "");
+    const employee = employees.find((item) => item.id === employeeId);
     const values: RecordBonusValues = {
-      employeeId: String(form.get("employeeId") ?? ""),
+      employeeId,
+      employeeName: employee?.name ?? "",
+      department: employee?.department ?? "",
+      initials: employee?.initials ?? "",
+      avatarColor: employee?.avatarColor ?? "",
       type: String(form.get("type") ?? ""),
       amount: String(form.get("amount") ?? "").trim(),
       note: String(form.get("note") ?? "").trim(),
@@ -86,7 +103,7 @@ export function RecordBonusModal({
             Record bonus
           </h2>
           <p id={descriptionId} className={styles.description}>
-            Added to the {accountantBonusesPeriod} payroll run.
+            Added to the current payroll run.
           </p>
         </div>
 
@@ -95,14 +112,14 @@ export function RecordBonusModal({
             <span>
               Employee <em>*</em>
             </span>
-            <select
-              name="employeeId"
-              defaultValue={accountantBonusEmployees[0]?.id}
-              required
-            >
-              {accountantBonusEmployees.map((employee) => (
+            <select name="employeeId" defaultValue="" required>
+              <option value="" disabled>
+                {employees.length ? "Select employee" : "No employees available"}
+              </option>
+              {employees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
-                  {employee.name} · {employee.department}
+                  {employee.name}
+                  {employee.department ? ` · ${employee.department}` : ""}
                 </option>
               ))}
             </select>

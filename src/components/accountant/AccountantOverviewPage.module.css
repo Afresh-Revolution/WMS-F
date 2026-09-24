@@ -299,6 +299,14 @@
   color: var(--afresh-ink);
 }
 
+.empty {
+  margin: 0;
+  padding: 16px 4px 8px;
+  list-style: none;
+  color: #a8a29e;
+  font-size: 13px;
+}
+
 .cardLink {
   font-size: 12px;
   font-weight: 600;

@@ -16,7 +16,7 @@ import {
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { superAdminApi } from "@/lib/api";
-import { listFrom, mapPurchaseRequest } from "@/lib/api/mappers";
+import { listFrom, mapDepartment, mapPurchaseRequest } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinancePurchasesPage.module.css";
 
@@ -27,12 +27,6 @@ const statusClass: Record<PurchaseStatus, string> = {
   Delivered: styles.statusDelivered,
   Rejected: styles.statusRejected,
 };
-
-const createFields = [
-  { name: "item", label: "Item", required: true },
-  { name: "detail", label: "Details", required: true },
-  { name: "amount", label: "Amount", required: true, placeholder: "₦ 0" },
-];
 
 function isPending(status: PurchaseStatus): boolean {
   return (
@@ -50,10 +44,72 @@ export function FinancePurchasesPage() {
     () => superAdminApi.purchaseRequests.list(),
     [],
   );
+  const { data: departmentData } = useAsyncData(
+    () => superAdminApi.departments.list(),
+    [],
+  );
 
   const purchaseRequests = useMemo(() => {
     return listFrom(data ?? undefined).map((record) => mapPurchaseRequest(record));
   }, [data]);
+
+  const departmentOptions = useMemo(() => {
+    return listFrom(departmentData ?? undefined)
+      .map(mapDepartment)
+      .filter((item) => item.id && item.name)
+      .map((item) => ({ label: item.name, value: item.id }));
+  }, [departmentData]);
+
+  const createFields = useMemo(
+    () => [
+      {
+        name: "item",
+        label: "Item / service description",
+        required: true,
+        fullWidth: true,
+        placeholder: "What needs to be purchased?",
+      },
+      {
+        name: "quantity",
+        label: "Quantity",
+        type: "number" as const,
+        required: true,
+        pair: "qty",
+        defaultValue: "1",
+        min: 1,
+      },
+      {
+        name: "amount",
+        label: "Est. amount (₦)",
+        type: "number" as const,
+        required: true,
+        pair: "qty",
+        defaultValue: "0",
+        min: 0,
+      },
+      {
+        name: "departmentId",
+        label: "Department",
+        type: "select" as const,
+        required: true,
+        fullWidth: true,
+        defaultValue: "",
+        options: [
+          { label: "Select department", value: "" },
+          ...departmentOptions,
+        ],
+      },
+      {
+        name: "reason",
+        label: "Reason",
+        type: "textarea" as const,
+        fullWidth: true,
+        rows: 2,
+        placeholder: "Business justification",
+      },
+    ],
+    [departmentOptions],
+  );
 
   const purchaseStats = useMemo(() => {
     const pending = purchaseRequests.filter((request) =>
@@ -81,8 +137,40 @@ export function FinancePurchasesPage() {
   }, [activeFilter, purchaseRequests, query]);
 
   async function handleCreate(values: Record<string, string>) {
+    const item = values.item.trim();
+    const reason = values.reason.trim();
+    const departmentId = values.departmentId.trim();
+    const quantity = Number(values.quantity);
+    const amount = Number(values.amount);
+    if (!item) {
+      throw new Error("Enter the item or service to purchase.");
+    }
+    if (!departmentId) {
+      throw new Error("Choose a department.");
+    }
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      throw new Error("Enter a quantity of 1 or more.");
+    }
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error("Enter a valid estimated amount.");
+    }
+    const departmentName =
+      departmentOptions.find((option) => option.value === departmentId)?.label ??
+      "";
     await runAction("Create request", async () => {
-      await superAdminApi.purchaseRequests.create(values);
+      await superAdminApi.purchaseRequests.create({
+        item,
+        title: item,
+        description: item,
+        detail: reason,
+        quantity,
+        amount,
+        estimatedAmount: amount,
+        departmentId,
+        department: departmentName,
+        reason,
+        justification: reason,
+      });
       refetch();
     });
   }
@@ -295,9 +383,10 @@ export function FinancePurchasesPage() {
       <SimpleModal
         open={createOpen}
         title="New purchase request"
-        description="Submit a request for procurement review."
         fields={createFields}
         submitLabel="Submit request"
+        showClose
+        appearance="soft"
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />

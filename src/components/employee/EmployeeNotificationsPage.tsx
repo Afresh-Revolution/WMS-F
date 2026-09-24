@@ -89,13 +89,9 @@ export function EmployeeNotificationsPage() {
         async () => {
           const remote = unread.filter((item) => !item.id.startsWith("local-"));
           if (remote.length > 0) {
-            try {
-              await notificationsApi.markAllRead();
-            } catch {
-              await Promise.all(
-                remote.map((item) => notificationsApi.markRead(item.id)),
-              );
-            }
+            await Promise.all(
+              remote.map((item) => employeeApi.notifications.markRead(item.id)),
+            );
           }
           markLocal(unread.map((item) => item.id));
         },

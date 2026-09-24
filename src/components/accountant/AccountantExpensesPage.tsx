@@ -4,6 +4,7 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Bell, Plus, Search, Wallet } from "lucide-react";
+import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import {
   RecordExpenseModal,
@@ -11,13 +12,12 @@ import {
 } from "@/components/accountant/RecordExpenseModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { accountantApi } from "@/lib/api";
+import { accountantApi, asRecord } from "@/lib/api";
 import {
   mapAccountantExpense,
   unwrapAccountantList,
 } from "@/lib/api/accountantMappers";
 import {
-  accountantExpenseEmployees,
   accountantExpenseFilters,
   formatExpenseNaira,
   matchesExpenseFilter,
@@ -38,16 +38,22 @@ export function AccountantExpensesPage() {
   const [filter, setFilter] =
     useState<AccountantExpenseFilter>("Pending Review");
   const [recordOpen, setRecordOpen] = useState(false);
+  const [recorded, setRecorded] = useState<AccountantExpense[]>([]);
   const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
     () => accountantApi.expenses.list(),
     [],
   );
 
-  const expenses = useMemo(
-    () => unwrapAccountantList(data).map(mapAccountantExpense),
-    [data],
-  );
+  const expenses = useMemo(() => {
+    const mapped = unwrapAccountantList(data).map(mapAccountantExpense);
+    const seen = new Set<string>();
+    return [...recorded, ...mapped].filter((item) => {
+      if (!item.id || seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [data, recorded]);
 
   const filtered = useMemo(
     () => expenses.filter((item) => matchesExpenseFilter(item, filter)),
@@ -68,9 +74,13 @@ export function AccountantExpensesPage() {
   );
 
   async function handleRecord(values: RecordExpenseValues) {
-    const employee = accountantExpenseEmployees.find(
-      (item) => item.id === values.employeeId,
-    );
+    const employee = {
+      id: values.employeeId,
+      name: values.employeeName,
+      department: values.department,
+      initials: values.initials,
+      avatarColor: values.avatarColor,
+    };
     const amount = Number(values.amount);
     if (!employee || !Number.isFinite(amount) || amount <= 0) {
       throw new Error("Enter a valid employee and amount");
@@ -79,15 +89,25 @@ export function AccountantExpensesPage() {
     await runAction(
       "Record expense",
       async () => {
-        await accountantApi.payments.create({
-          category: "Expense",
+        const created = await accountantApi.expenses.create({
+          category: values.category,
           employeeId: employee.id,
           employeeName: employee.name,
+          name: employee.name,
           payee: employee.name,
+          department: employee.department,
+          initials: employee.initials,
+          avatarColor: employee.avatarColor,
           amount,
           note: values.note || values.category,
+          title: values.note || values.category,
           hasReceipt: values.hasReceipt,
+          status: "PENDING",
         });
+        setRecorded((current) => [
+          mapAccountantExpense(asRecord(created)),
+          ...current,
+        ]);
         refetch();
       },
       `Expense recorded for ${employee.name}`,
@@ -129,13 +149,7 @@ export function AccountantExpensesPage() {
             <span className={styles.notifDot} aria-hidden />
             <Bell size={16} />
           </Link>
-          <Link
-            href="/accountant/profile"
-            className={styles.avatarChip}
-            aria-label="Profile"
-          >
-            RK
-          </Link>
+          <AccountantProfileChip className={styles.avatarChip} />
         </div>
       </div>
 

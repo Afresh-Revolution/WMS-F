@@ -1,4 +1,4 @@
-import { apiRequest, buildQuery } from "./client";
+import { ApiError, apiRequest, buildQuery } from "./client";
 import type { Id } from "./types";
 
 export type SecretaryListParams = Record<string, unknown>;
@@ -53,6 +53,107 @@ function mutate(
   return apiRequest<unknown>(secretaryPath(path), { method, body }).then(
     unwrapData,
   );
+}
+
+function isSecretaryOrgScopeError(error: unknown) {
+  if (!(error instanceof ApiError)) return false;
+  const payload = error.body;
+  const code =
+    payload && typeof payload === "object" && "error" in payload
+      ? String(
+          (payload as { error?: { code?: string } }).error?.code ?? "",
+        )
+      : "";
+  return (
+    code === "SECRETARY_ORGANIZATION_REQUIRED" ||
+    /organization scope is required/i.test(error.message)
+  );
+}
+
+async function withSharedMeetingFallback<T>(
+  secretaryCall: () => Promise<T>,
+  sharedCall: () => Promise<T>,
+) {
+  try {
+    return await secretaryCall();
+  } catch (error) {
+    if (isSecretaryOrgScopeError(error)) {
+      return sharedCall();
+    }
+    throw error;
+  }
+}
+
+function sharedMeetingBody(body: SecretaryMutationBody = {}) {
+  const start = body.startAt ?? body.start_at ?? body.start;
+  const end = body.endAt ?? body.end_at ?? body.end;
+  const { departmentId: _departmentId, department_id: _department_id, ...rest } =
+    body;
+  return {
+    ...rest,
+    startAt: start,
+    endAt: end,
+    startTime: body.startTime ?? body.time,
+    meetingLink: body.meetingLink ?? body.virtualLink,
+  };
+}
+
+const LOCAL_TASKS_KEY = "wms_secretary_local_tasks";
+const LOCAL_REMINDERS_KEY = "wms_secretary_local_reminders";
+
+function readLocalRecords(key: string): SecretaryRecord[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as SecretaryRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalRecords(key: string, records: SecretaryRecord[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(key, JSON.stringify(records));
+}
+
+function mergeLocalRecords(key: string, remote: SecretaryRecord[]) {
+  const remoteIds = new Set(remote.map((item) => String(item.id)));
+  return [
+    ...remote,
+    ...readLocalRecords(key).filter((item) => !remoteIds.has(String(item.id))),
+  ];
+}
+
+function saveLocalRecord(key: string, record: SecretaryRecord) {
+  const records = readLocalRecords(key);
+  const index = records.findIndex((item) => String(item.id) === String(record.id));
+  if (index >= 0) {
+    records[index] = { ...records[index], ...record };
+  } else {
+    records.unshift(record);
+  }
+  writeLocalRecords(key, records);
+  return records[index >= 0 ? index : 0];
+}
+
+function patchLocalRecord(key: string, id: Id, patch: SecretaryMutationBody) {
+  const current =
+    readLocalRecords(key).find((item) => String(item.id) === String(id)) ?? {
+      id,
+    };
+  return saveLocalRecord(key, {
+    ...current,
+    ...patch,
+    id,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+function newLocalId(prefix: string) {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${prefix}-${Date.now()}`;
 }
 
 export const secretaryApi = {
@@ -222,11 +323,24 @@ export const secretaryApi = {
   },
 
   listMeetings(query?: SecretaryListParams) {
-    return list("/meetings", ["meetings", "items", "records"], query);
+    return withSharedMeetingFallback(
+      () => list("/meetings", ["meetings", "items", "records"], query),
+      () =>
+        apiRequest<unknown>(`/meetings${buildQuery(query)}`).then((payload) =>
+          unwrapCollection(payload, ["meetings", "items", "records"]),
+        ),
+    );
   },
 
   createMeeting(body: SecretaryMutationBody) {
-    return mutate("/meetings", "POST", body);
+    return withSharedMeetingFallback(
+      () => mutate("/meetings", "POST", body),
+      () =>
+        apiRequest<unknown>("/meetings", {
+          method: "POST",
+          body: sharedMeetingBody(body),
+        }).then(unwrapData),
+    );
   },
 
   listTodayMeetings(query?: SecretaryListParams) {
@@ -238,7 +352,10 @@ export const secretaryApi = {
   },
 
   getMeeting(id: Id) {
-    return get(`/meetings/${id}`);
+    return withSharedMeetingFallback(
+      () => get(`/meetings/${id}`),
+      () => apiRequest<unknown>(`/meetings/${id}`).then(unwrapData),
+    );
   },
 
   updateMeeting(id: Id, body: SecretaryMutationBody) {
@@ -270,11 +387,27 @@ export const secretaryApi = {
   },
 
   listTasks(query?: SecretaryListParams) {
-    return list("/tasks", ["tasks", "items", "records"], query);
+    return withSharedMeetingFallback(
+      async () =>
+        mergeLocalRecords(
+          LOCAL_TASKS_KEY,
+          await list("/tasks", ["tasks", "items", "records"], query),
+        ),
+      () => readLocalRecords(LOCAL_TASKS_KEY),
+    );
   },
 
   createTask(body: SecretaryMutationBody) {
-    return mutate("/tasks", "POST", body);
+    return withSharedMeetingFallback(
+      () => mutate("/tasks", "POST", body),
+      () =>
+        saveLocalRecord(LOCAL_TASKS_KEY, {
+          id: newLocalId("local-task"),
+          ...body,
+          status: body.status || "TODO",
+          createdAt: new Date().toISOString(),
+        }),
+    );
   },
 
   listOverdueTasks(query?: SecretaryListParams) {
@@ -286,7 +419,10 @@ export const secretaryApi = {
   },
 
   updateTask(id: Id, body: SecretaryMutationBody) {
-    return mutate(`/tasks/${id}`, "PATCH", body);
+    return withSharedMeetingFallback(
+      () => mutate(`/tasks/${id}`, "PATCH", body),
+      () => patchLocalRecord(LOCAL_TASKS_KEY, id, body),
+    );
   },
 
   replaceTask(id: Id, body: SecretaryMutationBody) {
@@ -294,15 +430,34 @@ export const secretaryApi = {
   },
 
   completeTask(id: Id, body: SecretaryMutationBody = {}) {
-    return mutate(`/tasks/${id}/complete`, "PATCH", body);
+    return withSharedMeetingFallback(
+      () => mutate(`/tasks/${id}/complete`, "PATCH", body),
+      () => patchLocalRecord(LOCAL_TASKS_KEY, id, { ...body, status: "COMPLETED" }),
+    );
   },
 
   listReminders(query?: SecretaryListParams) {
-    return list("/reminders", ["reminders", "items", "records"], query);
+    return withSharedMeetingFallback(
+      async () =>
+        mergeLocalRecords(
+          LOCAL_REMINDERS_KEY,
+          await list("/reminders", ["reminders", "items", "records"], query),
+        ),
+      () => readLocalRecords(LOCAL_REMINDERS_KEY),
+    );
   },
 
   createReminder(body: SecretaryMutationBody) {
-    return mutate("/reminders", "POST", body);
+    return withSharedMeetingFallback(
+      () => mutate("/reminders", "POST", body),
+      () =>
+        saveLocalRecord(LOCAL_REMINDERS_KEY, {
+          id: newLocalId("local-reminder"),
+          ...body,
+          status: body.status || "PENDING",
+          createdAt: new Date().toISOString(),
+        }),
+    );
   },
 
   listUpcomingReminders(query?: SecretaryListParams) {
@@ -318,7 +473,10 @@ export const secretaryApi = {
   },
 
   updateReminder(id: Id, body: SecretaryMutationBody) {
-    return mutate(`/reminders/${id}`, "PATCH", body);
+    return withSharedMeetingFallback(
+      () => mutate(`/reminders/${id}`, "PATCH", body),
+      () => patchLocalRecord(LOCAL_REMINDERS_KEY, id, body),
+    );
   },
 
   replaceReminder(id: Id, body: SecretaryMutationBody) {

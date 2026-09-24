@@ -67,21 +67,9 @@ function isActivePlacementConflict(error: unknown) {
   );
 }
 
-function localIsoDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function defaultPlacementDates() {
-  const start = new Date();
-  const end = new Date(start);
-  end.setFullYear(end.getFullYear() + 1);
-  return { start: localIsoDate(start), end: localIsoDate(end) };
-}
-
 function memberWriteBody(values: Record<string, string>) {
+  const email = values.email?.trim() ?? "";
+  const phone = values.phone?.trim() ?? "";
   return {
     fullName: values.name.trim(),
     type: values.type === "INTERN" ? "INTERN" : "NYSC",
@@ -90,18 +78,20 @@ function memberWriteBody(values: Record<string, string>) {
     startDate: values.startDate,
     endDate: values.endDate,
     departmentId: values.departmentId,
-    ...(values.email.trim() ? { email: values.email.trim() } : {}),
-    ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {}),
   };
 }
 
 function memberPatchBody(values: Record<string, string>) {
+  const email = values.email?.trim() ?? "";
+  const phone = values.phone?.trim() ?? "";
   return {
     fullName: values.name.trim(),
     institution: values.school.trim(),
     courseOfStudy: values.courseOfStudy.trim(),
-    ...(values.email.trim() ? { email: values.email.trim() } : {}),
-    ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {}),
   };
 }
 
@@ -169,71 +159,68 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       .map((item) => ({ label: item.name, value: item.id }));
   }, [lookupPayload]);
 
-  const supervisorOptions = useMemo(() => {
-    return listFrom(lookupPayload?.employees ?? undefined)
-      .map((record) => ({
-        label: str(
-          record.fullName ?? record.name ?? record.label ?? record.email,
-        ),
-        value: str(record.id ?? record.employeeId ?? record._id),
-      }))
-      .filter((item) => item.label && item.value);
-  }, [lookupPayload]);
-
   const addMemberFields = useMemo(
     () => [
-      { name: "name", label: "Full name", required: true },
+      {
+        name: "name",
+        label: "Full name",
+        required: true,
+        fullWidth: true,
+      },
       {
         name: "type",
         label: "Type",
         type: "select" as const,
         required: true,
+        fullWidth: true,
         defaultValue: "NYSC",
         options: [
           { label: "NYSC", value: "NYSC" },
           { label: "Intern", value: "INTERN" },
         ],
       },
-      { name: "school", label: "School / institution", required: true },
-      { name: "courseOfStudy", label: "Course of study", required: true },
       {
-        name: "departmentId",
-        label: "Department",
-        type: "select" as const,
+        name: "school",
+        label: "Institution",
         required: true,
-        options:
-          departmentOptions.length > 0
-            ? departmentOptions
-            : [{ label: "No departments available", value: "" }],
+        fullWidth: true,
       },
       {
-        name: "employeeId",
-        label: "Supervisor",
-        type: "select" as const,
+        name: "courseOfStudy",
+        label: "Course of study",
         required: true,
-        options:
-          supervisorOptions.length > 0
-            ? supervisorOptions
-            : [{ label: "No employees in directory", value: "" }],
+        fullWidth: true,
       },
       {
         name: "startDate",
         label: "Start date",
         type: "date" as const,
         required: true,
-        defaultValue: defaultPlacementDates().start,
+        pair: "dates",
+        placeholder: "mm/dd/yyyy",
       },
       {
         name: "endDate",
         label: "End date",
         type: "date" as const,
         required: true,
-        defaultValue: defaultPlacementDates().end,
+        pair: "dates",
+        placeholder: "mm/dd/yyyy",
       },
-      { name: "email", label: "Email" },
-      { name: "phone", label: "Phone" },
+      {
+        name: "departmentId",
+        label: "Department",
+        type: "select" as const,
+        required: true,
+        fullWidth: true,
+        defaultValue: departmentOptions[0]?.value ?? "",
+        options:
+          departmentOptions.length > 0
+            ? departmentOptions
+            : [{ label: "Select department", value: "" }],
+      },
     ],
-    [departmentOptions, supervisorOptions],
+    [departmentOptions],
   );
 
   const placementMembers = useMemo(() => {
@@ -385,10 +372,6 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       showToast("Choose a department from the dropdown.", "error");
       throw new Error("Choose a department from the dropdown.");
     }
-    if (!values.employeeId.trim()) {
-      showToast("Choose a supervisor from the directory.", "error");
-      throw new Error("Choose a supervisor from the directory.");
-    }
     if (!values.startDate || !values.endDate || values.endDate <= values.startDate) {
       showToast("End date must be after the start date.", "error");
       throw new Error("End date must be after the start date.");
@@ -399,7 +382,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
       const created = manager
         ? await managerApi.createNyscIntern(body)
         : await superAdminApi.nyscInterns.create(body);
-      await assignSupervisor(created, values.employeeId);
+      await assignSupervisor(created, values.employeeId ?? "");
       const loginEmail =
         str((created as { loginEmail?: unknown })?.loginEmail) ||
         values.email.trim();
@@ -443,7 +426,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
         await superAdminApi.nyscInterns.patch(existingId, patchBody);
       }
       try {
-        await assignSupervisor({ id: existingId }, values.employeeId);
+        await assignSupervisor({ id: existingId }, values.employeeId ?? "");
       } catch {
         /* placement was updated even if supervisor assignment is unavailable */
       }
@@ -608,11 +591,11 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
 
         <SimpleModal
           open={addOpen}
-          title="Add member"
-          description="Register a new NYSC member or intern. Department and supervisor must come from the directory."
+          title="Add NYSC / Intern"
           fields={addMemberFields}
           submitLabel="Add member"
-          wide
+          showClose
+          appearance="soft"
           onClose={() => setAddOpen(false)}
           onSubmit={handleAddMember}
         />

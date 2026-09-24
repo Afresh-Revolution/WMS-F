@@ -589,7 +589,7 @@ export function AttendancePage({
               <span className={styles.panelIcon} aria-hidden>
                 <Clock size={14} />
               </span>
-              <h2 className={styles.panelTitle}>Department breakdown · Today</h2>
+              <h2 className={styles.breakdownTitle}>Department breakdown · Today</h2>
             </div>
             <div className={styles.tableWrap}>
               {monitor.departments.length === 0 ? (
@@ -600,7 +600,7 @@ export function AttendancePage({
                   </p>
                 </div>
               ) : (
-                <table className={styles.table}>
+                <table className={`${styles.table} ${styles.breakdownTable}`}>
                 <thead>
                   <tr>
                     <th>Department</th>
@@ -614,7 +614,7 @@ export function AttendancePage({
                 <tbody>
                   {monitor.departments.map((dept) => (
                     <tr key={dept.id}>
-                      <td>{dept.name}</td>
+                      <td className={styles.deptName}>{dept.name}</td>
                       <td className={styles.numeric}>{dept.expected}</td>
                       <td className={`${styles.numeric} ${styles.countPresent}`}>
                         {dept.present}
