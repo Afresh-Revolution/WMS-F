@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Search } from "lucide-react";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -274,6 +275,7 @@ export function EmployeeSettingsPage() {
 
   return (
     <div className={styles.page}>
+      <HideOnManager>
       <header className={styles.topBar}>
         <PageDateLabel />
         <div className={styles.topActions}>
@@ -288,6 +290,7 @@ export function EmployeeSettingsPage() {
           </ProfileLink>
         </div>
       </header>
+      </HideOnManager>
 
       <div className={styles.heading}>
         <p>Account settings</p>

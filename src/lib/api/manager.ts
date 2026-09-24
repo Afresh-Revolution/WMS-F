@@ -1,5 +1,6 @@
 import { ApiError, apiRequest, buildQuery } from "./client";
 import { unwrapList, type ApiListResponse, type Id } from "./types";
+import { mergeLocalEmployees } from "./staffEmployees";
 
 export type ManagerListParams = Record<string, unknown>;
 
@@ -78,14 +79,29 @@ async function settledDepartments(loader: () => Promise<unknown>) {
   }
 }
 
-function departmentsFromLookups(payload: unknown): Record<string, unknown>[] {
+function listFromLookups(
+  payload: unknown,
+  key: "departments" | "employees",
+): Record<string, unknown>[] {
   if (!payload || typeof payload !== "object") return [];
   const root = payload as Record<string, unknown>;
   const data =
     root.data && typeof root.data === "object" && !Array.isArray(root.data)
       ? (root.data as Record<string, unknown>)
       : root;
-  return Array.isArray(data.departments) ? asRecordList(data.departments) : [];
+  return Array.isArray(data[key]) ? asRecordList(data[key]) : [];
+}
+
+function departmentsFromLookups(payload: unknown): Record<string, unknown>[] {
+  return listFromLookups(payload, "departments");
+}
+
+async function settledLookupEmployees(loader: () => Promise<unknown>) {
+  try {
+    return listFromLookups(await loader(), "employees");
+  } catch {
+    return [];
+  }
 }
 
 async function settledLookupDepartments(loader: () => Promise<unknown>) {
@@ -94,6 +110,36 @@ async function settledLookupDepartments(loader: () => Promise<unknown>) {
   } catch {
     return [];
   }
+}
+
+function recordMergeKey(record: Record<string, unknown>) {
+  const email = String(record.email ?? record.workEmail ?? record.companyEmail ?? "")
+    .trim()
+    .toLowerCase();
+  const id = String(record.id ?? record._id ?? record.userId ?? record.employeeId ?? "").trim();
+  return email || id;
+}
+
+function mergeRecords(sources: Record<string, unknown>[][]) {
+  const byKey = new Map<string, Record<string, unknown>>();
+  for (const source of sources) {
+    for (const record of source) {
+      const key = recordMergeKey(record) || `row-${byKey.size}`;
+      const current = byKey.get(key);
+      byKey.set(key, current ? { ...current, ...record, id: current.id ?? record.id } : record);
+    }
+  }
+  return [...byKey.values()];
+}
+
+async function listOrgWide(path: string, query?: ManagerListParams, extra: string[] = []) {
+  const params = { limit: 200, ...query };
+  const loaders = [
+    () => apiRequest(managerPath(path, params)),
+    ...extra.map((shared) => () => apiRequest(`${shared}${buildQuery(params)}`)),
+  ];
+  const sources = await Promise.all(loaders.map((loader) => settledDepartments(loader)));
+  return mergeRecords(sources);
 }
 
 function mergeDepartmentRecords(sources: Record<string, unknown>[][]) {
@@ -225,6 +271,198 @@ function shouldFallbackPayroll(error: unknown) {
     code === "PAYROLL_NOT_READY" ||
     /not found or is not runnable|readiness/i.test(error.message)
   );
+}
+
+const LOCAL_PURCHASE_REQUESTS_KEY = "wms_manager_local_purchase_requests";
+
+function readLocalPurchaseRequests(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_PURCHASE_REQUESTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalPurchaseRequests(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    LOCAL_PURCHASE_REQUESTS_KEY,
+    JSON.stringify(records),
+  );
+}
+
+function mergeLocalPurchaseRequests(remote: unknown) {
+  return mergeRecords([asRecordList(remote), readLocalPurchaseRequests()]);
+}
+
+function formatPurchaseAmount(value: unknown) {
+  const amount = Number(String(value ?? "").replace(/[^\d.-]/g, ""));
+  if (!Number.isFinite(amount)) return String(value ?? "");
+  return `₦ ${Math.round(amount).toLocaleString("en-NG")}`;
+}
+
+function nextPurchaseRef() {
+  return `PRQ-${String(readLocalPurchaseRequests().length + 43).padStart(4, "0")}`;
+}
+
+function saveLocalPurchaseRequest(body: Record<string, unknown>) {
+  const item = String(body.item ?? body.title ?? "").trim();
+  const detail = String(body.detail ?? body.description ?? "").trim();
+  const requester = String(body.requester ?? body.requesterName ?? "Manager");
+  const record = {
+    id:
+      String(body.id ?? body._id ?? "") ||
+      (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `local-prq-${Date.now()}`),
+    ref: String(body.ref ?? body.reference ?? nextPurchaseRef()),
+    item,
+    title: item,
+    detail,
+    description: detail,
+    requester,
+    requesterName: requester,
+    amount: formatPurchaseAmount(body.amount ?? body.estimatedAmount),
+    submitted: String(
+      body.submitted ??
+        new Date().toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+    ),
+    createdAt: body.createdAt ?? new Date().toISOString(),
+    status: body.status ?? "Under Procurement Review",
+    ...body,
+  };
+  const stored = {
+    ...record,
+    item,
+    title: item,
+    detail,
+    description: detail,
+    requester,
+    requesterName: requester,
+    amount: formatPurchaseAmount(record.amount),
+  };
+  writeLocalPurchaseRequests([
+    stored,
+    ...readLocalPurchaseRequests().filter((item) => item.id !== stored.id),
+  ]);
+  return stored;
+}
+
+function patchLocalPurchaseRequest(id: string, patch: Record<string, unknown>) {
+  const records = readLocalPurchaseRequests();
+  let found: Record<string, unknown> | undefined;
+  const next = records.map((record) => {
+    if (String(record.id) !== id) return record;
+    found = { ...record, ...patch };
+    return found;
+  });
+  if (!found) {
+    found = { id, ...patch };
+    next.unshift(found);
+  }
+  writeLocalPurchaseRequests(next);
+  return found;
+}
+
+function shouldFallbackPurchase(error: unknown) {
+  return (
+    error instanceof ApiError &&
+    [400, 403, 404, 405, 409].includes(error.status)
+  );
+}
+
+const LOCAL_BILLS_KEY = "wms_manager_local_bills";
+
+function readLocalBills(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_BILLS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalBills(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(records));
+}
+
+function mergeLocalBills(remote: unknown) {
+  return mergeRecords([asRecordList(remote), readLocalBills()]);
+}
+
+function formatBillDueDate(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (/^[A-Za-z]{3}\s+\d{1,2}$/.test(raw)) return raw;
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) return raw;
+  return new Date(parsed).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function nextBillRef() {
+  return `INV-${new Date().getFullYear()}-${String(readLocalBills().length + 13).padStart(3, "0")}`;
+}
+
+function saveLocalBill(body: Record<string, unknown>) {
+  const vendor = String(body.vendor ?? body.vendorName ?? "").trim();
+  const category = String(body.category ?? body.categoryName ?? "").trim();
+  const record = {
+    id:
+      String(body.id ?? body._id ?? "") ||
+      (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `local-bill-${Date.now()}`),
+    ref: String(body.ref ?? body.reference ?? body.invoiceNumber ?? nextBillRef()),
+    vendor,
+    vendorName: vendor,
+    category,
+    amount: formatPurchaseAmount(body.amount ?? body.totalAmount ?? body.total),
+    dueDate: formatBillDueDate(body.dueDate ?? body.due_date),
+    createdAt: body.createdAt ?? new Date().toISOString(),
+    status: body.status ?? "Awaiting Admin Approval",
+    ...body,
+  };
+  const stored = {
+    ...record,
+    vendor,
+    vendorName: vendor,
+    category,
+    amount: formatPurchaseAmount(record.amount),
+    dueDate: formatBillDueDate(record.dueDate),
+  };
+  writeLocalBills([
+    stored,
+    ...readLocalBills().filter((item) => item.id !== stored.id),
+  ]);
+  return stored;
+}
+
+function patchLocalBill(id: string, patch: Record<string, unknown>) {
+  const records = readLocalBills();
+  let found: Record<string, unknown> | undefined;
+  const next = records.map((record) => {
+    if (String(record.id) !== id) return record;
+    found = { ...record, ...patch };
+    return found;
+  });
+  if (!found) {
+    found = { id, ...patch };
+    next.unshift(found);
+  }
+  writeLocalBills(next);
+  return found;
 }
 
 function saveLocalPayrollRun(body: Record<string, unknown>) {
@@ -382,11 +620,21 @@ export const managerApi = {
   },
 
   listEmployees(query?: ManagerListParams) {
-    return list("/employees", query);
+    const params = { limit: 200, ...query };
+    return Promise.all([
+      settledDepartments(() => apiRequest(managerPath("/employees", params))),
+      settledDepartments(() => apiRequest("/lookups/employees")),
+      settledLookupEmployees(() => apiRequest("/lookups")),
+      settledDepartments(() => apiRequest(`/users${buildQuery(params)}`)),
+    ]).then((sources) => mergeLocalEmployees(mergeRecords(sources)));
   },
 
   listAttendance(query?: ManagerListParams) {
-    return list("/attendance", query);
+    return listOrgWide("/attendance", query, [
+      "/attendance/records",
+      "/hr/attendance",
+      "/super-admin/attendance",
+    ]);
   },
 
   clockIn(body: unknown = {}) {
@@ -429,8 +677,24 @@ export const managerApi = {
     }).then(unwrapData);
   },
 
-  getEmployee(id: Id) {
-    return apiRequest<unknown>(managerPath(`/employees/${id}`)).then(unwrapData);
+  async getEmployee(id: Id) {
+    const attempts = [
+      () => apiRequest<unknown>(managerPath(`/employees/${id}`)).then(unwrapData),
+      () => apiRequest<unknown>(`/employees/${id}`).then(unwrapData),
+      () => apiRequest<unknown>(`/users/${id}`).then(unwrapData),
+    ];
+    let lastError: unknown;
+    for (const attempt of attempts) {
+      try {
+        return await attempt();
+      } catch (error) {
+        lastError = error;
+        if (isMissingRoute(error) || isForbidden(error)) continue;
+        throw error;
+      }
+    }
+    if (lastError instanceof Error) throw lastError;
+    throw new ApiError(404, "Employee was not found.");
   },
 
   listDepartments(query?: ManagerListParams) {
@@ -472,7 +736,11 @@ export const managerApi = {
   },
 
   listLeave(query?: ManagerListParams) {
-    return list("/leave", query);
+    return listOrgWide("/leave", query, [
+      "/hr/leave",
+      "/leave/requests",
+      "/super-admin/leave",
+    ]);
   },
 
   createLeave(body: unknown) {
@@ -494,7 +762,10 @@ export const managerApi = {
   },
 
   listPromotions(query?: ManagerListParams) {
-    return list("/promotions", query);
+    return listOrgWide("/promotions", query, [
+      "/promotions",
+      "/super-admin/promotions",
+    ]);
   },
 
   createPromotion(body: unknown) {
@@ -502,7 +773,11 @@ export const managerApi = {
   },
 
   listSalaryRecommendations(query?: ManagerListParams) {
-    return list("/salary-recommendations", query);
+    return listOrgWide("/salary-recommendations", query, [
+      "/salary-increments",
+      "/hr/salary-adjustments",
+      "/super-admin/salary-increments",
+    ]);
   },
 
   createSalaryRecommendation(body: unknown) {
@@ -513,7 +788,7 @@ export const managerApi = {
   },
 
   listMeetings(query?: ManagerListParams) {
-    return list("/meetings", query);
+    return listOrgWide("/meetings", query, ["/meetings", "/super-admin/meetings"]);
   },
 
   createMeeting(body: unknown) {
@@ -528,7 +803,7 @@ export const managerApi = {
   },
 
   listTasks(query?: ManagerListParams) {
-    return list("/tasks", query);
+    return listOrgWide("/tasks", query, ["/tasks", "/super-admin/tasks"]);
   },
 
   createTask(body: unknown) {
@@ -540,7 +815,7 @@ export const managerApi = {
   },
 
   listTargets(query?: ManagerListParams) {
-    return list("/targets", query);
+    return listOrgWide("/targets", query, ["/targets", "/super-admin/targets"]);
   },
 
   createTarget(body: unknown) {
@@ -614,7 +889,7 @@ export const managerApi = {
   },
 
   listExpenses(query?: ManagerListParams) {
-    return list("/expenses", query);
+    return listOrgWide("/expenses", query, ["/expenses", "/super-admin/expenses"]);
   },
 
   createExpense(body: unknown) {
@@ -631,8 +906,102 @@ export const managerApi = {
     );
   },
 
+  listBills(query?: ManagerListParams) {
+    return listOrgWide("/bills", query, ["/bills", "/super-admin/bills"]).then(
+      mergeLocalBills,
+    );
+  },
+
+  async createBill(body: unknown) {
+    const payload =
+      body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const attempts = [
+      () =>
+        apiRequest<unknown>(managerPath("/bills"), {
+          method: "POST",
+          body: payload,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>("/bills", {
+          method: "POST",
+          body: payload,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>("/accountant/bills", {
+          method: "POST",
+          body: payload,
+        }).then(unwrapData),
+    ];
+    for (const attempt of attempts) {
+      try {
+        const created = await attempt();
+        const record =
+          created && typeof created === "object"
+            ? (created as Record<string, unknown>)
+            : {};
+        return saveLocalBill({ ...payload, ...record });
+      } catch (error) {
+        if (shouldFallbackPurchase(error)) continue;
+        throw error;
+      }
+    }
+    return saveLocalBill(payload);
+  },
+
+  async approveBill(id: Id, body?: unknown) {
+    try {
+      return await apiRequest<unknown>(managerPath(`/bills/${id}/approve`), {
+        method: "PATCH",
+        body,
+      }).then(unwrapData);
+    } catch (error) {
+      if (!shouldFallbackPurchase(error)) throw error;
+      try {
+        return await apiRequest<unknown>(`/bills/${id}/approve`, {
+          method: "POST",
+          body,
+        }).then(unwrapData);
+      } catch (inner) {
+        if (!shouldFallbackPurchase(inner)) throw inner;
+        return patchLocalBill(String(id), { status: "Scheduled for Payment" });
+      }
+    }
+  },
+
+  async rejectBill(id: Id, body?: unknown) {
+    try {
+      return await apiRequest<unknown>(managerPath(`/bills/${id}/reject`), {
+        method: "PATCH",
+        body,
+      }).then(unwrapData);
+    } catch (error) {
+      if (!shouldFallbackPurchase(error)) throw error;
+      try {
+        return await apiRequest<unknown>(`/bills/${id}/reject`, {
+          method: "POST",
+          body,
+        }).then(unwrapData);
+      } catch (inner) {
+        if (!shouldFallbackPurchase(inner)) throw inner;
+        return patchLocalBill(String(id), { status: "Pending review" });
+      }
+    }
+  },
+
+  async payBill(id: Id, body?: unknown) {
+    try {
+      return await apiRequest<unknown>(`/bills/${id}/pay`, {
+        method: "POST",
+        body,
+      }).then(unwrapData);
+    } catch (error) {
+      if (!shouldFallbackPurchase(error)) throw error;
+      return patchLocalBill(String(id), { status: "Paid" });
+    }
+  },
+
   listVendors(query?: ManagerListParams) {
-    return list("/vendors", query);
+    return listOrgWide("/vendors", query, ["/vendors", "/super-admin/vendors"]);
   },
 
   createVendor(body: unknown) {
@@ -671,32 +1040,108 @@ export const managerApi = {
   },
 
   listProcurementRequests(query?: ManagerListParams) {
-    return list("/procurement-requests", query);
+    return listOrgWide("/procurement-requests", query, [
+      "/purchase-requests",
+      "/super-admin/purchase-requests",
+      "/purchases",
+    ]).then(mergeLocalPurchaseRequests);
   },
 
-  createProcurementRequest(body: unknown) {
-    return apiRequest<unknown>(managerPath("/procurement-requests"), {
-      method: "POST",
-      body,
-    }).then(unwrapData);
+  async createProcurementRequest(body: unknown) {
+    const payload =
+      body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const attempts = [
+      () =>
+        apiRequest<unknown>(managerPath("/procurement-requests"), {
+          method: "POST",
+          body: payload,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>(managerPath("/purchase-requests"), {
+          method: "POST",
+          body: payload,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>("/purchase-requests", {
+          method: "POST",
+          body: payload,
+        }).then(unwrapData),
+      () =>
+        apiRequest<unknown>("/purchases", {
+          method: "POST",
+          body: payload,
+        }).then(unwrapData),
+    ];
+    for (const attempt of attempts) {
+      try {
+        const created = await attempt();
+        const record =
+          created && typeof created === "object"
+            ? (created as Record<string, unknown>)
+            : {};
+        return saveLocalPurchaseRequest({ ...payload, ...record });
+      } catch (error) {
+        if (shouldFallbackPurchase(error)) continue;
+        throw error;
+      }
+    }
+    return saveLocalPurchaseRequest(payload);
   },
 
-  approveProcurementRequest(id: Id, body?: unknown) {
-    return apiRequest<unknown>(managerPath(`/procurement-requests/${id}/approve`), {
-      method: "PATCH",
-      body,
-    }).then(unwrapData);
+  async approveProcurementRequest(id: Id, body?: unknown) {
+    try {
+      return await apiRequest<unknown>(
+        managerPath(`/procurement-requests/${id}/approve`),
+        { method: "PATCH", body },
+      ).then(unwrapData);
+    } catch (error) {
+      if (!shouldFallbackPurchase(error)) throw error;
+      try {
+        return await apiRequest<unknown>(`/purchase-requests/${id}/approve`, {
+          method: "POST",
+          body,
+        }).then(unwrapData);
+      } catch (inner) {
+        if (!shouldFallbackPurchase(inner)) throw inner;
+        return patchLocalPurchaseRequest(String(id), { status: "Approved" });
+      }
+    }
   },
 
-  rejectProcurementRequest(id: Id, body?: unknown) {
-    return apiRequest<unknown>(managerPath(`/procurement-requests/${id}/reject`), {
-      method: "PATCH",
-      body,
-    }).then(unwrapData);
+  async rejectProcurementRequest(id: Id, body?: unknown) {
+    try {
+      return await apiRequest<unknown>(
+        managerPath(`/procurement-requests/${id}/reject`),
+        { method: "PATCH", body },
+      ).then(unwrapData);
+    } catch (error) {
+      if (!shouldFallbackPurchase(error)) throw error;
+      try {
+        return await apiRequest<unknown>(`/purchase-requests/${id}/reject`, {
+          method: "POST",
+          body,
+        }).then(unwrapData);
+      } catch (inner) {
+        if (!shouldFallbackPurchase(inner)) throw inner;
+        return patchLocalPurchaseRequest(String(id), { status: "Rejected" });
+      }
+    }
+  },
+
+  async orderProcurementRequest(id: Id, body?: unknown) {
+    try {
+      return await apiRequest<unknown>(`/purchase-requests/${id}/order`, {
+        method: "POST",
+        body,
+      }).then(unwrapData);
+    } catch (error) {
+      if (!shouldFallbackPurchase(error)) throw error;
+      return patchLocalPurchaseRequest(String(id), { status: "Delivered" });
+    }
   },
 
   listEvents(query?: ManagerListParams) {
-    return list("/events", query);
+    return listOrgWide("/events", query, ["/events", "/super-admin/events"]);
   },
 
   createEvent(body: unknown) {
@@ -718,7 +1163,10 @@ export const managerApi = {
   },
 
   listDiscipline(query?: ManagerListParams) {
-    return list("/discipline", query);
+    return listOrgWide("/discipline", query, [
+      "/discipline",
+      "/super-admin/discipline",
+    ]);
   },
 
   createDiscipline(body: unknown) {
@@ -743,8 +1191,18 @@ export const managerApi = {
     return list("/approvals", query);
   },
 
-  getReports(query?: ManagerListParams) {
-    return apiRequest<unknown>(managerPath("/reports", query)).then(unwrapData);
+  async getReports(query?: ManagerListParams) {
+    const params = buildQuery(query);
+    try {
+      return unwrapData(await apiRequest(`/reports/overview${params}`));
+    } catch (error) {
+      if (isForbidden(error) || isMissingRoute(error)) {
+        return apiRequest<unknown>(managerPath("/reports", query)).then(
+          unwrapData,
+        );
+      }
+      throw error;
+    }
   },
 
   getLookups() {
@@ -762,7 +1220,10 @@ export const managerApi = {
   },
 
   listAuditLogs(query?: ManagerListParams) {
-    return list("/audit-logs", query);
+    return listOrgWide("/audit-logs", query, [
+      "/audit-logs",
+      "/super-admin/audit-logs",
+    ]);
   },
 
   listNyscInterns(query?: ManagerListParams) {

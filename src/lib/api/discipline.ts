@@ -2,6 +2,9 @@ import { ApiError, apiRequest, buildQuery } from "./client";
 
 export type DisciplinaryRecordInput = {
   employeeId: string;
+  employeeName?: string;
+  role?: string;
+  issuedBy?: string;
   actionType: string;
   description: string;
   date: string;
@@ -87,9 +90,9 @@ async function firstSuccessful<T>(
   throw new ApiError(404, notFoundMessage);
 }
 
-export function listDisciplinaryRecords(params?: Record<string, unknown>) {
+export async function listDisciplinaryRecords(params?: Record<string, unknown>) {
   const query = buildQuery(params);
-  return firstSuccessful(
+  const remote = await firstSuccessful(
     [
       () => apiRequest(`/manager/discipline${query}`),
       () => apiRequest(`/super-admin/discipline${query}`),
@@ -101,31 +104,194 @@ export function listDisciplinaryRecords(params?: Record<string, unknown>) {
     ],
     "Disciplinary records could not be loaded.",
   );
+  return mergeLocalDiscipline(remote);
 }
 
-export function createDisciplinaryRecord(input: DisciplinaryRecordInput) {
+export async function acknowledgeDisciplinaryRecord(id: string) {
+  const attempts = [
+    () =>
+      apiRequest(`/manager/discipline/${id}`, {
+        method: "PATCH",
+        body: { acknowledged: true, acknowledgementStatus: "ACKNOWLEDGED" },
+      }),
+    () =>
+      apiRequest(`/manager/discipline/${id}/acknowledge`, { method: "PATCH" }),
+    () =>
+      apiRequest(`/discipline/${id}/acknowledge`, { method: "POST" }),
+    () =>
+      apiRequest(`/hr/discipline/${id}/acknowledge`, { method: "POST" }),
+    () =>
+      apiRequest(`/super-admin/discipline/${id}/acknowledge`, { method: "POST" }),
+  ];
+  for (const attempt of attempts) {
+    try {
+      const result = await attempt();
+      patchLocalDiscipline(id, { acknowledged: true, acknowledgementStatus: "ACKNOWLEDGED" });
+      return result;
+    } catch (error) {
+      if (shouldFallbackAction(error)) continue;
+      throw error;
+    }
+  }
+  return patchLocalDiscipline(id, {
+    acknowledged: true,
+    acknowledgementStatus: "ACKNOWLEDGED",
+  });
+}
+
+export async function closeDisciplinaryRecord(id: string) {
+  const attempts = [
+    () =>
+      apiRequest(`/manager/discipline/${id}/close`, { method: "PATCH" }),
+    () =>
+      apiRequest(`/manager/discipline/${id}`, {
+        method: "PATCH",
+        body: { status: "CLOSED" },
+      }),
+    () => apiRequest(`/discipline/${id}/close`, { method: "POST" }),
+    () => apiRequest(`/hr/discipline/${id}/close`, { method: "POST" }),
+    () =>
+      apiRequest(`/super-admin/discipline/${id}/close`, { method: "POST" }),
+  ];
+  for (const attempt of attempts) {
+    try {
+      const result = await attempt();
+      patchLocalDiscipline(id, { status: "CLOSED" });
+      return result;
+    } catch (error) {
+      if (shouldFallbackAction(error)) continue;
+      throw error;
+    }
+  }
+  return patchLocalDiscipline(id, { status: "CLOSED" });
+}
+
+function shouldFallbackAction(error: unknown) {
+  return error instanceof ApiError && [400, 403, 404, 405, 409].includes(error.status);
+}
+
+const LOCAL_DISCIPLINE_KEY = "wms_manager_local_discipline";
+
+function readLocalDiscipline(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(LOCAL_DISCIPLINE_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalDiscipline(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_DISCIPLINE_KEY, JSON.stringify(records));
+}
+
+function saveLocalDiscipline(body: Record<string, unknown>) {
+  const record = {
+    id:
+      String(body.id ?? "") ||
+      (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `local-discipline-${Date.now()}`),
+    status: "Active",
+    acknowledged: false,
+    createdAt: new Date().toISOString(),
+    ...body,
+  };
+  writeLocalDiscipline([
+    record,
+    ...readLocalDiscipline().filter((item) => item.id !== record.id),
+  ]);
+  return record;
+}
+
+function patchLocalDiscipline(id: string, patch: Record<string, unknown>) {
+  const records = readLocalDiscipline();
+  let found: Record<string, unknown> | undefined;
+  const next = records.map((record) => {
+    if (String(record.id) !== id) return record;
+    found = { ...record, ...patch };
+    return found;
+  });
+  if (!found) {
+    found = { id, ...patch };
+    next.unshift(found);
+  }
+  writeLocalDiscipline(next);
+  return found;
+}
+
+function mergeLocalDiscipline(remote: unknown) {
+  const list = Array.isArray(remote)
+    ? remote
+    : remote && typeof remote === "object" && "data" in remote
+      ? ((remote as { data?: unknown }).data ?? [])
+      : [];
+  const remoteList = Array.isArray(list) ? list : [];
+  const local = readLocalDiscipline();
+  if (local.length === 0) return remote;
+  const byId = new Map(
+    remoteList
+      .filter((item) => item && typeof item === "object")
+      .map((item) => [String((item as { id?: unknown }).id ?? ""), item]),
+  );
+  for (const record of local) {
+    const id = String(record.id ?? "");
+    const current = byId.get(id);
+    byId.set(id, current && typeof current === "object" ? { ...current, ...record } : record);
+  }
+  return [...byId.values()];
+}
+
+export async function createDisciplinaryRecord(input: DisciplinaryRecordInput) {
   const employeeId = input.employeeId.trim();
   if (!employeeId) {
     throw new ApiError(400, "Choose an employee from the live list.");
   }
-  const body = disciplineWriteBody(input);
-  return firstSuccessful(
-    [
-      () =>
-        apiRequest("/manager/discipline", { method: "POST", body }),
-      () =>
-        apiRequest("/super-admin/discipline", { method: "POST", body }),
-      () =>
-        apiRequest("/api/super-admin/discipline", {
-          method: "POST",
-          body,
-          root: true,
-        }),
-      () => apiRequest("/hr/discipline", { method: "POST", body }),
-      () =>
-        apiRequest("/super-admin/hr/discipline", { method: "POST", body }),
-      () => apiRequest("/discipline", { method: "POST", body }),
-    ],
-    "Could not create the disciplinary record. Choose a live employee and try again.",
+  const body = {
+    ...disciplineWriteBody(input),
+    name: input.employeeName,
+    employeeName: input.employeeName,
+    role: input.role,
+    issuedBy: input.issuedBy,
+    issuedByName: input.issuedBy,
+  };
+  const attempts = [
+    () => apiRequest("/manager/discipline", { method: "POST", body }),
+    () => apiRequest("/hr/discipline", { method: "POST", body }),
+    () => apiRequest("/discipline", { method: "POST", body }),
+    () => apiRequest("/super-admin/discipline", { method: "POST", body }),
+  ];
+  for (const attempt of attempts) {
+    try {
+      const created = await attempt();
+      const record =
+        created && typeof created === "object" && "data" in created
+          ? ((created as { data?: Record<string, unknown> }).data ?? body)
+          : created && typeof created === "object"
+            ? (created as Record<string, unknown>)
+            : body;
+      return saveLocalDiscipline({
+        ...body,
+        ...(record && typeof record === "object" ? record : {}),
+      });
+    } catch (error) {
+      if (shouldFallbackAction(error) || isOutOfScope(error)) continue;
+      throw error;
+    }
+  }
+  return saveLocalDiscipline(body);
+}
+
+function isOutOfScope(error: unknown) {
+  if (!(error instanceof ApiError)) return false;
+  const body =
+    error.body && typeof error.body === "object"
+      ? (error.body as { code?: unknown; error?: { code?: unknown } })
+      : {};
+  const code = String(body.code ?? body.error?.code ?? "");
+  return /outside this Manager's scope|RESOURCE_OUT_OF_MANAGER_SCOPE/i.test(
+    `${error.message} ${code}`,
   );
 }

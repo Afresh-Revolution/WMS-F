@@ -1,5 +1,23 @@
-import { apiRequest, buildQuery } from "./client";
+import { ApiError, apiRequest, buildQuery } from "./client";
 import type { ApiListResponse, Id } from "./types";
+
+export async function loadOrgReport<T>(
+  primary: () => Promise<T>,
+  fallback?: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await primary();
+  } catch (error) {
+    if (
+      fallback &&
+      error instanceof ApiError &&
+      (error.status === 403 || error.status === 404 || error.status === 405)
+    ) {
+      return fallback();
+    }
+    throw error;
+  }
+}
 
 export const reportsApi = {
   overview: () => apiRequest<Record<string, unknown>>("/reports/overview"),

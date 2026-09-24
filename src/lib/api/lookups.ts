@@ -21,8 +21,29 @@ export function readLookupLists(payload: unknown) {
   };
 }
 
+function mergeLookupRows(
+  current: Record<string, unknown>[],
+  incoming: unknown,
+) {
+  const seen = new Set(
+    current.map((row) =>
+      String(row.id ?? row._id ?? row.email ?? row.name ?? "").toLowerCase(),
+    ),
+  );
+  const next = [...current];
+  for (const row of listFrom(incoming as never)) {
+    const key = String(
+      row.id ?? row._id ?? row.email ?? row.name ?? "",
+    ).toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    next.push(row);
+  }
+  return next;
+}
+
 export async function loadManagerLookups() {
-  const [lookups, employees, departments] = await Promise.all([
+  const [lookups, employees, departments, orgLookups] = await Promise.all([
     managerApi.getLookups().catch((error) => {
       if (
         error instanceof ApiError &&
@@ -34,20 +55,20 @@ export async function loadManagerLookups() {
     }),
     managerApi.listEmployees({ limit: 200 }).catch(() => []),
     managerApi.listDepartments().catch(() => []),
+    lookupsApi.all().catch(() => null),
   ]);
   const lists = readLookupLists(lookups);
-  const directory = Array.isArray(employees)
-    ? employees
-    : listFrom(employees as never);
-  const departmentRows = Array.isArray(departments)
-    ? departments
-    : listFrom(departments as never);
-  if (directory.length) {
-    lists.employees = listFrom(directory as never);
-  }
-  if (departmentRows.length) {
-    lists.departments = listFrom(departmentRows as never);
-  }
+  lists.employees = mergeLookupRows(
+    mergeLookupRows(lists.employees, orgLookups ? readLookupLists(orgLookups).employees : []),
+    employees,
+  );
+  lists.departments = mergeLookupRows(
+    mergeLookupRows(
+      lists.departments,
+      orgLookups ? readLookupLists(orgLookups).departments : [],
+    ),
+    departments,
+  );
   return lists;
 }
 

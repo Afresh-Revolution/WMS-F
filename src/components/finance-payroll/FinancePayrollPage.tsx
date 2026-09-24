@@ -197,6 +197,7 @@ export function FinancePayrollPage() {
                 Run payroll
               </button>
             </div>
+            {!manager ? (
             <div className={styles.topActions}>
               <label className={styles.search}>
                 <Search size={14} />
@@ -216,6 +217,7 @@ export function FinancePayrollPage() {
                 {user?.initials || "SU"}
               </ProfileLink>
             </div>
+            ) : null}
           </div>
         </div>
 

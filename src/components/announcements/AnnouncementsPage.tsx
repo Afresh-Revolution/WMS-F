@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Search,
 } from "lucide-react";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
@@ -98,16 +99,13 @@ export function AnnouncementsPage() {
     [manager],
   );
   const { data: departmentData } = useAsyncData(async () => {
-    if (manager) {
-      const lookups = await loadManagerLookups().catch(() => null);
-      if (lookups?.departments.length) return lookups.departments;
-      return managerApi.listDepartments().catch(() => null);
-    }
     const settled = await Promise.allSettled([
+      managerApi.listDepartments(),
       lookupsApi.departments(),
+      loadManagerLookups().then((lists) => lists.departments),
     ]);
     for (const result of settled) {
-      if (result.status === "fulfilled") return result.value;
+      if (result.status === "fulfilled" && result.value) return result.value;
     }
     return null;
   }, [manager]);
@@ -331,6 +329,7 @@ export function AnnouncementsPage() {
   return (
     <>
       <div className={styles.page}>
+        <HideOnManager>
         <div className={styles.topBar}>
           <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading announcements…</p> : null}
@@ -362,6 +361,7 @@ export function AnnouncementsPage() {
             <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
+        </HideOnManager>
 
         <div className={styles.header}>
           <div>
@@ -373,6 +373,17 @@ export function AnnouncementsPage() {
             </p>
           </div>
           <div className={styles.headerActions}>
+            {manager ? (
+              <label className={styles.search}>
+                <Search size={15} className={styles.searchIcon} />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search"
+                  className={styles.searchInput}
+                />
+              </label>
+            ) : null}
             <button type="button" className={styles.exportButton} onClick={handleExport}>
               <Download size={15} />
               Export

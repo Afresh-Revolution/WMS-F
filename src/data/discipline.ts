@@ -11,6 +11,7 @@ export type DisciplineTagTone =
 export type DisciplineCase = {
   id: string;
   ref: string;
+  employeeId?: string;
   initials: string;
   name: string;
   role: string;
@@ -18,6 +19,7 @@ export type DisciplineCase = {
   issuedBy: string;
   description: string;
   status: "Active" | "Closed";
+  acknowledged?: boolean;
   tags: { label: string; tone: DisciplineTagTone }[];
 };
 

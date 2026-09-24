@@ -1,5 +1,5 @@
 import { ApiError, apiRequest, buildQuery } from "./client";
-import type { Id } from "./types";
+import { unwrapList, type Id } from "./types";
 
 const BASE = "/attendance";
 
@@ -15,7 +15,40 @@ export async function attendanceSettled<T>(
 
 function isMissingAttendanceRoute(error: unknown) {
   if (!(error instanceof ApiError)) return false;
-  return error.status === 404 || error.status === 405;
+  return error.status === 404 || error.status === 405 || error.status === 403;
+}
+
+function attendanceKey(row: Record<string, unknown>) {
+  return String(row.id ?? row._id ?? `${row.employeeId ?? ""}-${row.date ?? row.createdAt ?? ""}`)
+    .trim()
+    .toLowerCase();
+}
+
+async function mergeAttendanceLists(loaders: Array<() => Promise<unknown>>) {
+  const merged: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  const settled = await Promise.allSettled(loaders.map((load) => load()));
+  for (const result of settled) {
+    if (result.status !== "fulfilled") continue;
+    for (const row of unwrapList<Record<string, unknown>>(result.value)) {
+      const key = attendanceKey(row);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(row);
+    }
+  }
+  return merged;
+}
+
+export function listOrgAttendance(params?: Record<string, unknown>) {
+  const query = buildQuery(params);
+  return mergeAttendanceLists([
+    () => apiRequest<unknown>(`${BASE}/records${query}`),
+    () => apiRequest<unknown>(`${BASE}${query}`),
+    () => apiRequest<unknown>(`/manager/attendance${query}`),
+    () => apiRequest<unknown>(`/hr/attendance${query}`),
+    () => apiRequest<unknown>(`/super-admin/attendance${query}`),
+  ]);
 }
 
 async function firstAttendanceRoute<T>(attempts: Array<() => Promise<T>>): Promise<T> {
@@ -115,8 +148,7 @@ export const attendanceApi = {
   },
 
   records: {
-    list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`${BASE}/records${buildQuery(params)}`),
+    list: (params?: Record<string, unknown>) => listOrgAttendance(params),
     get: (id: Id) => apiRequest<unknown>(`${BASE}/records/${id}`),
   },
 
@@ -126,8 +158,7 @@ export const attendanceApi = {
   },
 
   manager: {
-    list: (params?: Record<string, unknown>) =>
-      apiRequest<unknown>(`/manager/attendance${buildQuery(params)}`),
+    list: (params?: Record<string, unknown>) => listOrgAttendance(params),
     get: (id: Id) => apiRequest<unknown>(`/manager/attendance/${id}`),
     correct: (id: Id, body: Record<string, unknown>) =>
       apiRequest<unknown>(`/manager/attendance/${id}/correct`, {

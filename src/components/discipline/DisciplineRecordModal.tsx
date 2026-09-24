@@ -4,7 +4,10 @@ import { useEffect } from "react";
 import { X } from "lucide-react";
 import type { DisciplineCase } from "@/data/discipline";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import {
+  acknowledgeDisciplinaryRecord,
+  closeDisciplinaryRecord,
+} from "@/lib/api";
 import styles from "./DisciplineRecordModal.module.css";
 
 const tagClass = {
@@ -31,16 +34,16 @@ export function DisciplineRecordModal({
   const isActive = record.status === "Active";
 
   function acknowledgeRecord() {
-    void runAction(`Acknowledge case ${record.ref}`, async () => {
-      await superAdminApi.discipline.action(record.id, "acknowledge");
+    void runAction("Acknowledge case", async () => {
+      await acknowledgeDisciplinaryRecord(record.id);
       onUpdated?.();
       onClose();
     }).catch(() => undefined);
   }
 
   function closeCase() {
-    void runAction(`Close case ${record.ref}`, async () => {
-      await superAdminApi.discipline.action(record.id, "close");
+    void runAction("Close case", async () => {
+      await closeDisciplinaryRecord(record.id);
       onUpdated?.();
       onClose();
     }).catch(() => undefined);
@@ -84,8 +87,8 @@ export function DisciplineRecordModal({
 
         <div className={styles.profile}>
           <div className={styles.avatar}>{record.initials}</div>
-          <h3 className={styles.name}>{record.name}</h3>
-          <p className={styles.role}>{record.role}</p>
+          <h3 className={styles.name}>{record.name || "Staff member"}</h3>
+          <p className={styles.role}>{record.role || "—"}</p>
           <div className={styles.tags}>
             {record.tags.map((tag) => (
               <span
@@ -101,15 +104,15 @@ export function DisciplineRecordModal({
         <div className={styles.details}>
           <div className={styles.detailBlock}>
             <span className={styles.detailLabel}>Ref</span>
-            <span className={styles.detailValue}>{record.ref}</span>
+            <span className={styles.detailValue}>{record.ref || "—"}</span>
           </div>
           <div className={styles.detailBlock}>
             <span className={styles.detailLabel}>Date issued</span>
-            <span className={styles.detailValue}>{record.date}</span>
+            <span className={styles.detailValue}>{record.date || "—"}</span>
           </div>
           <div className={styles.detailBlock}>
             <span className={styles.detailLabel}>Issued by</span>
-            <span className={styles.detailValue}>{record.issuedBy}</span>
+            <span className={styles.detailValue}>{record.issuedBy || "Manager"}</span>
           </div>
         </div>
 
@@ -118,15 +121,17 @@ export function DisciplineRecordModal({
           <p className={styles.descriptionText}>{record.description}</p>
         </div>
 
-        {isActive && (
+        {isActive ? (
           <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.acknowledgeButton}
-              onClick={acknowledgeRecord}
-            >
-              Mark as acknowledged
-            </button>
+            {record.acknowledged ? null : (
+              <button
+                type="button"
+                className={styles.acknowledgeButton}
+                onClick={acknowledgeRecord}
+              >
+                Mark as acknowledged
+              </button>
+            )}
             <button
               type="button"
               className={styles.closeCaseButton}
@@ -135,7 +140,7 @@ export function DisciplineRecordModal({
               Close case
             </button>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

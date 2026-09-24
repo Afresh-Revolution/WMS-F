@@ -4,7 +4,6 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
   Building2,
-  ChevronRight,
   Mail,
   MapPin,
   Plus,
@@ -12,10 +11,12 @@ import {
   Search,
 } from "lucide-react";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   matchesVendorFilter,
+  vendors as sampleVendors,
   type Vendor,
   type VendorFilter,
 } from "@/data/financeVendors";
@@ -28,6 +29,19 @@ import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceVendorsPage.module.css";
 
 const vendorFilters: VendorFilter[] = ["Active", "All"];
+
+function amountNumber(value: string) {
+  return Number(String(value).replace(/[^\d.-]/g, "")) || 0;
+}
+
+function formatCompactNaira(total: number) {
+  if (total >= 1_000_000) {
+    const millions = total / 1_000_000;
+    return `₦ ${millions.toFixed(1).replace(/\.0$/, "")}M`;
+  }
+  if (total >= 1_000) return `₦ ${Math.round(total / 1_000)}K`;
+  return `₦ ${Math.round(total).toLocaleString("en-NG")}`;
+}
 
 const createFields = [
   { name: "name", label: "Vendor name", required: true },
@@ -63,7 +77,10 @@ export function FinanceVendorsPage() {
   const [activeFilter, setActiveFilter] = useState<VendorFilter>("Active");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const { runAction, exportRows } = usePageActions();
+  const [createdRecords, setCreatedRecords] = useState<
+    Record<string, unknown>[]
+  >([]);
+  const { runAction } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
     () => (manager ? managerApi.listVendors() : superAdminApi.vendors.list()),
@@ -71,17 +88,29 @@ export function FinanceVendorsPage() {
   );
 
   const vendors = useMemo(() => {
-    return listFrom(data ?? undefined).map((record) => mapVendor(record));
-  }, [data]);
+    const remote = listFrom(data ?? undefined);
+    const seen = new Set<string>();
+    const mapped = [...createdRecords, ...remote]
+      .filter((record) => {
+        const key = String(record.id ?? record.email ?? record.name ?? "");
+        if (key && seen.has(key)) return false;
+        if (key) seen.add(key);
+        return true;
+      })
+      .map((record) => mapVendor(record));
+    return mapped.length > 0 || loading ? mapped : sampleVendors;
+  }, [createdRecords, data, loading]);
 
   const vendorStats = useMemo(() => {
-    const active = vendors.filter((vendor) => vendor.active).length;
     const openBills = vendors.reduce((sum, vendor) => sum + vendor.openBills, 0);
+    const ytdSpend = vendors.reduce(
+      (sum, vendor) => sum + amountNumber(vendor.ytdSpend),
+      0,
+    );
     return [
       { id: "total", label: "Total vendors", value: String(vendors.length) },
-      { id: "active", label: "Active vendors", value: String(active) },
       { id: "open-bills", label: "Open bills", value: String(openBills) },
-      { id: "inactive", label: "Inactive", value: String(vendors.length - active) },
+      { id: "ytd-spend", label: "Total YTD spend", value: formatCompactNaira(ytdSpend) },
     ];
   }, [vendors]);
 
@@ -113,9 +142,15 @@ export function FinanceVendorsPage() {
       if (!body.name) {
         throw new Error("Enter a vendor name.");
       }
-      await (manager
+      const created = await (manager
         ? managerApi.createVendor(body)
         : superAdminApi.vendors.create({ ...body, active: true }));
+      if (created && typeof created === "object") {
+        setCreatedRecords((current) => [
+          created as Record<string, unknown>,
+          ...current,
+        ]);
+      }
       refetch();
     });
   }
@@ -134,21 +169,6 @@ export function FinanceVendorsPage() {
     });
   }
 
-  function handleExport() {
-    exportRows(
-      filteredVendors.map((vendor) => ({
-        name: vendor.name,
-        category: vendor.category,
-        location: vendor.location,
-        email: vendor.email,
-        ytdSpend: vendor.ytdSpend,
-        openBills: vendor.openBills,
-        active: vendor.active,
-      })),
-      "vendors.csv",
-    );
-  }
-
   return (
     <>
       <div className={payrollStyles.page}>
@@ -156,6 +176,7 @@ export function FinanceVendorsPage() {
         {loading ? <p>Loading vendors…</p> : null}
         {error ? <p role="alert">{error}</p> : null}
 
+        <HideOnManager>
         <div className={payrollStyles.topBar}>
           <PageDateLabel className={payrollStyles.dateLabel} />
           <div className={payrollStyles.topActions}>
@@ -171,6 +192,7 @@ export function FinanceVendorsPage() {
             <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
+        </HideOnManager>
 
         <div className={payrollStyles.header}>
           <div>
@@ -181,15 +203,10 @@ export function FinanceVendorsPage() {
               bills by vendor.
             </p>
           </div>
-          <div className={payrollStyles.headerActions}>
-            <button type="button" className={payrollStyles.exportButton} onClick={handleExport}>
-              Export
-            </button>
-            <button type="button" className={styles.addButton} onClick={() => setCreateOpen(true)}>
-              <Plus size={16} strokeWidth={2.5} />
-              Add vendor
-            </button>
-          </div>
+          <button type="button" className={styles.addButton} onClick={() => setCreateOpen(true)}>
+            <Plus size={16} strokeWidth={2.5} />
+            Add vendor
+          </button>
         </div>
 
         <div className={styles.stats}>
@@ -273,7 +290,6 @@ export function FinanceVendorsPage() {
                   onClick={() => void viewVendor(vendor)}
                 >
                   View details
-                  <ChevronRight size={15} />
                 </button>
               </article>
             ))}

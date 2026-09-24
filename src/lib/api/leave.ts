@@ -433,8 +433,9 @@ function mapDirectoryEmployee(record: Record<string, unknown>): DirectoryEmploye
 async function listDirectoryEmployees(): Promise<DirectoryEmployee[]> {
   const loaders = [
     () => apiRequest("/lookups/employees"),
-    () => apiRequest("/manager/employees"),
     () => apiRequest("/lookups"),
+    () => apiRequest("/users"),
+    () => apiRequest("/manager/employees"),
     () => apiRequest("/manager/lookups"),
   ];
   const seen = new Set<string>();
@@ -484,25 +485,32 @@ async function resolveEmployeeRef(
 
 export async function listOrganisationLeave(params?: Record<string, unknown>) {
   const query = buildQuery(params);
-  const managerAttempt = () => apiRequest(`/manager/leave${query}`);
   const attempts = [
     () => apiRequest(`/hr/leave${query}`),
     () => apiRequest(`${SHARED}/requests${query}`),
     () => apiRequest(`/super-admin/leave/requests${query}`),
+    () => apiRequest(`/manager/leave${query}`),
   ];
-  const role = readCachedWorkspace()?.roleKey ?? "";
-  const ordered = /hod|manager/i.test(role)
-    ? [managerAttempt, ...attempts]
-    : [...attempts, managerAttempt];
-  try {
-    return mergeLocalLeave(
-      await firstSuccessful(ordered, "Leave requests could not be loaded."),
-    );
-  } catch (error) {
-    const local = readLocalLeave();
-    if (local.length) return local;
-    throw error;
+  const merged: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  let lastError: unknown;
+  for (const attempt of attempts) {
+    try {
+      for (const row of unwrapList<Record<string, unknown>>(await attempt())) {
+        const key = str(row.id ?? row._id);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        merged.push(row);
+      }
+    } catch (error) {
+      lastError = error;
+    }
   }
+  if (merged.length) return mergeLocalLeave(merged);
+  const local = readLocalLeave();
+  if (local.length) return local;
+  if (lastError instanceof ApiError) throw lastError;
+  throw new ApiError(404, "Leave requests could not be loaded.");
 }
 
 export async function applyForLeave(input: LeaveApplyInput & { reason?: string }) {

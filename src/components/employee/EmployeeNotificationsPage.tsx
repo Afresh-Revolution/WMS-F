@@ -3,6 +3,7 @@
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -104,6 +105,7 @@ export function EmployeeNotificationsPage() {
 
   return (
     <div className={styles.page}>
+      <HideOnManager>
       <header className={styles.topBar}>
         <PageDateLabel />
         <div className={styles.topActions}>
@@ -118,6 +120,7 @@ export function EmployeeNotificationsPage() {
           </ProfileLink>
         </div>
       </header>
+      </HideOnManager>
 
       <div className={styles.heading}>
         <div>

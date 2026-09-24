@@ -15,6 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -249,6 +250,7 @@ export function EmployeeProfilePage() {
 
   return (
     <div className={styles.page}>
+      <HideOnManager>
       <header className={styles.topBar}>
         <PageDateLabel />
         <div className={styles.topActions}>
@@ -263,6 +265,7 @@ export function EmployeeProfilePage() {
           </ProfileLink>
         </div>
       </header>
+      </HideOnManager>
 
       <div className={styles.heading}>
         <p>My profile</p>

@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, LogIn, Search } from "lucide-react";
-import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { LogIn } from "lucide-react";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { ConfirmClockInModal } from "@/components/manager/ConfirmClockInModal";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
@@ -38,14 +37,6 @@ const statusClass: Record<AttendanceStatus, string> = {
   "Missing Clock-Out": `${pageStyles.statusPill} ${pageStyles.statusMissing}`,
   "Early Departure": `${pageStyles.statusPill} ${pageStyles.statusEarly}`,
 };
-
-function formatTopDate(date: Date) {
-  return date.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
 
 function formatLongDate(date: Date) {
   return date.toLocaleDateString("en-US", {
@@ -208,28 +199,6 @@ export function ManagerAttendancePage({
         error={error}
         resource="your attendance"
       />
-      <div className={pageStyles.topBar}>
-        <p className={pageStyles.dateLabel}>{formatTopDate(today)}</p>
-        <div className={pageStyles.topActions}>
-          <label className={pageStyles.search}>
-            <Search size={15} className={pageStyles.searchIcon} />
-            <input
-              type="search"
-              placeholder="Search"
-              className={pageStyles.searchInput}
-              aria-label="Search"
-            />
-            <kbd className={pageStyles.searchKbd}>⌘ K</kbd>
-          </label>
-          <NotificationsLink className={pageStyles.iconButton}>
-            <span className={pageStyles.notifDot} aria-hidden />
-            <Bell size={16} />
-          </NotificationsLink>
-          <ProfileLink className={pageStyles.avatarChip}>
-            {user?.initials || "M"}
-          </ProfileLink>
-        </div>
-      </div>
 
       <AttendanceSectionNav variant="manager" active="my" />
 

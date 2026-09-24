@@ -19,6 +19,7 @@ import {
   Settings,
   SlidersHorizontal,
 } from "lucide-react";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
@@ -443,6 +444,7 @@ export function AttendancePage({
         error={monitor.error}
         resource="attendance"
       />
+      <HideOnManager>
       <div className={styles.topBar}>
         <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
@@ -455,6 +457,7 @@ export function AttendancePage({
           </ProfileLink>
         </div>
       </div>
+      </HideOnManager>
 
       <AttendanceSectionNav variant={variant} active={section} />
 

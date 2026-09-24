@@ -9,11 +9,11 @@ import type {
   DepartmentAttendance,
 } from "@/data/attendance";
 import {
-  employeesApi,
   reportsApi,
   attendanceApi,
   attendanceSettled,
   auditLogsApi,
+  listStaffEmployees,
   managerApi,
 } from "@/lib/api";
 import {
@@ -37,28 +37,20 @@ export function useAttendanceMonitor(source: "admin" | "manager" = "admin") {
   const { data, loading, error, refetch } = useAsyncData(async () => {
     const [records, summary, employees, schedules, locations, reports, audits] =
       await Promise.all([
-        attendanceSettled(
-          source === "manager"
-            ? attendanceApi.manager.list({ limit: 100 })
-            : attendanceApi.records.list({ limit: 100 }),
-        ),
+        attendanceSettled(attendanceApi.records.list({ limit: 200 })),
         attendanceSettled(attendanceApi.reports.summary({ period: "current" })),
-        attendanceSettled(
-          source === "manager"
-            ? managerApi.listEmployees({ limit: 100 })
-            : employeesApi.list({ limit: 100 }),
-        ),
+        attendanceSettled(listStaffEmployees()),
         attendanceSettled(attendanceApi.schedules.list({ limit: 50 })),
         attendanceSettled(attendanceApi.locations.list({ limit: 50 })),
         attendanceSettled(
-          source === "manager"
-            ? managerApi.getReports()
-            : reportsApi.attendance(),
+          reportsApi.attendance().catch(() => managerApi.getReports()),
         ),
         attendanceSettled(
-          source === "manager"
-            ? managerApi.listAuditLogs({ q: "attendance", limit: 50 })
-            : auditLogsApi.list({ q: "attendance", limit: 50 }),
+          auditLogsApi
+            .list({ q: "attendance", limit: 50 })
+            .catch(() =>
+              managerApi.listAuditLogs({ q: "attendance", limit: 50 }),
+            ),
         ),
       ]);
     return {

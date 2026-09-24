@@ -3,6 +3,7 @@
 import { Bell, Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "./PageLinks";
 import { PageDateLabel } from "./PageDateLabel";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./PageTopBar.module.css";
 type PageTopBarProps = {
   dateLabel?: string;
@@ -24,6 +25,11 @@ export function PageTopBar({
   status,
 }: PageTopBarProps) {
   const controlled = onSearchChange !== undefined;
+  const manager = useManagerPortal();
+
+  if (manager) {
+    return status ? <div className={styles.lead}>{status}</div> : null;
+  }
 
   return (
     <div className={`${styles.topBar} app-top-bar`}>

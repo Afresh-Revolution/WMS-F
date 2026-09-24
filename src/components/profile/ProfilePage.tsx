@@ -18,6 +18,7 @@ import {
   type ProfileLeaveBalance,
   type ProfileLeaveHistoryItem,
 } from "@/data/profile";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -454,6 +455,7 @@ export function ProfilePage({
 
   return (
     <div className={styles.page}>
+      <HideOnManager>
       <div className={styles.topBar}>
         <PageDateLabel className={styles.dateLabel} />
         <div className={styles.topActions}>
@@ -471,6 +473,7 @@ export function ProfilePage({
           <ProfileLink className={styles.avatarChip}>{profile.initials}</ProfileLink>
         </div>
       </div>
+      </HideOnManager>
 
       <div className={styles.header}>
         <div className={styles.headerCopy}>

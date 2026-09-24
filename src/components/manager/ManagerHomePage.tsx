@@ -9,14 +9,11 @@ import {
   Clock,
   GraduationCap,
   Megaphone,
-  Search,
   Target,
   TrendingUp,
   Users,
 } from "lucide-react";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
-import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import {
   listManagerAnnouncements,
@@ -497,21 +494,7 @@ export function ManagerHomePage() {
         resource="manager workspace"
       />
 
-      <div className={styles.topBar}>
-        <PageDateLabel className={styles.dateLabel} />
-        <div className={styles.topActions}>
-          <label className={styles.search}>
-            <Search size={15} className={styles.searchIcon} />
-            <input
-              type="search"
-              placeholder="Search"
-              className={styles.searchInput}
-            />
-          </label>
-          <NotificationsLink className={styles.iconButton} />
-          <ProfileLink className={styles.avatarChip} />
-        </div>
-      </div>
+      {/* Shared manager navbar lives in ManagerShell. */}
 
       <section className={styles.hero}>
         <div className={styles.heroContent}>

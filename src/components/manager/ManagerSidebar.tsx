@@ -45,7 +45,6 @@ const primaryNav: NavItem[] = [
   { href: "/manager/departments", label: "Departments", icon: Building2 },
   { href: "/manager/leave", label: "Leave", icon: CalendarOff },
   { href: "/manager/promotions", label: "Promotions", icon: TrendingUp },
-  { href: "/manager/attendance", label: "Attendance", icon: Clock },
   {
     href: "/manager/salary-increments",
     label: "Salary Increments",
@@ -59,6 +58,7 @@ const primaryNav: NavItem[] = [
   { href: "/manager/discipline", label: "Discipline", icon: Gavel },
   { href: "/manager/nysc-interns", label: "NYSC & Interns", icon: GraduationCap },
   { href: "/manager/announcements", label: "Announcements", icon: Megaphone },
+  { href: "/manager/attendance", label: "Attendance", icon: Clock },
   { href: "/manager/reports", label: "Reports", icon: FileBarChart },
   { href: "/manager/audit", label: "Audit Logs", icon: ScrollText },
   {

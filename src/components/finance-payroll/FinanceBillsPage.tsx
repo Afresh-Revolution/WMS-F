@@ -4,6 +4,7 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import { Check, Plus, RefreshCw, Search, TrendingDown, Upload, X } from "lucide-react";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
@@ -15,7 +16,8 @@ import {
 } from "@/data/financeBills";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapBill } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinanceBillsPage.module.css";
@@ -39,20 +41,64 @@ function isAwaitingApproval(status: BillStatus): boolean {
   return status === "Awaiting Admin Approval";
 }
 
+function billWriteBody(values: Record<string, string>) {
+  const vendor = values.vendor.trim();
+  const category = values.category.trim();
+  const amount = Number(String(values.amount ?? "").replace(/[^\d.-]/g, ""));
+  const dueDate = values.dueDate.trim();
+  const unitPrice = Number.isFinite(amount) && amount > 0 ? amount : 0;
+  const invoiceNumber = `INV-${Date.now()}`;
+  return {
+    vendor,
+    vendorName: vendor,
+    category,
+    categoryName: category,
+    amount: unitPrice,
+    totalAmount: unitPrice,
+    dueDate,
+    due_date: dueDate,
+    invoiceNumber,
+    invoice_number: invoiceNumber,
+    description: `${category} bill from ${vendor}`,
+    status: "Awaiting Admin Approval",
+    items: [
+      {
+        description: category || vendor,
+        quantity: 1,
+        unitPrice: unitPrice,
+        estimatedUnitPrice: unitPrice,
+      },
+    ],
+  };
+}
+
 export function FinanceBillsPage() {
+  const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<BillFilter>("All");
   const [createOpen, setCreateOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [createdRecords, setCreatedRecords] = useState<
+    Record<string, unknown>[]
+  >([]);
   const { runAction, exportRows } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.bills.list(),
-    [],
+    () => (manager ? managerApi.listBills() : superAdminApi.bills.list()),
+    [manager],
   );
 
   const bills = useMemo(() => {
-    return listFrom(data ?? undefined).map((record) => mapBill(record));
-  }, [data]);
+    const remote = listFrom(data ?? undefined);
+    const seen = new Set<string>();
+    return [...createdRecords, ...remote]
+      .filter((record) => {
+        const key = String(record.id ?? record.ref ?? record.reference ?? "");
+        if (key && seen.has(key)) return false;
+        if (key) seen.add(key);
+        return true;
+      })
+      .map((record) => mapBill(record));
+  }, [createdRecords, data]);
 
   const billStats = useMemo(() => {
     const overdue = bills.filter((bill) => bill.status === "Overdue").length;
@@ -105,21 +151,43 @@ export function FinanceBillsPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Add bill", async () => {
-      await superAdminApi.bills.create(values);
+      const body = billWriteBody(values);
+      if (!body.vendor) {
+        throw new Error("Enter a vendor name.");
+      }
+      if (!Number.isFinite(body.amount) || body.amount <= 0) {
+        throw new Error("Enter a valid amount.");
+      }
+      if (!body.dueDate) {
+        throw new Error("Enter a due date.");
+      }
+      const created = await (manager
+        ? managerApi.createBill(body)
+        : superAdminApi.bills.create(body));
+      if (created && typeof created === "object") {
+        setCreatedRecords((current) => [
+          created as Record<string, unknown>,
+          ...current,
+        ]);
+      }
       refetch();
     });
   }
 
   async function approveBill(bill: Bill) {
     await runAction(`Approve ${bill.ref}`, async () => {
-      await superAdminApi.bills.action(bill.id, "approve");
+      await (manager
+        ? managerApi.approveBill(bill.id)
+        : superAdminApi.bills.action(bill.id, "approve"));
       refetch();
     });
   }
 
   async function rejectBill(bill: Bill) {
     await runAction(`Reject ${bill.ref}`, async () => {
-      await superAdminApi.bills.action(bill.id, "reject");
+      await (manager
+        ? managerApi.rejectBill(bill.id)
+        : superAdminApi.bills.action(bill.id, "reject"));
       refetch();
     });
   }
@@ -133,7 +201,9 @@ export function FinanceBillsPage() {
 
   async function payBill(bill: Bill) {
     await runAction(`Pay ${bill.ref}`, async () => {
-      await superAdminApi.bills.action(bill.id, "pay");
+      await (manager
+        ? managerApi.payBill(bill.id)
+        : superAdminApi.bills.action(bill.id, "pay"));
       refetch();
     });
   }
@@ -165,6 +235,7 @@ export function FinanceBillsPage() {
         {loading ? <p>Loading bills…</p> : null}
         {error ? <p role="alert">{error}</p> : null}
 
+        <HideOnManager>
         <div className={payrollStyles.topBar}>
           <PageDateLabel className={payrollStyles.dateLabel} />
           <div className={payrollStyles.topActions}>
@@ -188,6 +259,7 @@ export function FinanceBillsPage() {
             <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
+        </HideOnManager>
 
         <div className={payrollStyles.header}>
           <div>

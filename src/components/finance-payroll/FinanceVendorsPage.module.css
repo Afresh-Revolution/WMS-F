@@ -18,14 +18,13 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  margin-top: 8px;
+  margin-top: 28px;
   padding: 12px 18px;
   border-radius: 999px;
   background: var(--afresh-orange);
   color: #fff;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 8px 20px rgba(237, 90, 40, 0.22);
 }
 
 .stats {
@@ -36,10 +35,9 @@
 }
 
 .statCard {
-  padding: 18px 20px;
-  border: 1px solid #f3e7df;
-  border-radius: 16px;
-  background: var(--afresh-orange-soft);
+  padding: 20px 22px 18px;
+  border-radius: 18px;
+  background: #fff;
 }
 
 .statLabel {
@@ -52,7 +50,7 @@
 }
 
 .statValue {
-  margin: 10px 0 0;
+  margin: 14px 0 0;
   font-family: var(--font-display);
   font-size: 40px;
   line-height: 1;
@@ -62,8 +60,7 @@
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   margin-bottom: 24px;
 }
 
@@ -72,11 +69,11 @@
   align-items: center;
   gap: 10px;
   flex: 1;
-  max-width: 420px;
-  padding: 0 16px;
+  min-width: 0;
+  padding: 0 18px;
   height: 44px;
-  border: 1px solid #ebe6e1;
-  border-radius: 12px;
+  border: 1px solid #f0ece8;
+  border-radius: 999px;
   background: #fff;
 }
 
@@ -98,15 +95,17 @@
 .filterToggle {
   display: inline-flex;
   align-items: center;
-  padding: 4px;
-  border: 1px solid #ebe6e1;
-  border-radius: 999px;
-  background: #fff;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .filterButton {
-  padding: 8px 16px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid #f0ece8;
   border-radius: 999px;
+  background: #fff;
   font-size: 13px;
   font-weight: 600;
   color: #78716c;
@@ -114,6 +113,7 @@
 
 .filterButtonActive {
   background: var(--afresh-orange);
+  border-color: var(--afresh-orange);
   color: #fff;
 }
 
@@ -126,11 +126,9 @@
 .card {
   display: flex;
   flex-direction: column;
-  padding: 20px;
-  border: 1px solid #ebe6e1;
-  border-radius: 16px;
+  padding: 20px 20px 18px;
+  border-radius: 20px;
   background: #fff;
-  overflow: hidden;
 }
 
 .cardTop {
@@ -138,7 +136,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 
 .vendorIcon {
@@ -200,8 +198,7 @@
   justify-content: space-between;
   gap: 10px;
   margin-top: auto;
-  padding-top: 14px;
-  border-top: 1px solid #f5f5f4;
+  margin-bottom: 14px;
 }
 
 .ytdSpend {
@@ -229,30 +226,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  width: calc(100% + 40px);
-  margin: 14px -20px -20px;
-  padding: 12px 20px;
-  border: 0;
-  border-top: 1px solid #f5f5f4;
-  border-radius: 0 0 16px 16px;
-  background: #fafaf9;
+  width: 100%;
+  height: 40px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: #78716c;
+  color: #44403c;
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .detailsButton:hover {
   color: var(--afresh-orange);
-  background: #f5f5f4;
+  border-color: #f3e7df;
 }
 
 .empty {
   padding: 48px 24px;
-  border: 1px dashed #ebe6e1;
   border-radius: 16px;
   background: #fff;
   text-align: center;
@@ -270,8 +262,11 @@
   }
 
   .searchField {
-    max-width: none;
     width: 100%;
+  }
+
+  .addButton {
+    margin-top: 0;
   }
 }
 

@@ -14,10 +14,17 @@ import {
 import {
   quickExports,
 } from "@/data/reports";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { ApiError, managerApi, superAdminApi, unwrapRecord } from "@/lib/api";
+import {
+  ApiError,
+  loadOrgReport,
+  managerApi,
+  superAdminApi,
+  unwrapRecord,
+} from "@/lib/api";
 import { downloadApiBlob } from "@/lib/export/downloadBlob";
 import { listFrom, nestedStr, num, str } from "@/lib/api/mappers";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
@@ -110,23 +117,37 @@ async function managerQuickExportPayload(
 ) {
   switch (label) {
     case "Full headcount roster":
-      return managerApi.listEmployees({ limit: 500 });
+      return loadOrgReport(
+        () => superAdminApi.reports.headcount(),
+        () => managerApi.listEmployees({ limit: 500 }),
+      );
     case "This month's attendance":
-      return managerApi.listAttendance({ period: "current", limit: 500 });
+      return loadOrgReport(
+        () => superAdminApi.reports.attendance(),
+        () => managerApi.listAttendance({ period: "current", limit: 500 }),
+      );
     case "Leave balances snapshot":
-      return managerApi.listLeave({ limit: 500 });
+      return loadOrgReport(
+        () => superAdminApi.reports.leave(),
+        () => managerApi.listLeave({ limit: 500 }),
+      );
     case "Payroll summary":
-      try {
-        return await managerApi.listPayrollRuns({ limit: 100 });
-      } catch (error) {
-        if (
-          error instanceof ApiError &&
-          (error.status === 404 || error.status === 405)
-        ) {
-          return managerApi.getReports();
-        }
-        throw error;
-      }
+      return loadOrgReport(
+        () => superAdminApi.reports.payroll(),
+        async () => {
+          try {
+            return await managerApi.listPayrollRuns({ limit: 100 });
+          } catch (error) {
+            if (
+              error instanceof ApiError &&
+              (error.status === 404 || error.status === 405)
+            ) {
+              return managerApi.getReports();
+            }
+            throw error;
+          }
+        },
+      );
   }
 }
 
@@ -260,26 +281,43 @@ export function ReportsPage() {
   const [query, setQuery] = useState("");
 
   const { data: overview, loading, error } = useAsyncData(
-    () => (manager ? managerApi.getReports() : superAdminApi.reports.overview()),
+    () =>
+      loadOrgReport(
+        () => superAdminApi.reports.overview(),
+        () => managerApi.getReports(),
+      ),
     [manager],
   );
   const { data: growthData } = useAsyncData(
     () =>
-      manager ? managerApi.getReports() : superAdminApi.reports.headcountGrowth(),
+      loadOrgReport(
+        () => superAdminApi.reports.headcountGrowth(),
+        () => managerApi.getReports(),
+      ),
     [manager],
   );
   const { data: deptData } = useAsyncData(
     () =>
-      manager ? managerApi.getReports() : superAdminApi.reports.departments(),
+      loadOrgReport(
+        () => superAdminApi.reports.departments(),
+        () => managerApi.getReports(),
+      ),
     [manager],
   );
   const { data: attendanceData } = useAsyncData(
     () =>
-      manager ? managerApi.getReports() : superAdminApi.reports.attendance(),
+      loadOrgReport(
+        () => superAdminApi.reports.attendance(),
+        () => managerApi.getReports(),
+      ),
     [manager],
   );
   const { data: savedData } = useAsyncData(
-    () => (manager ? Promise.resolve(null) : superAdminApi.reports.saved.list()),
+    () =>
+      loadOrgReport(
+        () => superAdminApi.reports.saved.list(),
+        () => Promise.resolve(null),
+      ).catch(() => null),
     [manager],
   );
 
@@ -382,15 +420,23 @@ export function ReportsPage() {
   function exportFullReport() {
     void runAction("Export report", async () => {
       if (manager) {
-        const employees = await managerApi.listEmployees({ limit: 500 });
-        const rows = exportableRows(employees);
-        if (rows.length > 0) {
-          exportRows(rows, "workforce-report.csv");
+        try {
+          await downloadApiBlob(
+            superAdminApi.reports.exportPath(),
+            "workforce-report.csv",
+          );
+          return;
+        } catch {
+          const employees = await managerApi.listEmployees({ limit: 500 });
+          const rows = exportableRows(employees);
+          if (rows.length > 0) {
+            exportRows(rows, "workforce-report.csv");
+            return;
+          }
+          const reports = await managerApi.getReports();
+          exportRows(exportableRows(reports), "workforce-report.csv");
           return;
         }
-        const reports = await managerApi.getReports();
-        exportRows(exportableRows(reports), "workforce-report.csv");
-        return;
       }
       await downloadApiBlob(
         superAdminApi.reports.exportPath(),
@@ -413,7 +459,6 @@ export function ReportsPage() {
   }
 
   function runSavedReport(id: string, name: string) {
-    if (manager) return;
     void runAction(`Run ${name}`, async () => {
       await superAdminApi.reports.saved.action(id, "run");
     });
@@ -421,6 +466,7 @@ export function ReportsPage() {
 
   return (
       <div className={styles.page}>
+        <HideOnManager>
         <div className={styles.topBar}>
           <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading reports…</p> : null}
@@ -444,6 +490,7 @@ export function ReportsPage() {
             <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
+        </HideOnManager>
 
         <div className={styles.header}>
           <div>
@@ -455,6 +502,17 @@ export function ReportsPage() {
             </p>
           </div>
           <div className={styles.headerActions}>
+            {manager ? (
+              <label className={styles.search}>
+                <Search size={15} className={styles.searchIcon} />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search"
+                  className={styles.searchInput}
+                />
+              </label>
+            ) : null}
             <button type="button" className={styles.csvButton} onClick={exportCsvOverview}>
               <FileSpreadsheet size={15} strokeWidth={2} />
               CSV

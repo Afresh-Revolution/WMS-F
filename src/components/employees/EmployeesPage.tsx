@@ -17,7 +17,6 @@ import {
   departmentsApi,
   listStaffEmployees,
   managerApi,
-  loadManagerLookups,
   lookupsApi,
   superAdminApi,
 } from "@/lib/api";
@@ -67,6 +66,9 @@ export function EmployeesPage() {
   const [profileEmployee, setProfileEmployee] = useState<MappedEmployee | null>(
     null,
   );
+  const [createdRecords, setCreatedRecords] = useState<
+    Record<string, unknown>[]
+  >([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const { showToast } = usePageActions();
@@ -89,26 +91,38 @@ export function EmployeesPage() {
     [],
   );
   const { data: departmentData } = useAsyncData(async () => {
-    if (manager) {
-      const lookups = await loadManagerLookups().catch(() => null);
-      if (lookups?.departments.length) return lookups.departments;
-      return managerApi.listDepartments().catch(() => null);
-    }
     const settled = await Promise.allSettled([
+      manager ? managerApi.listDepartments() : Promise.reject(),
       superAdminApi.departments.list(),
       lookupsApi.departments(),
       departmentsApi.list(),
     ]);
+    const rows: Record<string, unknown>[] = [];
+    const seen = new Set<string>();
     for (const result of settled) {
-      if (result.status === "fulfilled") return result.value;
+      if (result.status !== "fulfilled" || !result.value) continue;
+      for (const record of listFrom(result.value)) {
+        const key = str(record.id ?? record._id ?? record.name).toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        rows.push(record);
+      }
     }
-    return null;
+    return rows.length ? rows : null;
   }, [manager]);
 
-  const employees = useMemo(
-    () => (data ?? []).map((record) => mapEmployee(record)),
-    [data],
-  );
+  const employees = useMemo(() => {
+    const rows: MappedEmployee[] = [];
+    const seen = new Set<string>();
+    for (const record of [...createdRecords, ...(data ?? [])]) {
+      const mapped = mapEmployee(record);
+      const key = `${mapped.email || mapped.id}`.trim().toLowerCase();
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      rows.push(mapped);
+    }
+    return rows;
+  }, [createdRecords, data]);
 
   const departmentOptions = useMemo(
     () =>
@@ -238,6 +252,8 @@ export function EmployeesPage() {
     setSaving(true);
     try {
       const created = await createStaffEmployee(values);
+      setCreatedRecords((current) => [created, ...current]);
+      setActiveFilter("All");
       refetch();
       setAddOpen(false);
       if (values.email.trim()) {

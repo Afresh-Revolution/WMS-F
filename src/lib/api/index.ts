@@ -34,7 +34,7 @@ export { emailConfigApi, notificationConfigApi, notificationsApi } from "./notif
 export { usersApi, rolesApi, permissionsApi } from "./users";
 export { departmentsApi, hrApi } from "./departments";
 export { lookupsApi, loadHodOptions, loadManagerLookups, readLookupLists } from "./lookups";
-export { reportsApi, auditLogsApi } from "./reports";
+export { reportsApi, auditLogsApi, loadOrgReport } from "./reports";
 export { superAdminApi, saRequest } from "./superAdmin";
 
 export { accountantApi, accountantSettled } from "./accountant";
@@ -120,12 +120,15 @@ export type { LeaveTypeOption, LeaveBalanceCard, LeaveApplyInput } from "./leave
 export {
   listDisciplinaryRecords,
   createDisciplinaryRecord,
+  acknowledgeDisciplinaryRecord,
+  closeDisciplinaryRecord,
 } from "./discipline";
 export {
   listStaffEmployees,
   getStaffEmployee,
   createStaffEmployee,
   findStaffEmployeeByEmail,
+  mergeLocalEmployees,
 } from "./staffEmployees";
 export type { DisciplinaryRecordInput } from "./discipline";
 export type { ResourceModule } from "./resources";

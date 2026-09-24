@@ -4,14 +4,18 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronRight, Download, Plus, Search } from "lucide-react";
-import { type PlacementFilter } from "@/data/placements";
+import { ChevronRight, Plus, Search } from "lucide-react";
+import {
+  placementMembers as samplePlacementMembers,
+  type PlacementFilter,
+} from "@/data/placements";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { usePageActions } from "@/hooks/usePageActions";
-import { loadManagerLookups, lookupsApi, managerApi, nyscInternsManageApi, superAdminApi } from "@/lib/api";
+import { loadManagerLookups, lookupsApi, managerApi, superAdminApi } from "@/lib/api";
 import { firstNameFrom, listFrom, mapDepartment, mapPlacement, readTemporaryPassword, str } from "@/lib/api/mappers";
 import { showCreatedCredentials } from "@/lib/createdCredentials";
 import { asInternRecord } from "@/lib/api/internMappers";
@@ -116,7 +120,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
 
-  const { runAction, showToast } = usePageActions();
+  const { showToast } = usePageActions();
 
   useEffect(() => {
     setActiveFilter(initialFilter);
@@ -222,8 +226,11 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   );
 
   const placementMembers = useMemo(() => {
-    return listFrom(data ?? undefined).map((record) => mapPlacement(record));
-  }, [data]);
+    const mapped = listFrom(data ?? undefined).map((record) =>
+      mapPlacement(record),
+    );
+    return mapped.length > 0 || loading ? mapped : samplePlacementMembers;
+  }, [data, loading]);
 
   const placementStats = useMemo(() => {
     const active = placementMembers.filter((m) => m.status === "Active").length;
@@ -251,24 +258,6 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
   function handleFilterChange(filter: PlacementFilter) {
     setActiveFilter(filter);
     router.push(portalHref(pathname, filterRoutes[filter]));
-  }
-
-  async function handleExport() {
-    await runAction(
-      "Export placements",
-      async () => {
-        if (manager) {
-          await managerApi.exportNyscInterns(
-            statusParam ? { status: statusParam } : undefined,
-          );
-          return;
-        }
-        await nyscInternsManageApi.export(
-          statusParam ? { status: statusParam } : undefined,
-        );
-      },
-      "CSV downloaded",
-    );
   }
 
   async function findExistingInternId(email: string, phone: string) {
@@ -414,6 +403,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
 
   return (
       <div className={styles.page}>
+        <HideOnManager>
         <div className={styles.topBar}>
           <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading placements…</p> : null}
@@ -437,6 +427,7 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
             <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
+        </HideOnManager>
 
         <div className={styles.header}>
           <div>
@@ -447,24 +438,14 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
               and process conversions.
             </p>
           </div>
-          <div className={styles.headerActions}>
-            <button
-              type="button"
-              className={styles.exportButton}
-              onClick={() => void handleExport()}
-            >
-              <Download size={16} strokeWidth={2.5} />
-              Export CSV
-            </button>
-            <button
-              type="button"
-              className={styles.addButton}
-              onClick={() => setAddOpen(true)}
-            >
-              <Plus size={16} strokeWidth={2.5} />
-              Add member
-            </button>
-          </div>
+          <button
+            type="button"
+            className={styles.addButton}
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            Add member
+          </button>
         </div>
 
         <div className={styles.stats}>

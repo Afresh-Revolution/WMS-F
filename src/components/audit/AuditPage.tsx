@@ -14,6 +14,7 @@ import {
   type AuditFilter,
   type AuditModule,
 } from "@/data/audit";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
@@ -128,6 +129,7 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
 
   return (
       <div className={styles.page}>
+        <HideOnManager>
         <div className={styles.topBar}>
           <PageDateLabel className={styles.dateLabel} />
           <div className={styles.topActions}>
@@ -135,6 +137,7 @@ export function AuditPage({ initialFilter = "All events" }: AuditPageProps) {
             <ProfileLink className={styles.avatarChip}>DO</ProfileLink>
           </div>
         </div>
+        </HideOnManager>
 
         <div className={styles.header}>
           <div>

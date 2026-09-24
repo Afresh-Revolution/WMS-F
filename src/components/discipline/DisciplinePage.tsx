@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import {
   actionTypeOptions,
+  disciplineCases as sampleDisciplineCases,
   type DisciplineCase,
   type DisciplineFilter,
 } from "@/data/discipline";
@@ -24,8 +25,10 @@ import {
   listDisciplinaryRecords,
   listStaffEmployees,
 } from "@/lib/api";
-import { listFrom, mapDisciplineCase, mapEmployee } from "@/lib/api/mappers";
+import { initials, listFrom, mapDisciplineCase, mapEmployee } from "@/lib/api/mappers";
 import { DisciplineRecordModal } from "./DisciplineRecordModal";
+import { HideOnManager } from "@/components/layout/HideOnManager";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { usePageActions } from "@/hooks/usePageActions";
 import { portalHref } from "@/lib/portalPaths";
@@ -61,6 +64,7 @@ export function DisciplinePage({
 }: DisciplinePageProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { user } = useCurrentUser();
   const { runAction } = usePageActions();
   const [activeFilter, setActiveFilter] =
     useState<DisciplineFilter>(initialFilter);
@@ -93,10 +97,23 @@ export function DisciplinePage({
   );
 
   const disciplineCases = useMemo((): DisciplineCase[] => {
-    return listFrom(data ?? undefined).map(
+    const mapped = listFrom(data ?? undefined).map(
       (record) => mapDisciplineCase(record) as DisciplineCase,
     );
-  }, [data]);
+    const byId = new Map(employees.map((person) => [person.id, person]));
+    const enriched = mapped.map((item) => {
+      const person = item.employeeId ? byId.get(item.employeeId) : undefined;
+      const name = item.name || person?.name || "";
+      return {
+        ...item,
+        name,
+        initials: item.initials && item.initials !== "—" ? item.initials : initials(name) || "—",
+        role: item.role || person?.title || person?.department || "",
+        issuedBy: item.issuedBy || "Manager",
+      };
+    });
+    return enriched.length > 0 || loading ? enriched : sampleDisciplineCases;
+  }, [data, employees, loading]);
 
   const disciplineStats = useMemo(() => {
     const open = disciplineCases.filter((item) => item.status === "Active").length;
@@ -195,8 +212,12 @@ export function DisciplinePage({
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     void runAction("Create disciplinary record", async () => {
+      const person = employees.find((item) => item.id === employee);
       await createDisciplinaryRecord({
         employeeId: employee,
+        employeeName: person?.name,
+        role: person?.title || person?.department,
+        issuedBy: user?.name || "Manager",
         actionType,
         description,
         date,
@@ -211,6 +232,7 @@ export function DisciplinePage({
       <div
         className={`${styles.page} ${isModalOpen ? styles.pageDimmed : ""}`}
       >
+        <HideOnManager>
         <div className={styles.topBar}>
           <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading cases…</p> : null}
@@ -234,6 +256,7 @@ export function DisciplinePage({
             <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
+        </HideOnManager>
 
         <div className={styles.header}>
           <div>
@@ -290,7 +313,7 @@ export function DisciplinePage({
               <div className={styles.avatar}>{item.initials}</div>
               <div className={styles.cardBody}>
                 <div className={styles.titleRow}>
-                  <h2 className={styles.name}>{item.name}</h2>
+                  <h2 className={styles.name}>{item.name || "Staff member"}</h2>
                   {item.tags.map((tag) => (
                     <span
                       key={`${item.id}-${tag.label}`}

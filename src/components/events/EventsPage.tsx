@@ -4,6 +4,7 @@ import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { CalendarDays, Check, Plus, Search, Send } from "lucide-react";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import {
@@ -226,6 +227,7 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
   return (
     <>
       <div className={styles.page}>
+        <HideOnManager>
         <div className={styles.topBar}>
           <PageDateLabel className={styles.dateLabel} />
           {loading ? <p className={styles.dateLabel}>Loading events…</p> : null}
@@ -249,6 +251,7 @@ export function EventsPage({ initialFilter = "All" }: EventsPageProps) {
             <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
+        </HideOnManager>
 
         <div className={styles.header}>
           <div>

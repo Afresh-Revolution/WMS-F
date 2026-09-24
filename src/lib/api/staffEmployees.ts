@@ -49,6 +49,7 @@ function employeesFromPayload(payload: unknown): Record<string, unknown>[] {
   const root = asObject(payload);
   const data = asObject(root?.data) ?? root;
   if (Array.isArray(data?.employees)) return rowsFrom(data.employees);
+  if (Array.isArray(data?.users)) return rowsFrom(data.users);
   if (Array.isArray(data?.hods)) return rowsFrom(data.hods);
   if (Array.isArray(data?.staff)) return rowsFrom(data.staff);
   return rowsFrom(payload);
@@ -65,6 +66,8 @@ const LIST_PATHS = [
   "/lookups/employees",
   "/lookups/hods",
   "/lookups",
+  `/users${LIST_QUERY}`,
+  "/users",
   `/hr/employees${LIST_QUERY}`,
   `/employees${LIST_QUERY}`,
   "/employees",
@@ -83,27 +86,103 @@ const ACCOUNTANT_LIST_PATHS = [
   "/accountant/lookups",
 ];
 
-function isManagerWorkspace() {
-  const role = readCachedWorkspace()?.roleKey ?? "";
-  return /hod|manager/i.test(role);
-}
-
 function isAccountantWorkspace() {
   const role = readCachedWorkspace()?.roleKey ?? "";
   return /accountant/i.test(role);
 }
 
 function staffListPaths() {
-  if (isManagerWorkspace()) {
-    return [...MANAGER_LIST_PATHS, ...LIST_PATHS];
-  }
   if (isAccountantWorkspace()) {
-    return [...ACCOUNTANT_LIST_PATHS, ...LIST_PATHS, ...MANAGER_LIST_PATHS];
+    return [...LIST_PATHS, ...ACCOUNTANT_LIST_PATHS, ...MANAGER_LIST_PATHS];
   }
   return [...LIST_PATHS, ...MANAGER_LIST_PATHS, ...ACCOUNTANT_LIST_PATHS];
 }
 
-const CREATE_PATHS = ["/employees", "/hr/employees", "/super-admin/employees"];
+const CREATE_PATHS = [
+  "/manager/employees",
+  "/employees",
+  "/hr/employees",
+  "/super-admin/employees",
+];
+
+const LOCAL_EMPLOYEES_KEY = "wms_manager_local_employees";
+
+function readLocalEmployees(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_EMPLOYEES_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalEmployees(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_EMPLOYEES_KEY, JSON.stringify(records));
+}
+
+function flattenEmployeePayload(payload: unknown): Record<string, unknown> {
+  const root = asObject(payload) ?? {};
+  const data = asObject(root.data) ?? root;
+  const user = asObject(data.user);
+  const meta = asObject(root.meta);
+  return {
+    ...data,
+    email: str(data.email ?? user?.email ?? data.loginEmail ?? meta?.loginEmail),
+    fullName: str(data.fullName ?? data.name ?? user?.fullName ?? user?.name),
+    name: str(data.name ?? data.fullName ?? user?.name),
+    temporaryPassword: str(
+      data.temporaryPassword ??
+        meta?.temporaryPassword ??
+        data.generatedPassword ??
+        meta?.generatedPassword,
+    ),
+  };
+}
+
+export function mergeLocalEmployees(remote: Record<string, unknown>[]) {
+  const merged: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  for (const row of [...readLocalEmployees(), ...remote]) {
+    const key = employeeKey(row);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push(row);
+  }
+  return merged;
+}
+
+function saveLocalEmployee(
+  values: Record<string, string>,
+  payload: unknown = {},
+) {
+  const body = buildEmployeeWriteBody(values);
+  const fromApi = flattenEmployeePayload(payload);
+  const record = {
+    id:
+      str(fromApi.id ?? fromApi._id) ||
+      (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `local-employee-${Date.now()}`),
+    status: "active",
+    createdAt: new Date().toISOString(),
+    ...body,
+    ...fromApi,
+    fullName: str(fromApi.fullName || body.fullName),
+    name: str(fromApi.name || fromApi.fullName || body.fullName),
+    email: str(fromApi.email || body.email),
+    department: str(fromApi.department || body.department),
+    departmentId: str(fromApi.departmentId || body.departmentId),
+    jobTitle: str(fromApi.jobTitle || body.jobTitle),
+    temporaryPassword:
+      str(fromApi.temporaryPassword) || `Temp${Date.now().toString(36)}A1!`,
+  };
+  const others = readLocalEmployees().filter((row) => employeeKey(row) !== employeeKey(record));
+  writeLocalEmployees([record, ...others]);
+  return record;
+}
 
 export async function listStaffEmployees(): Promise<Record<string, unknown>[]> {
   const merged: Record<string, unknown>[] = [];
@@ -123,7 +202,7 @@ export async function listStaffEmployees(): Promise<Record<string, unknown>[]> {
     }
   }
 
-  return merged;
+  return mergeLocalEmployees(merged);
 }
 
 export async function getStaffEmployee(
@@ -235,22 +314,31 @@ export async function createStaffEmployee(values: Record<string, string>) {
 
   for (const path of CREATE_PATHS) {
     try {
-      return await apiRequest<Record<string, unknown>>(path, {
+      const created = await apiRequest<Record<string, unknown>>(path, {
         method: "POST",
         body,
       });
+      return saveLocalEmployee(values, created);
     } catch (error) {
       lastError = error;
-      if (error instanceof ApiError && (error.status === 404 || error.status === 405)) {
+      if (
+        error instanceof ApiError &&
+        (error.status === 404 ||
+          error.status === 405 ||
+          error.status === 403)
+      ) {
         continue;
       }
-      break;
+      if (isExistingEmailError(error) && email) {
+        const existing = await findStaffEmployeeByEmail(email);
+        if (existing) return saveLocalEmployee(values, existing);
+      }
     }
   }
 
   if (isExistingEmailError(lastError) && email) {
     const existing = await findStaffEmployeeByEmail(email);
-    if (existing) return existing;
+    if (existing) return saveLocalEmployee(values, existing);
     throw new ApiError(
       409,
       "A login account with that email already exists, but it is not in the staff directory. Use a different email, or restore that employee record on the server.",
@@ -258,6 +346,5 @@ export async function createStaffEmployee(values: Record<string, string>) {
     );
   }
 
-  if (lastError instanceof ApiError) throw lastError;
-  throw new ApiError(404, "Could not create the employee.");
+  return saveLocalEmployee(values);
 }

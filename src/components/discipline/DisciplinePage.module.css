@@ -147,14 +147,13 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  margin-top: 8px;
+  margin-top: 28px;
   padding: 12px 18px;
   border-radius: 999px;
   background: var(--afresh-orange);
   color: #fff;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 8px 20px rgba(237, 90, 40, 0.22);
 }
 
 .stats {
@@ -165,15 +164,13 @@
 }
 
 .statCard {
-  padding: 18px 20px;
-  border-radius: 16px;
-  border: 1px solid #f3e7df;
+  padding: 20px 22px 18px;
+  border-radius: 18px;
   background: #fff;
 }
 
 .statCardSoft {
   background: #fff7f2;
-  border-color: #f3e7df;
 }
 
 .statLabel {
@@ -196,9 +193,14 @@
 
 .filters {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 18px;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #f0ece8;
 }
 
 .filterChip {
@@ -206,7 +208,7 @@
   border-radius: 999px;
   font-size: 14px;
   font-weight: 500;
-  color: #44403c;
+  color: #78716c;
 }
 
 .filterChipActive {
@@ -225,9 +227,8 @@
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  padding: 18px 20px;
-  border: 1px solid #ebe6e1;
-  border-radius: 16px;
+  padding: 20px 22px;
+  border-radius: 20px;
   background: #fff;
 }
 
@@ -339,7 +340,8 @@
   gap: 6px;
   flex-shrink: 0;
   margin-top: 4px;
-  padding: 8px 14px;
+  height: 36px;
+  padding: 0 14px;
   border: 1px solid #ebe6e1;
   border-radius: 999px;
   background: #fff;
@@ -543,5 +545,9 @@
   .title {
     font-size: 34px;
     white-space: normal;
+  }
+
+  .newButton {
+    margin-top: 0;
   }
 }

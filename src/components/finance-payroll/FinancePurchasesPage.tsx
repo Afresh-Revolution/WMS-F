@@ -2,20 +2,24 @@
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
-import { Check, Plus, RefreshCw, Search, ShoppingCart, X } from "lucide-react";
+import { Check, Plus, RefreshCw, ShoppingCart, X } from "lucide-react";
 import { FinanceModuleTabs } from "@/components/finance-payroll/FinanceModuleTabs";
+import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   matchesPurchaseFilter,
   purchaseFilters,
+  purchaseRequests as samplePurchaseRequests,
   type PurchaseFilter,
   type PurchaseRequest,
   type PurchaseStatus,
 } from "@/data/financePurchases";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { superAdminApi } from "@/lib/api";
+import { useManagerPortal } from "@/hooks/useManagerPortal";
+import { managerApi, superAdminApi } from "@/lib/api";
 import { listFrom, mapPurchaseRequest } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinancePurchasesPage.module.css";
@@ -40,70 +44,174 @@ function isPending(status: PurchaseStatus): boolean {
   );
 }
 
+function displayStatus(status: PurchaseStatus) {
+  return status === "Under Procurement Review"
+    ? "Under accountant review"
+    : status;
+}
+
+function amountNumber(value: string) {
+  return Number(String(value).replace(/[^\d.-]/g, "")) || 0;
+}
+
+function formatCompactNaira(total: number) {
+  if (total >= 1_000_000) {
+    const millions = total / 1_000_000;
+    return `₦ ${millions.toFixed(millions >= 10 ? 0 : 2).replace(/\.00$/, "")}M`;
+  }
+  if (total >= 1_000) {
+    return `₦ ${Math.round(total / 1_000)}K`;
+  }
+  return `₦ ${Math.round(total).toLocaleString("en-NG")}`;
+}
+
+function formatSubmitted(value: string) {
+  if (/^[A-Za-z]{3}\s+\d{1,2}$/.test(value.trim())) return value;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return value;
+  return new Date(parsed).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatAmount(value: string) {
+  if (value.includes("₦") && value.includes(",")) return value;
+  const amount = amountNumber(value);
+  if (!amount) return value;
+  return `₦ ${Math.round(amount).toLocaleString("en-NG")}`;
+}
+
+function purchaseWriteBody(
+  values: Record<string, string>,
+  requester: string,
+) {
+  const item = values.item.trim();
+  const detail = values.detail.trim();
+  const amount = Number(String(values.amount ?? "").replace(/[^\d.-]/g, ""));
+  const unitPrice = Number.isFinite(amount) && amount > 0 ? amount : 0;
+  return {
+    title: item,
+    item,
+    description: detail,
+    detail,
+    reason: detail || item,
+    amount: unitPrice,
+    estimatedAmount: unitPrice,
+    estimatedUnitPrice: unitPrice,
+    quantity: 1,
+    itemDescription: item,
+    requester,
+    requesterName: requester,
+    status: "Under Procurement Review",
+    items: [
+      {
+        description: item || detail,
+        quantity: 1,
+        estimatedUnitPrice: unitPrice,
+      },
+    ],
+  };
+}
+
 export function FinancePurchasesPage() {
+  const manager = useManagerPortal();
+  const { user } = useCurrentUser();
   const [activeFilter, setActiveFilter] = useState<PurchaseFilter>("All");
   const [createOpen, setCreateOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const { runAction, exportRows } = usePageActions();
+  const [createdRecords, setCreatedRecords] = useState<
+    Record<string, unknown>[]
+  >([]);
+  const { runAction } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
-    () => superAdminApi.purchaseRequests.list(),
-    [],
+    () =>
+      manager
+        ? managerApi.listProcurementRequests()
+        : superAdminApi.purchaseRequests.list(),
+    [manager],
   );
 
   const purchaseRequests = useMemo(() => {
-    return listFrom(data ?? undefined).map((record) => mapPurchaseRequest(record));
-  }, [data]);
+    const remote = listFrom(data ?? undefined);
+    const seen = new Set<string>();
+    const mapped = [...createdRecords, ...remote]
+      .filter((record) => {
+        const key = String(record.id ?? record.ref ?? record.reference ?? "");
+        if (key && seen.has(key)) return false;
+        if (key) seen.add(key);
+        return true;
+      })
+      .map((record) => mapPurchaseRequest(record));
+    return mapped.length > 0 || loading ? mapped : samplePurchaseRequests;
+  }, [createdRecords, data, loading]);
 
   const purchaseStats = useMemo(() => {
-    const pending = purchaseRequests.filter((request) =>
-      request.status === "Under Procurement Review" ||
-      request.status === "Awaiting Admin Approval",
-    ).length;
+    const pending = purchaseRequests.filter((request) => isPending(request.status)).length;
     const approved = purchaseRequests.filter((request) => request.status === "Approved").length;
-    const delivered = purchaseRequests.filter((request) => request.status === "Delivered").length;
+    const totalValue = purchaseRequests.reduce(
+      (sum, request) => sum + amountNumber(request.amount),
+      0,
+    );
     return [
-      { id: "total", label: "Total requests", value: String(purchaseRequests.length) },
+      { id: "total", label: "Total this month", value: String(purchaseRequests.length) },
       { id: "pending", label: "Pending review", value: String(pending) },
+      { id: "value", label: "Total value", value: formatCompactNaira(totalValue) },
       { id: "approved", label: "Approved", value: String(approved) },
-      { id: "delivered", label: "Delivered", value: String(delivered) },
     ];
   }, [purchaseRequests]);
 
   const filteredRequests = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return purchaseRequests.filter((request) => {
-      const matchesFilter = matchesPurchaseFilter(request.status, activeFilter);
-      const haystack =
-        `${request.ref} ${request.item} ${request.detail} ${request.requester}`.toLowerCase();
-      return matchesFilter && (!term || haystack.includes(term));
-    });
-  }, [activeFilter, purchaseRequests, query]);
+    return purchaseRequests.filter((request) =>
+      matchesPurchaseFilter(request.status, activeFilter),
+    );
+  }, [activeFilter, purchaseRequests]);
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Create request", async () => {
-      await superAdminApi.purchaseRequests.create(values);
+      const body = purchaseWriteBody(values, user?.name || "Manager");
+      if (body.title.length < 3) {
+        throw new Error("Enter an item name.");
+      }
+      if (!Number.isFinite(body.amount) || body.amount <= 0) {
+        throw new Error("Enter a valid amount.");
+      }
+      const created = await (manager
+        ? managerApi.createProcurementRequest(body)
+        : superAdminApi.purchaseRequests.create(body));
+      if (created && typeof created === "object") {
+        setCreatedRecords((current) => [
+          created as Record<string, unknown>,
+          ...current,
+        ]);
+      }
       refetch();
     });
   }
 
   async function approveRequest(request: PurchaseRequest) {
     await runAction(`Approve ${request.ref}`, async () => {
-      await superAdminApi.purchaseRequests.action(request.id, "approve");
+      await (manager
+        ? managerApi.approveProcurementRequest(request.id)
+        : superAdminApi.purchaseRequests.action(request.id, "approve"));
       refetch();
     });
   }
 
   async function rejectRequest(request: PurchaseRequest) {
     await runAction(`Reject ${request.ref}`, async () => {
-      await superAdminApi.purchaseRequests.action(request.id, "reject");
+      await (manager
+        ? managerApi.rejectProcurementRequest(request.id)
+        : superAdminApi.purchaseRequests.action(request.id, "reject"));
       refetch();
     });
   }
 
   async function orderRequest(request: PurchaseRequest) {
     await runAction(`Order ${request.ref}`, async () => {
-      await superAdminApi.purchaseRequests.action(request.id, "order");
+      await (manager
+        ? managerApi.orderProcurementRequest(request.id)
+        : superAdminApi.purchaseRequests.action(request.id, "order"));
       refetch();
     });
   }
@@ -114,21 +222,6 @@ export function FinancePurchasesPage() {
     });
   }
 
-  function handleExport() {
-    exportRows(
-      filteredRequests.map((request) => ({
-        ref: request.ref,
-        item: request.item,
-        detail: request.detail,
-        requester: request.requester,
-        amount: request.amount,
-        submitted: request.submitted,
-        status: request.status,
-      })),
-      "purchase-requests.csv",
-    );
-  }
-
   return (
     <>
       <div className={payrollStyles.page}>
@@ -136,6 +229,7 @@ export function FinancePurchasesPage() {
         {loading ? <p>Loading purchases…</p> : null}
         {error ? <p role="alert">{error}</p> : null}
 
+        <HideOnManager>
         <div className={payrollStyles.topBar}>
           <PageDateLabel className={payrollStyles.dateLabel} />
           <div className={payrollStyles.topActions}>
@@ -151,24 +245,21 @@ export function FinancePurchasesPage() {
             <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
           </div>
         </div>
+        </HideOnManager>
 
         <div className={payrollStyles.header}>
           <div>
+            <p className={payrollStyles.eyebrow}>Purchase requests</p>
             <h1 className={payrollStyles.title}>Every purchase, accounted for</h1>
             <p className={payrollStyles.subtitle}>
               Submit, review, and track purchase requests from initiation through
               delivery and payment.
             </p>
           </div>
-          <div className={payrollStyles.headerActions}>
-            <button type="button" className={payrollStyles.exportButton} onClick={handleExport}>
-              Export
-            </button>
-            <button type="button" className={styles.newButton} onClick={() => setCreateOpen(true)}>
-              <Plus size={16} strokeWidth={2.5} />
-              New request
-            </button>
-          </div>
+          <button type="button" className={styles.newButton} onClick={() => setCreateOpen(true)}>
+            <Plus size={16} strokeWidth={2.5} />
+            New request
+          </button>
         </div>
 
         <div className={styles.stats}>
@@ -195,18 +286,6 @@ export function FinancePurchasesPage() {
             );
           })}
         </div>
-
-        <label className={styles.searchField}>
-          <Search size={16} className={styles.searchIcon} />
-          <input
-            type="search"
-            data-purchases-search
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search requests..."
-            className={styles.searchInput}
-          />
-        </label>
 
         <section className={styles.tableSection}>
           <div className={styles.tableWrap}>
@@ -241,11 +320,13 @@ export function FinancePurchasesPage() {
                         {request.requester}
                       </span>
                     </td>
-                    <td className={styles.amountCell}>{request.amount}</td>
-                    <td>{request.submitted}</td>
+                    <td className={styles.amountCell}>{formatAmount(request.amount)}</td>
+                    <td className={styles.submittedCell}>
+                      {formatSubmitted(request.submitted)}
+                    </td>
                     <td>
                       <span className={statusClass[request.status]}>
-                        {request.status}
+                        {displayStatus(request.status)}
                       </span>
                     </td>
                     <td className={styles.actionCell}>

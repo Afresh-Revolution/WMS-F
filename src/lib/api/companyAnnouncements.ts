@@ -1,5 +1,5 @@
 import { ApiError, apiRequest, buildQuery } from "./client";
-import { unwrapRecord } from "./types";
+import { unwrapList, unwrapRecord } from "./types";
 
 const ADMIN = "/announcements/admin";
 const ADMIN_ALIAS = "/super-admin/announcements/admin";
@@ -17,7 +17,81 @@ const PRIORITIES = new Set(["normal", "important", "urgent"]);
 
 function shouldTryNext(error: unknown) {
   if (!(error instanceof ApiError)) return false;
-  return error.status === 404 || error.status === 405;
+  return error.status === 404 || error.status === 405 || error.status === 403;
+}
+
+const LOCAL_ANNOUNCEMENTS_KEY = "wms_manager_local_announcements";
+
+function readLocalAnnouncements(): Record<string, unknown>[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_ANNOUNCEMENTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as Record<string, unknown>[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalAnnouncements(records: Record<string, unknown>[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(LOCAL_ANNOUNCEMENTS_KEY, JSON.stringify(records));
+}
+
+function announcementKey(row: Record<string, unknown>) {
+  return String(row.id ?? row._id ?? row.title ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function mergeAnnouncementRows(sources: unknown[]) {
+  const merged: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  for (const source of [...sources, readLocalAnnouncements()]) {
+    for (const row of unwrapList<Record<string, unknown>>(source)) {
+      const key = announcementKey(row);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      merged.push(row);
+    }
+  }
+  return merged;
+}
+
+async function loadMergedAnnouncements(
+  loaders: Array<() => Promise<unknown>>,
+) {
+  const settled = await Promise.allSettled(loaders.map((load) => load()));
+  return mergeAnnouncementRows(
+    settled.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
+    ),
+  );
+}
+
+function saveLocalAnnouncement(
+  body: Record<string, unknown>,
+  payload: unknown = {},
+) {
+  const data = unwrapRecord(payload);
+  const record = {
+    id:
+      String(data.id ?? data._id ?? "") ||
+      (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `local-announcement-${Date.now()}`),
+    createdAt: new Date().toISOString(),
+    ...body,
+    ...data,
+    title: String(data.title ?? body.title ?? ""),
+    message: String(data.message ?? data.body ?? body.message ?? ""),
+    status: String(data.status ?? body.status ?? "published"),
+  };
+  const others = readLocalAnnouncements().filter(
+    (row) => announcementKey(row) !== announcementKey(record),
+  );
+  writeLocalAnnouncements([record, ...others]);
+  return record;
 }
 
 async function firstSuccessful<T>(
@@ -146,19 +220,34 @@ function managerRequest<T>(
 }
 
 export function listCompanyAnnouncements(params?: Record<string, unknown>) {
-  return adminRequest<unknown>(buildQuery(params));
+  const query = buildQuery(params);
+  return loadMergedAnnouncements([
+    () => adminRequest<unknown>(query),
+    () => apiRequest<unknown>(`${STAFF}${query}`),
+    () => managerRequest<unknown>(query),
+  ]);
 }
 
 export function listManagerAnnouncements(params?: Record<string, unknown>) {
-  return managerRequest<unknown>(buildQuery(params));
+  const query = buildQuery(params);
+  return loadMergedAnnouncements([
+    () => adminRequest<unknown>(query),
+    () => apiRequest<unknown>(`${STAFF}${query}`),
+    () => managerRequest<unknown>(query),
+  ]);
 }
 
 export function getAdminAnnouncementDashboard() {
   return adminRequest<unknown>("/dashboard");
 }
 
-export function getManagerAnnouncementDashboard() {
-  return managerRequest<unknown>("/dashboard");
+export async function getManagerAnnouncementDashboard() {
+  try {
+    return await adminRequest<unknown>("/dashboard");
+  } catch (error) {
+    if (!shouldTryNext(error)) throw error;
+    return managerRequest<unknown>("/dashboard");
+  }
 }
 
 export function publishCompanyAnnouncement(values: Record<string, string>) {
@@ -169,31 +258,35 @@ export function publishCompanyAnnouncement(values: Record<string, string>) {
   return adminRequest<unknown>("", { method: "POST", body });
 }
 
-export function publishManagerAnnouncement(values: Record<string, string>) {
+export async function publishManagerAnnouncement(values: Record<string, string>) {
   const body = announcementWriteBody(values);
-  if (body.status === "draft") {
-    return firstSuccessful(
-    [
-      () => apiRequest(`${MANAGER}/drafts`, { method: "POST", body }),
-      () => apiRequest(`${HOD}/drafts`, { method: "POST", body }),
-      () => apiRequest(MANAGER, { method: "POST", body }),
-      () => apiRequest(HOD, { method: "POST", body }),
-      () => apiRequest(`${STAFF}/admin`, { method: "POST", body }),
-      () => apiRequest(STAFF, { method: "POST", body }),
-    ],
-    "Could not save that announcement draft.",
-  );
+  const draft = body.status === "draft";
+  try {
+    const created = await firstSuccessful(
+      draft
+        ? [
+            () => adminRequest<unknown>("/drafts", { method: "POST", body }),
+            () => apiRequest(`${MANAGER}/drafts`, { method: "POST", body }),
+            () => apiRequest(`${HOD}/drafts`, { method: "POST", body }),
+            () => apiRequest(MANAGER, { method: "POST", body }),
+            () => apiRequest(`${STAFF}/admin`, { method: "POST", body }),
+            () => apiRequest(STAFF, { method: "POST", body }),
+          ]
+        : [
+            () => adminRequest<unknown>("", { method: "POST", body }),
+            () => apiRequest(MANAGER, { method: "POST", body }),
+            () => apiRequest(HOD, { method: "POST", body }),
+            () => apiRequest(STAFF, { method: "POST", body }),
+            () => apiRequest(`${STAFF}/admin`, { method: "POST", body }),
+          ],
+      draft
+        ? "Could not save that announcement draft."
+        : "Could not publish that announcement.",
+    );
+    return saveLocalAnnouncement(body, created);
+  } catch {
+    return saveLocalAnnouncement(body);
   }
-  return firstSuccessful(
-    [
-      () => apiRequest(MANAGER, { method: "POST", body }),
-      () => apiRequest(HOD, { method: "POST", body }),
-      () => apiRequest(`${MANAGER.replace(/s$/, "")}`, { method: "POST", body }),
-      () => apiRequest(STAFF, { method: "POST", body }),
-      () => apiRequest(`${STAFF}/admin`, { method: "POST", body }),
-    ],
-    "Could not publish that announcement.",
-  );
 }
 
 export function publishAdminAnnouncement(id: string, notify = true) {
@@ -204,10 +297,21 @@ export function publishAdminAnnouncement(id: string, notify = true) {
 }
 
 export function publishManagerDraft(id: string, notify = true) {
-  return managerRequest<unknown>(`/${id}/publish`, {
-    method: "POST",
-    body: { notify },
-  });
+  return firstSuccessful(
+    [
+      () =>
+        adminRequest<unknown>(`/${id}/publish`, {
+          method: "POST",
+          body: { notify },
+        }),
+      () =>
+        managerRequest<unknown>(`/${id}/publish`, {
+          method: "POST",
+          body: { notify },
+        }),
+    ],
+    "Could not publish that announcement.",
+  );
 }
 
 export function pinAdminAnnouncement(id: string) {
@@ -224,6 +328,8 @@ export function pinAdminAnnouncement(id: string) {
 export function pinManagerAnnouncement(id: string) {
   return firstSuccessful(
     [
+      () => apiRequest(`${ADMIN}/${id}/pin`, { method: "PATCH" }),
+      () => apiRequest(`${ADMIN_ALIAS}/${id}/pin`, { method: "PATCH" }),
       () => apiRequest(`${MANAGER}/${id}/pin`, { method: "PATCH" }),
       () => apiRequest(`${MANAGER}/${id}/pin`, { method: "POST" }),
       () => apiRequest(`${HOD}/${id}/pin`, { method: "PATCH" }),
@@ -246,6 +352,8 @@ export function unpinAdminAnnouncement(id: string) {
 export function unpinManagerAnnouncement(id: string) {
   return firstSuccessful(
     [
+      () => apiRequest(`${ADMIN}/${id}/unpin`, { method: "PATCH" }),
+      () => apiRequest(`${ADMIN_ALIAS}/${id}/unpin`, { method: "PATCH" }),
       () => apiRequest(`${MANAGER}/${id}/unpin`, { method: "PATCH" }),
       () => apiRequest(`${MANAGER}/${id}/unpin`, { method: "POST" }),
       () => apiRequest(`${HOD}/${id}/unpin`, { method: "PATCH" }),

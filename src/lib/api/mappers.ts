@@ -1325,54 +1325,133 @@ export function mapEvent(record: Record<string, unknown>) {
   };
 }
 
+function humanizeDisciplineLabel(value: string) {
+  return value
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatDisciplineDate(value: unknown) {
+  const raw = str(value);
+  if (!raw) return "";
+  if (/^[A-Za-z]{3}\s+\d{1,2}(,\s+\d{4})?$/.test(raw.trim())) return raw;
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) return raw;
+  return new Date(parsed).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function personName(value: unknown) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  const record = asRecord(value);
+  if (!record) return "";
+  return str(
+    record.fullName ??
+      record.name ??
+      [record.firstName, record.lastName].filter(Boolean).join(" ") ??
+      record.email,
+  );
+}
+
 export function mapDisciplineCase(record: Record<string, unknown>) {
   const employee = asRecord(record.employee) ?? asRecord(record.staff);
+  const issuer =
+    asRecord(record.issuedBy) ??
+    asRecord(record.issuer) ??
+    asRecord(record.issuedByUser) ??
+    asRecord(record.createdByUser);
   const name = str(
     record.name ??
       record.employeeName ??
-      employee?.fullName ??
-      employee?.name,
+      record.employee_name ??
+      personName(employee) ??
+      [record.firstName, record.lastName].filter(Boolean).join(" "),
   );
   const statusRaw = str(record.status).toLowerCase();
   const status = statusRaw.includes("closed") ? "Closed" : "Active";
-  const actionLabel = str(
-    record.actionType ?? record.type ?? record.action,
-    status,
+  const actionRaw = str(
+    record.actionType ?? record.type ?? record.action ?? record.action_type,
   );
+  const actionLabel = humanizeDisciplineLabel(actionRaw) || status;
+  const acknowledged =
+    record.acknowledged === true ||
+    /acknowledged/.test(str(record.acknowledgementStatus ?? record.acknowledgement).toLowerCase());
+  const tags = Array.isArray(record.tags)
+    ? (record.tags as { label: string; tone?: string }[]).map((tag) => ({
+        label: humanizeDisciplineLabel(str(tag.label)) || str(tag.label),
+        tone: (str(tag.tone, "active") as
+          | "warning"
+          | "unacknowledged"
+          | "active"
+          | "closed"
+          | "acknowledged"
+          | "strike"),
+      }))
+    : [
+        {
+          label: actionLabel,
+          tone:
+            actionLabel.toLowerCase().includes("strike") ||
+            actionLabel.toLowerCase().includes("suspen")
+              ? ("strike" as const)
+              : actionLabel.toLowerCase().includes("warn")
+                ? ("warning" as const)
+                : status === "Closed"
+                  ? ("closed" as const)
+                  : ("active" as const),
+        },
+        ...(status === "Active"
+          ? [
+              {
+                label: acknowledged ? "Acknowledged" : "Unacknowledged",
+                tone: acknowledged
+                  ? ("acknowledged" as const)
+                  : ("unacknowledged" as const),
+              },
+            ]
+          : []),
+        { label: status, tone: status === "Closed" ? ("closed" as const) : ("active" as const) },
+      ];
+
   return {
     id: str(record.id ?? record._id),
     ref: str(record.ref ?? record.reference ?? record.caseNumber),
-    initials: str(record.initials, initials(name)),
+    employeeId: str(
+      record.employeeId ??
+        record.employee_id ??
+        employee?.id ??
+        employee?._id,
+    ),
+    initials: str(record.initials, initials(name) || "—"),
     name,
     role: str(
       record.role ??
         record.department ??
-        nestedStr(employee?.department, ["name", "title", "label"]),
+        record.departmentName ??
+        nestedStr(employee?.department, ["name", "title", "label"]) ??
+        employee?.title ??
+        employee?.jobTitle,
     ),
-    date: str(record.date ?? record.issuedAt ?? record.createdAt),
+    date: formatDisciplineDate(
+      record.date ?? record.issuedAt ?? record.occurredAt ?? record.createdAt,
+    ),
     issuedBy: str(
-      record.issuedBy ?? record.issuer ?? nestedStr(record.issuedByUser),
+      record.issuedByName ??
+        record.issuerName ??
+        personName(issuer) ??
+        (typeof record.issuedBy === "string" ? record.issuedBy : "") ??
+        record.createdByName,
     ),
     description: str(record.description ?? record.reason ?? record.summary),
     status: status as "Active" | "Closed",
-    tags: Array.isArray(record.tags)
-      ? (record.tags as { label: string; tone?: string }[]).map((tag) => ({
-          label: str(tag.label),
-          tone: (str(tag.tone, "active") as "warning" | "unacknowledged" | "active" | "closed" | "acknowledged" | "strike"),
-        }))
-      : [
-          {
-            label: actionLabel,
-            tone:
-              actionLabel.toLowerCase().includes("strike")
-                ? ("strike" as const)
-                : actionLabel.toLowerCase().includes("warn")
-                  ? ("warning" as const)
-                  : status === "Closed"
-                    ? ("closed" as const)
-                    : ("active" as const),
-          },
-        ],
+    acknowledged,
+    tags,
   };
 }
 

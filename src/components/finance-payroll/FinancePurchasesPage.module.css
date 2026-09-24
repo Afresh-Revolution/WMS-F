@@ -26,28 +26,26 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  margin-top: 8px;
+  margin-top: 28px;
   padding: 12px 18px;
   border-radius: 999px;
   background: var(--afresh-orange);
   color: #fff;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 8px 20px rgba(237, 90, 40, 0.22);
 }
 
 .stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .statCard {
-  padding: 16px 18px;
-  border: 1px solid #f3e7df;
-  border-radius: 16px;
-  background: var(--afresh-orange-soft);
+  padding: 20px 22px 18px;
+  border-radius: 18px;
+  background: #fff;
 }
 
 .statLabel {
@@ -60,7 +58,7 @@
 }
 
 .statValue {
-  margin: 10px 0 0;
+  margin: 14px 0 0;
   font-family: var(--font-display);
   font-size: 40px;
   line-height: 1;
@@ -71,8 +69,12 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   margin-bottom: 20px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #f0ece8;
 }
 
 .filterChip {
@@ -90,8 +92,7 @@
 }
 
 .tableSection {
-  border: 1px solid #ebe6e1;
-  border-radius: 16px;
+  border-radius: 20px;
   background: #fff;
   overflow: hidden;
 }
@@ -106,7 +107,7 @@
 }
 
 .table th {
-  padding: 12px 24px;
+  padding: 16px 20px;
   border-bottom: 1px solid #f5f5f4;
   font-size: 10px;
   font-weight: 700;
@@ -118,7 +119,7 @@
 }
 
 .table td {
-  padding: 16px 24px;
+  padding: 16px 20px;
   border-bottom: 1px solid #f5f5f4;
   font-size: 13px;
   color: #44403c;
@@ -129,10 +130,6 @@
   border-bottom: none;
 }
 
-.table tbody tr:hover {
-  background: #fafaf9;
-}
-
 .refCell {
   font-weight: 600;
   color: var(--afresh-ink);
@@ -140,7 +137,7 @@
 }
 
 .itemCell {
-  min-width: 220px;
+  min-width: 240px;
   white-space: normal;
 }
 
@@ -183,6 +180,11 @@
   white-space: nowrap;
 }
 
+.submittedCell {
+  color: #78716c;
+  white-space: nowrap;
+}
+
 .actionCell {
   text-align: right;
   white-space: nowrap;
@@ -191,39 +193,37 @@
 .actionGroup {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+}
+
+.rejectButton,
+.approveButton,
+.orderButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
 }
 
 .rejectButton,
 .approveButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-}
-
-.rejectButton {
-  border: 1.5px solid #fecaca;
-  background: #fff;
-  color: #be123c;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1.5px solid #ebe6e1;
+  color: #78716c;
 }
 
 .approveButton {
-  background: var(--afresh-orange);
-  color: #fff;
+  color: var(--afresh-orange);
 }
 
 .orderButton {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
-  height: 32px;
+  height: 34px;
   padding: 0 12px;
   border: 1.5px solid #ebe6e1;
-  border-radius: 8px;
-  background: #fff;
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
   color: #44403c;
@@ -236,7 +236,7 @@
 .statusRejected {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 5px 10px;
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
@@ -269,32 +269,13 @@
   color: #78716c;
 }
 
-.searchField {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 1rem;
-  max-width: 420px;
-  padding: 0 16px;
-  height: 44px;
-  border: 1px solid #ebe6e1;
-  border-radius: 12px;
-  background: #fff;
-}
-
-.searchIcon {
-  color: #a8a29e;
-  flex-shrink: 0;
-}
-
-.searchInput {
-  width: 100%;
-  font-size: 14px;
-}
-
 @media (max-width: 980px) {
   .stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .newButton {
+    margin-top: 0;
   }
 }
 
