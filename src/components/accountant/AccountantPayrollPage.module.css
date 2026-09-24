@@ -272,9 +272,12 @@
 
 .empty {
   margin: 0;
-  padding: 28px 20px;
+  padding: 28px 22px;
   text-align: center;
-  color: #a8a29e;
+  border: 1px dashed #ebe6e1;
+  border-radius: 16px;
+  background: #fff;
+  color: #78716c;
   font-size: 14px;
 }
 

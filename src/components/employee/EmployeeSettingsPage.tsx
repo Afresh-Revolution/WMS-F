@@ -181,7 +181,8 @@ export function EmployeeSettingsPage() {
       <h2>Password</h2>
       {passwordRequired ? (
         <p className={styles.notice}>
-          Change your temporary password before saving other account details.
+          Your first login password is your first name. Change it before
+          saving other account details.
         </p>
       ) : null}
       <label className={styles.field}>

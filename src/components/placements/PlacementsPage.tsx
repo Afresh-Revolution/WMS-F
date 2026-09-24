@@ -12,7 +12,8 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { usePageActions } from "@/hooks/usePageActions";
 import { loadManagerLookups, lookupsApi, managerApi, nyscInternsManageApi, superAdminApi } from "@/lib/api";
-import { listFrom, mapDepartment, mapPlacement, str } from "@/lib/api/mappers";
+import { firstNameFrom, listFrom, mapDepartment, mapPlacement, readTemporaryPassword, str } from "@/lib/api/mappers";
+import { showCreatedCredentials } from "@/lib/createdCredentials";
 import { asInternRecord } from "@/lib/api/internMappers";
 import { portalHref } from "@/lib/portalPaths";
 import styles from "./PlacementsPage.module.css";
@@ -356,6 +357,18 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
         ? await managerApi.createNyscIntern(body)
         : await superAdminApi.nyscInterns.create(body);
       await assignSupervisor(created, values.employeeId);
+      const loginEmail =
+        str((created as { loginEmail?: unknown })?.loginEmail) ||
+        values.email.trim();
+      const temporaryPassword =
+        readTemporaryPassword(created) || firstNameFrom(values.name);
+      if (temporaryPassword) {
+        showCreatedCredentials({
+          name: values.name.trim(),
+          email: loginEmail,
+          password: temporaryPassword,
+        });
+      }
       refetch();
       showToast("Member added", "success");
     } catch (error) {

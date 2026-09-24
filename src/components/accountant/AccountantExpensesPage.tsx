@@ -3,7 +3,7 @@
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Bell, Check, Plus, Search, Undo2, Wallet } from "lucide-react";
+import { Bell, Plus, Search, Wallet } from "lucide-react";
 import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/components/accountant/RecordExpenseModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { accountantApi } from "@/lib/api";
+import { accountantApi, asRecord } from "@/lib/api";
 import {
   mapAccountantExpense,
   unwrapAccountantList,
@@ -22,7 +22,6 @@ import {
   formatExpenseNaira,
   matchesExpenseFilter,
   type AccountantExpense,
-  type AccountantExpenseCategory,
   type AccountantExpenseFilter,
   type AccountantExpenseStatus,
 } from "@/data/accountantExpenses";
@@ -35,19 +34,11 @@ const statusClass: Record<AccountantExpenseStatus, string> = {
   Returned: styles.statusReturned,
 };
 
-function formatExpenseDate(date = new Date()) {
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 export function AccountantExpensesPage() {
   const [filter, setFilter] =
     useState<AccountantExpenseFilter>("Pending Review");
-  const [localExpenses, setLocalExpenses] = useState<AccountantExpense[]>([]);
   const [recordOpen, setRecordOpen] = useState(false);
+  const [recorded, setRecorded] = useState<AccountantExpense[]>([]);
   const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
     () => accountantApi.expenses.list(),
@@ -56,14 +47,13 @@ export function AccountantExpensesPage() {
 
   const expenses = useMemo(() => {
     const mapped = unwrapAccountantList(data).map(mapAccountantExpense);
-    const merged = [...localExpenses, ...mapped];
     const seen = new Set<string>();
-    return merged.filter((item) => {
-      if (seen.has(item.id)) return false;
+    return [...recorded, ...mapped].filter((item) => {
+      if (!item.id || seen.has(item.id)) return false;
       seen.add(item.id);
       return true;
     });
-  }, [data, localExpenses]);
+  }, [data, recorded]);
 
   const filtered = useMemo(
     () => expenses.filter((item) => matchesExpenseFilter(item, filter)),
@@ -99,58 +89,28 @@ export function AccountantExpensesPage() {
     await runAction(
       "Record expense",
       async () => {
-        const next: AccountantExpense = {
-          id: `expense-${Date.now()}`,
-          ref: `EX-${4600 + expenses.length}`,
+        const created = await accountantApi.expenses.create({
+          category: values.category,
           employeeId: employee.id,
+          employeeName: employee.name,
           name: employee.name,
+          payee: employee.name,
+          department: employee.department,
           initials: employee.initials,
           avatarColor: employee.avatarColor,
-          department: employee.department,
-          category: values.category as AccountantExpenseCategory,
-          note: values.note || "Expense recorded",
-          date: formatExpenseDate(),
           amount,
-          amountLabel: formatExpenseNaira(amount),
-          status: "Pending Review",
+          note: values.note || values.category,
+          title: values.note || values.category,
           hasReceipt: values.hasReceipt,
-        };
-        setLocalExpenses((current) => [next, ...current]);
+          status: "PENDING",
+        });
+        setRecorded((current) => [
+          mapAccountantExpense(asRecord(created)),
+          ...current,
+        ]);
         refetch();
       },
       `Expense recorded for ${employee.name}`,
-    );
-  }
-
-  async function handleVerify(expense: AccountantExpense) {
-    await runAction(
-      "Verify expense",
-      async () => {
-        setLocalExpenses((current) =>
-          current.map((item) =>
-            item.id === expense.id
-              ? { ...item, status: "Verified" }
-              : item,
-          ),
-        );
-      },
-      `${expense.ref} verified`,
-    );
-  }
-
-  async function handleReturn(expense: AccountantExpense) {
-    await runAction(
-      "Return expense",
-      async () => {
-        setLocalExpenses((current) =>
-          current.map((item) =>
-            item.id === expense.id
-              ? { ...item, status: "Returned" }
-              : item,
-          ),
-        );
-      },
-      `${expense.ref} returned`,
     );
   }
 
@@ -281,28 +241,7 @@ export function AccountantExpensesPage() {
                 <p className={styles.amount}>{expense.amountLabel}</p>
               </div>
 
-              {expense.status === "Pending Review" ? (
-                <div className={styles.actions}>
-                  <button
-                    type="button"
-                    className={styles.primaryAction}
-                    onClick={() => void handleVerify(expense)}
-                  >
-                    <Check size={15} />
-                    Verify
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.secondaryAction}
-                    onClick={() => void handleReturn(expense)}
-                  >
-                    <Undo2 size={15} />
-                    Return
-                  </button>
-                </div>
-              ) : null}
-
-              {expense.status === "Verified" ? (
+              {expense.status === "Pending Review" || expense.status === "Verified" ? (
                 <div className={styles.actions}>
                   <button
                     type="button"

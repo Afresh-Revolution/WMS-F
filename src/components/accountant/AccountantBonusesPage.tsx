@@ -3,7 +3,7 @@
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Bell, Gift, Plus, Search, Trash2 } from "lucide-react";
+import { Bell, Gift, Plus, Search } from "lucide-react";
 import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import {
@@ -17,48 +17,31 @@ import {
   mapAccountantBonus,
   unwrapAccountantList,
 } from "@/lib/api/accountantMappers";
-import {
-  formatNaira,
-  type AccountantBonus,
-  type AccountantBonusType,
-} from "@/data/accountantBonuses";
+import { formatNaira, type AccountantBonus } from "@/data/accountantBonuses";
+import { asRecord } from "@/lib/api";
 import styles from "./AccountantBonusesPage.module.css";
-
-function formatBonusDate(date = new Date()) {
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 export function AccountantBonusesPage() {
   const [recordOpen, setRecordOpen] = useState(false);
-  const [localBonuses, setLocalBonuses] = useState<AccountantBonus[]>([]);
+  const [recorded, setRecorded] = useState<AccountantBonus[]>([]);
   const { runAction } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(async () => {
-    const [payments, dashboard] = await Promise.all([
-      accountantApi.payroll.payments(),
+    const [records, dashboard] = await Promise.all([
+      accountantApi.bonuses.list(),
       accountantSettled(accountantApi.payroll.dashboard()),
     ]);
-    return { payments, dashboard };
+    return { records, dashboard };
   }, []);
 
   const bonuses = useMemo(() => {
-    const mapped = unwrapAccountantList(data?.payments)
-      .filter((record) => {
-        const haystack = `${record.type ?? ""} ${record.category ?? ""} ${record.bonusType ?? ""}`.toLowerCase();
-        return haystack.includes("bonus") || Number(record.bonus ?? record.bonusAmount ?? 0) > 0;
-      })
-      .map(mapAccountantBonus);
-    const merged = [...localBonuses, ...mapped];
+    const mapped = unwrapAccountantList(data?.records).map(mapAccountantBonus);
     const seen = new Set<string>();
-    return merged.filter((item) => {
-      if (seen.has(item.id)) return false;
+    return [...recorded, ...mapped].filter((item) => {
+      if (!item.id || seen.has(item.id)) return false;
       seen.add(item.id);
       return true;
     });
-  }, [data, localBonuses]);
+  }, [data, recorded]);
 
   const total = useMemo(
     () => bonuses.reduce((sum, bonus) => sum + bonus.amount, 0),
@@ -81,33 +64,27 @@ export function AccountantBonusesPage() {
     await runAction(
       "Record bonus",
       async () => {
-        const next: AccountantBonus = {
-          id: `bonus-${Date.now()}`,
+        const created = await accountantApi.bonuses.create({
+          category: "Bonus",
+          type: values.type,
+          bonusType: values.type,
           employeeId: employee.id,
+          employeeName: employee.name,
           name: employee.name,
+          payee: employee.name,
+          department: employee.department,
           initials: employee.initials,
           avatarColor: employee.avatarColor,
-          type: values.type as AccountantBonusType,
-          department: employee.department,
-          note: values.note || "Bonus recorded",
-          date: formatBonusDate(),
           amount,
-          amountLabel: formatNaira(amount),
-        };
-        setLocalBonuses((current) => [next, ...current]);
+          note: values.note || "Bonus recorded",
+        });
+        setRecorded((current) => [
+          mapAccountantBonus(asRecord(created)),
+          ...current,
+        ]);
         refetch();
       },
       `Bonus recorded for ${employee.name}`,
-    );
-  }
-
-  async function handleDelete(bonus: AccountantBonus) {
-    await runAction(
-      "Delete bonus",
-      async () => {
-        setLocalBonuses((current) => current.filter((item) => item.id !== bonus.id));
-      },
-      `Removed bonus for ${bonus.name}`,
     );
   }
 
@@ -195,14 +172,6 @@ export function AccountantBonusesPage() {
               </div>
               <div className={styles.bonusAside}>
                 <p className={styles.bonusAmount}>+{bonus.amountLabel}</p>
-                <button
-                  type="button"
-                  className={styles.deleteButton}
-                  aria-label={`Delete bonus for ${bonus.name}`}
-                  onClick={() => void handleDelete(bonus)}
-                >
-                  <Trash2 size={16} />
-                </button>
               </div>
             </article>
           ))

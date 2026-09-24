@@ -211,6 +211,8 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
     "A user with that email already exists. Refresh the directory to see them.",
   MEETING_TYPE_NOT_FOUND:
     "Meeting type was not found. Create the meeting without a meeting type.",
+  SECRETARY_ORGANIZATION_REQUIRED:
+    "This secretary account is missing an organization. The meeting was saved on the shared calendar instead.",
   PASSWORD_CHANGE_REQUIRED:
     "Change your password before updating other account details.",
   INVALID_CURRENT_PASSWORD: "Current password is incorrect.",

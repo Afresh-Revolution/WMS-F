@@ -43,10 +43,10 @@ export async function loadManagerLookups() {
     ? departments
     : listFrom(departments as never);
   if (directory.length) {
-    lists.employees = directory;
+    lists.employees = listFrom(directory as never);
   }
   if (departmentRows.length) {
-    lists.departments = departmentRows;
+    lists.departments = listFrom(departmentRows as never);
   }
   return lists;
 }

@@ -76,6 +76,10 @@ const LIST_KEYS = [
   "purchaseRequests",
   "purchaseOrders",
   "salaryImplementations",
+  "implementations",
+  "documents",
+  "logs",
+  "auditLogs",
   "articles",
   "topics",
 ] as const;
@@ -227,23 +231,22 @@ export function mapAccountantPayrollDetail(
   if (!hasRun && items.length === 0) return null;
 
   const mappedPeriod = hasRun ? mapAccountantPayrollPeriod(run, 0) : null;
-  if (!mappedPeriod && !fallback) return fallback;
+  if (!mappedPeriod && items.length === 0) return null;
 
   const summarySource = asRecord(run.summary ?? run.totals ?? run);
-  const schedule = items.length > 0 ? items : fallback?.schedule ?? [];
-  const staff = mappedPeriod?.staff || schedule.length || fallback?.staff || 0;
+  const schedule = items;
+  const staff = mappedPeriod?.staff || schedule.length || 0;
   const netValue =
     summarySource.net ??
     summarySource.netPayable ??
-    mappedPeriod?.net ??
-    fallback?.summary.net;
+    mappedPeriod?.net;
 
   return {
-    id: mappedPeriod?.id ?? fallback?.id ?? "payroll",
+    id: mappedPeriod?.id ?? str(run.id ?? run._id, fallback?.id ?? "payroll"),
     label: str(
       run.label ??
         run.period ??
-        (mappedPeriod ? `${mappedPeriod.month} ${mappedPeriod.year}` : fallback?.label),
+        (mappedPeriod ? `${mappedPeriod.month} ${mappedPeriod.year}` : undefined),
       mappedPeriod?.title ?? fallback?.label ?? "Payroll",
     ),
     status: mappedPeriod?.status ?? fallback?.status ?? "In Preparation",
@@ -252,32 +255,26 @@ export function mapAccountantPayrollDetail(
       run.recorded ?? run.preparedLabel,
       `${schedule.length || staff}/${staff || schedule.length}`,
     ),
-    readiness: mappedPeriod?.readiness ?? fallback?.readiness ?? "0% ready",
+    readiness: mappedPeriod?.readiness ?? "0% ready",
     summary: {
       gross: formatAccountantNaira(
-        summarySource.gross ?? summarySource.grossPayable ?? fallback?.summary.gross,
+        summarySource.gross ?? summarySource.grossPayable,
       ),
       bonuses: formatAccountantNaira(
-        summarySource.bonuses ?? summarySource.totalBonuses ?? fallback?.summary.bonuses,
+        summarySource.bonuses ?? summarySource.totalBonuses,
       ),
       deductions: formatAccountantNaira(
-        summarySource.deductions ??
-          summarySource.totalDeductions ??
-          fallback?.summary.deductions,
+        summarySource.deductions ?? summarySource.totalDeductions,
       ),
       net: formatAccountantNaira(netValue),
     },
     totals: {
       base: formatAccountantNaira(
-        summarySource.base ?? summarySource.baseSalary ?? fallback?.totals.base,
+        summarySource.base ?? summarySource.baseSalary,
       ),
-      bonuses: formatAccountantNaira(
-        summarySource.bonuses ?? fallback?.totals.bonuses,
-      ),
-      deductions: formatAccountantNaira(
-        summarySource.deductions ?? fallback?.totals.deductions,
-      ),
-      net: formatAccountantNaira(netValue ?? fallback?.totals.net),
+      bonuses: formatAccountantNaira(summarySource.bonuses),
+      deductions: formatAccountantNaira(summarySource.deductions),
+      net: formatAccountantNaira(netValue),
     },
     schedule,
   };
@@ -484,7 +481,9 @@ export function mapAccountantVendor(
 
 function mapPaymentCategory(value: unknown): AccountantPaymentCategory {
   const raw = str(value).toLowerCase();
-  if (raw.includes("payroll") || raw.includes("salary")) return "Payroll";
+  if (raw.includes("payroll") || raw.includes("salary") || raw.includes("bonus")) {
+    return "Payroll";
+  }
   if (raw.includes("bill")) return "Bill";
   if (raw.includes("purchase")) return "Purchase";
   if (raw.includes("reimburse")) return "Reimbursement";
@@ -654,14 +653,35 @@ export function mapAccountantNotification(
   };
 }
 
+function liveMetricValue(
+  metrics: Record<string, unknown>,
+  data: Record<string, unknown>,
+  keys: string[],
+): unknown {
+  const raw = firstValue(metrics, keys) ?? firstValue(data, keys);
+  if (raw !== undefined && raw !== null && raw !== "") {
+    const rec = asRecord(raw);
+    if (Object.keys(rec).length > 0) {
+      return rec.value ?? rec.count ?? rec.total ?? rec.amount ?? rec.label ?? raw;
+    }
+    return raw;
+  }
+  for (const key of keys) {
+    const nested = data[key] ?? metrics[key];
+    const list = unwrapAccountantList(nested);
+    if (list.length > 0) return list.length;
+  }
+  return undefined;
+}
+
 export function overlayAccountantStats(
   templates: AccountantStat[],
   payload: unknown,
 ): AccountantStat[] {
   const data = asRecord(unwrapAccountantData(payload));
-  const metrics = asRecord(data.metrics ?? data.stats ?? data);
+  const metrics = asRecord(data.metrics ?? data.stats ?? data.counts ?? data);
   const list = unwrapAccountantList(payload);
-  if (list.length > 0 && str(list[0]?.label) && str(list[0]?.value)) {
+  if (list.length > 0 && str(list[0]?.label) && (str(list[0]?.value) || list[0]?.count != null)) {
     return list.map((record, index) => ({
       id: str(record.id, templates[index]?.id ?? `stat-${index + 1}`),
       label: str(record.label ?? record.name, templates[index]?.label ?? "Metric"),
@@ -680,29 +700,35 @@ export function overlayAccountantStats(
     bonuses: ["totalMonthlyBonuses", "bonuses", "totalBonuses"],
     increments: ["incrementsAwaiting", "salaryImplementations", "pendingIncrements"],
     approval: ["payrollAwaitingApproval", "awaitingApproval"],
-    "purchases-review": ["purchasesUnderReview", "purchaseReviews"],
-    "purchases-pay": ["purchasesAwaitingPayment", "purchasesToPay"],
-    "unpaid-bills": ["unpaidBills", "openBills"],
+    "purchases-review": ["purchasesUnderReview", "purchaseReviews", "purchases", "purchaseRequests"],
+    "purchases-pay": ["purchasesAwaitingPayment", "purchasesToPay", "purchaseOrders"],
+    "unpaid-bills": ["unpaidBills", "openBills", "bills"],
     "bills-soon": ["billsDueSoon", "dueSoon"],
     overdue: ["overdueBills", "overdue"],
     expenses: ["monthlyExpenseTotal", "expenseTotal", "expenses"],
     "expense-reviews": ["pendingExpenseReviews", "pendingExpenses"],
     reimbursements: ["pendingReimbursements", "reimbursements"],
     receipts: ["missingReceipts"],
-    invoices: ["missingInvoices"],
+    invoices: ["missingInvoices", "invoices"],
   };
 
   return templates.map((stat) => {
     const keys = keyMap[stat.id] ?? [];
-    const raw = firstValue(metrics, keys);
-    if (raw === undefined) return stat;
+    const raw = liveMetricValue(metrics, data, keys);
+    if (raw === undefined) {
+      return {
+        ...stat,
+        value: stat.id === "period" ? "—" : "0",
+        meta: "",
+      };
+    }
     const rec = asRecord(raw);
     const value = rec.value ?? rec.count ?? rec.total ?? rec.amount ?? raw;
-    const meta = rec.meta ?? rec.label ?? rec.subtitle ?? stat.meta;
+    const meta = rec.meta ?? rec.label ?? rec.subtitle;
     return {
       ...stat,
-      value: formatMaybeStat(value, stat.value),
-      meta: str(meta, stat.meta),
+      value: formatMaybeStat(value, stat.id === "period" ? "—" : "0"),
+      meta: str(meta),
     };
   });
 }
@@ -937,9 +963,8 @@ export function mapAccountantReports(
           value: formatAccountantNaira(
             summaryList[index]?.value ??
               summaryList[index]?.amount ??
-              summaryList[index]?.total ??
-              item.value,
-            item.value,
+              summaryList[index]?.total,
+            "—",
           ),
           label: str(summaryList[index]?.label, item.label),
         }))
@@ -950,8 +975,8 @@ export function mapAccountantReports(
             `${item.id}Value`,
           ]);
           return raw === undefined
-            ? item
-            : { ...item, value: formatAccountantNaira(raw, item.value) };
+            ? { ...item, value: "—" }
+            : { ...item, value: formatAccountantNaira(raw, "—") };
         });
 
   const trend = unwrapAccountantList(merged.trend ?? merged.payrollTrend).map((row) => ({
@@ -976,4 +1001,67 @@ export function mapAccountantReports(
     spendMix,
     expensesByCategory,
   };
+}
+
+export type AccountantDocumentItem = {
+  id: string;
+  name: string;
+  type: string;
+  date: string;
+};
+
+export function mapAccountantDocuments(payload: unknown): AccountantDocumentItem[] {
+  return unwrapAccountantList(payload).map((record, index) => ({
+    id: str(record.id ?? record._id, `doc-${index + 1}`),
+    name: str(record.name ?? record.filename ?? record.title ?? record.label, "Document"),
+    type: str(record.type ?? record.mimeType ?? record.kind),
+    date: formatDateLabel(record.createdAt ?? record.uploadedAt ?? record.date),
+  }));
+}
+
+export type AccountantAuditLogItem = {
+  id: string;
+  action: string;
+  actor: string;
+  time: string;
+};
+
+export function mapAccountantAuditLogs(payload: unknown): AccountantAuditLogItem[] {
+  return unwrapAccountantList(payload).map((record, index) => ({
+    id: str(record.id ?? record._id, `log-${index + 1}`),
+    action: str(
+      record.action ?? record.event ?? record.message ?? record.summary,
+      "Activity",
+    ),
+    actor: str(
+      record.actor ?? record.user ?? record.performedBy ?? nestedName(record, "user"),
+      "System",
+    ),
+    time:
+      formatDateLabel(record.createdAt ?? record.timestamp ?? record.occurredAt) ||
+      str(record.time, "just now"),
+  }));
+}
+
+export type AccountantLeaveItem = {
+  id: string;
+  type: string;
+  dates: string;
+  days: string;
+  status: string;
+};
+
+export function mapAccountantLeaveHistory(payload: unknown): AccountantLeaveItem[] {
+  return unwrapAccountantList(payload).map((record, index) => ({
+    id: str(record.id ?? record._id, `leave-${index + 1}`),
+    type: str(record.type ?? record.leaveType ?? record.name, "Leave"),
+    dates: str(
+      record.dates ?? record.period,
+      [formatDateLabel(record.startDate), formatDateLabel(record.endDate)]
+        .filter(Boolean)
+        .join(" – "),
+    ),
+    days: str(record.days ?? record.dayCount, record.days != null ? `${record.days} days` : ""),
+    status: str(record.status ?? record.state, "Pending"),
+  }));
 }

@@ -2,43 +2,48 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
+  gap: 16px;
+  margin-bottom: 28px;
 }
 
 .lead {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 4px;
   min-width: 0;
 }
 
 .dateLabel {
   margin: 0;
-  font-size: 0.8125rem;
-  color: var(--afresh-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #a8a29e;
 }
 
 .actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 10px;
   flex-shrink: 0;
 }
 
 .search {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  min-width: 180px;
-  padding: 0.45rem 0.75rem;
-  border: 1px solid var(--afresh-border);
+  gap: 8px;
+  width: 220px;
+  height: 38px;
+  padding: 0 12px 0 14px;
+  border: 1px solid #ebe6e1;
   border-radius: 999px;
   background: #fff;
+  color: #a8a29e;
 }
 
 .searchIcon {
-  color: var(--afresh-muted);
+  color: #a8a29e;
   flex-shrink: 0;
 }
 
@@ -46,7 +51,24 @@
   width: 100%;
   min-width: 0;
   background: transparent;
-  font-size: 0.8125rem;
+  font-size: 13px;
+  color: #44403c;
+}
+
+.searchInput::placeholder {
+  color: #a8a29e;
+}
+
+.searchKbd {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid #ebe6e1;
+  border-radius: 6px;
+  background: #fafaf9;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: #a8a29e;
 }
 
 .iconButton {
@@ -54,18 +76,18 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 999px;
   background: #fff;
-  border: 1px solid var(--afresh-border);
-  color: inherit;
+  border: 1px solid #ebe6e1;
+  color: #78716c;
 }
 
 .notifDot {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 9px;
+  right: 9px;
   width: 7px;
   height: 7px;
   border-radius: 999px;
@@ -76,13 +98,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border-radius: 999px;
   background: var(--afresh-orange-soft);
   color: var(--afresh-orange);
-  font-size: 0.75rem;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 @media (max-width: 768px) {
@@ -98,6 +121,7 @@
 
   .search {
     flex: 1;
+    width: auto;
     min-width: 0;
   }
 }
@@ -110,5 +134,9 @@
   .search {
     order: 3;
     width: 100%;
+  }
+
+  .searchKbd {
+    display: none;
   }
 }

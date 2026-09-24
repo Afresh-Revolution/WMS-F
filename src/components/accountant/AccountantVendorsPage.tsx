@@ -9,27 +9,23 @@ import {
   Landmark,
   Mail,
   Phone,
-  Plus,
   Search,
   UserRound,
 } from "lucide-react";
 import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
-import {
-  AddVendorModal,
-  type AddVendorValues,
-} from "@/components/accountant/AddVendorModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { accountantApi } from "@/lib/api";
 import {
+  asRecord,
   mapAccountantVendor,
+  unwrapAccountantData,
   unwrapAccountantList,
 } from "@/lib/api/accountantMappers";
 import {
   accountantVendorFilters,
   type AccountantVendor,
-  type AccountantVendorCategory,
   type AccountantVendorFilter,
 } from "@/data/accountantVendors";
 import styles from "./AccountantVendorsPage.module.css";
@@ -37,24 +33,16 @@ import styles from "./AccountantVendorsPage.module.css";
 export function AccountantVendorsPage() {
   const [filter, setFilter] = useState<AccountantVendorFilter>("Active");
   const [query, setQuery] = useState("");
-  const [localVendors, setLocalVendors] = useState<AccountantVendor[]>([]);
-  const [addOpen, setAddOpen] = useState(false);
-  const { runAction } = usePageActions();
+  const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
     () => accountantApi.vendors.list(),
     [],
   );
 
-  const vendors = useMemo(() => {
-    const mapped = unwrapAccountantList(data).map(mapAccountantVendor);
-    const merged = [...localVendors, ...mapped];
-    const seen = new Set<string>();
-    return merged.filter((item) => {
-      if (seen.has(item.id)) return false;
-      seen.add(item.id);
-      return true;
-    });
-  }, [data, localVendors]);
+  const vendors = useMemo(
+    () => unwrapAccountantList(data).map(mapAccountantVendor),
+    [data],
+  );
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -69,46 +57,21 @@ export function AccountantVendorsPage() {
     });
   }, [filter, query, vendors]);
 
-  async function handleAdd(values: AddVendorValues) {
-    if (!values.name) {
-      throw new Error("Vendor name is required");
-    }
-
+  async function handleView(vendor: AccountantVendor) {
     await runAction(
-      "Add vendor",
+      "Load vendor",
       async () => {
-        const next: AccountantVendor = {
-          id: `vendor-${Date.now()}`,
-          name: values.name,
-          category: values.category as AccountantVendorCategory,
-          status: "Active",
-          contactName: values.contactName || "—",
-          email: values.email || "—",
-          phone: values.phone || "—",
-          bankDetails: values.bankDetails || "—",
-          totalPaid: "₦ 0",
-          totalPaidValue: 0,
-          openBills: 0,
-        };
-        setLocalVendors((current) => [next, ...current]);
+        const detail = await accountantApi.vendors.get(vendor.id);
+        const mapped = mapAccountantVendor(
+          asRecord(unwrapAccountantData(detail)),
+          0,
+        );
+        showToast(
+          `${mapped.name || vendor.name}: ${mapped.contactName} · ${mapped.email}`,
+          "info",
+        );
         refetch();
       },
-      `${values.name} added to vendor directory`,
-    );
-  }
-
-  async function handleToggleStatus(vendor: AccountantVendor) {
-    const nextStatus = vendor.status === "Active" ? "Inactive" : "Active";
-    await runAction(
-      nextStatus === "Active" ? "Activate vendor" : "Deactivate vendor",
-      async () => {
-        setLocalVendors((current) =>
-          current.map((item) =>
-            item.id === vendor.id ? { ...item, status: nextStatus } : item,
-          ),
-        );
-      },
-      `${vendor.name} marked ${nextStatus.toLowerCase()}`,
     );
   }
 
@@ -138,14 +101,6 @@ export function AccountantVendorsPage() {
             Manage the vendors and payees the company transacts with.
           </p>
         </div>
-        <button
-          type="button"
-          className={styles.addButton}
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus size={16} />
-          Add vendor
-        </button>
       </div>
 
       <div className={styles.toolbar}>
@@ -237,20 +192,14 @@ export function AccountantVendorsPage() {
               <button
                 type="button"
                 className={styles.toggleButton}
-                onClick={() => void handleToggleStatus(vendor)}
+                onClick={() => void handleView(vendor)}
               >
-                {vendor.status === "Active" ? "Deactivate" : "Activate"}
+                View vendor
               </button>
             </article>
           ))}
         </div>
       )}
-
-      <AddVendorModal
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onSubmit={handleAdd}
-      />
     </div>
   );
 }

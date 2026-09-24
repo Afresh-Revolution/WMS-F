@@ -1,23 +1,21 @@
 "use client";
 
-import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
 import {
-  CalendarDays,
+  Briefcase,
+  Check,
   Heart,
-  Home,
-  LayoutGrid,
+  Plane,
   Plus,
-  Search,
+  Users,
   X,
-  FileText,
 } from "lucide-react";
 import {
   leaveTabs,
   type LeaveRequestStatus,
   type LeaveTab,
 } from "@/data/leave";
-import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { PageTopBar } from "@/components/layout/PageTopBar";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
@@ -30,6 +28,7 @@ import {
   leaveRequestIdFromError,
   listLeaveBalances,
   listLeaveTypes,
+  listMyLeave,
   listOrganisationLeave,
   loadManagerLookups,
   lookupsApi,
@@ -41,10 +40,10 @@ import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./LeavePage.module.css";
 
 const balanceIcons = {
-  annual: CalendarDays,
+  annual: Plane,
   sick: Heart,
-  parental: FileText,
-  personal: Home,
+  parental: Users,
+  personal: Briefcase,
 } as const;
 
 const statusClass: Record<LeaveRequestStatus, string> = {
@@ -59,22 +58,64 @@ const requestLeaveFields = [
     label: "Leave type",
     type: "select" as const,
     required: true,
+    fullWidth: true,
     options: [] as { label: string; value: string }[],
   },
-  { name: "startDate", label: "Start date", type: "date" as const, required: true },
-  { name: "endDate", label: "End date", type: "date" as const, required: true },
-  { name: "reason", label: "Reason", type: "textarea" as const, required: true },
+  {
+    name: "startDate",
+    label: "From",
+    type: "date" as const,
+    required: true,
+    placeholder: "mm/dd/yyyy",
+  },
+  {
+    name: "endDate",
+    label: "To",
+    type: "date" as const,
+    required: true,
+    placeholder: "mm/dd/yyyy",
+  },
+  {
+    name: "reason",
+    label: "Note",
+    type: "textarea" as const,
+    placeholder: "Optional context for your manager",
+    fullWidth: true,
+    rows: 3,
+  },
 ];
+
+function formatShortDate(value: string) {
+  const text = value.trim();
+  if (!text) return "";
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function prettyRange(range: string) {
+  const parts = range.split(/\s*[–-]\s*/).map((part) => part.trim()).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${formatShortDate(parts[0])} – ${formatShortDate(parts[1])}`;
+  }
+  return formatShortDate(range) || range;
+}
 
 export function LeavePage() {
   const manager = useManagerPortal();
   const [activeTab, setActiveTab] = useState<LeaveTab>("Requests");
   const [requestOpen, setRequestOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
-  const { runAction, showToast } = usePageActions();
+  const { runAction } = usePageActions();
 
   const { data: leaveData, loading, error, refetch } = useAsyncData(
     () => listOrganisationLeave(),
+    [],
+  );
+
+  const { data: myLeaveData, refetch: refetchMine } = useAsyncData(
+    () => listMyLeave().catch(() => []),
     [],
   );
 
@@ -91,18 +132,14 @@ export function LeavePage() {
             employees: [],
             locations: [],
           }))
-        : lookupsApi
-            .departments()
-            .then((payload) => ({
-              departments: listFrom(payload),
-              employees: [],
-              locations: [],
-            }))
-            .catch(() => ({
-              departments: [],
-              employees: [],
-              locations: [],
-            })),
+        : Promise.all([
+            lookupsApi.departments().catch(() => []),
+            lookupsApi.employees().catch(() => []),
+          ]).then(([departments, employees]) => ({
+            departments: listFrom(departments),
+            employees: listFrom(employees),
+            locations: [],
+          })),
     [manager],
   );
 
@@ -115,6 +152,12 @@ export function LeavePage() {
     () =>
       listFrom(leaveData ?? undefined).map((record) => mapLeaveRequest(record)),
     [leaveData],
+  );
+
+  const myLeave = useMemo(
+    () =>
+      listFrom(myLeaveData ?? undefined).map((record) => mapLeaveRequest(record)),
+    [myLeaveData],
   );
 
   const leaveBalances = useMemo(() => {
@@ -130,10 +173,33 @@ export function LeavePage() {
       .map((item) => ({ label: item.name, value: item.id }));
   }, [lookupData]);
 
+  const employeeOptions = useMemo(() => {
+    return listFrom(lookupData?.employees ?? undefined)
+      .map((record) => {
+        const id = String(
+          record.id ?? record.employeeId ?? record.employee_id ?? record.userId ?? "",
+        );
+        const name = String(
+          record.fullName ?? record.name ?? record.label ?? record.employeeName ?? "",
+        ).trim();
+        if (!id || !name) return null;
+        return { label: name, value: id };
+      })
+      .filter((option): option is { label: string; value: string } => Boolean(option));
+  }, [lookupData]);
+
   const createFields = useMemo(() => {
     const types = Array.isArray(typeData) ? typeData : [];
     return [
-      { name: "employeeName", label: "Employee name", required: true },
+      employeeOptions.length > 0
+        ? {
+            name: "employeeId",
+            label: "Employee",
+            type: "select" as const,
+            required: true,
+            options: employeeOptions,
+          }
+        : { name: "employeeName", label: "Employee name", required: true },
       {
         name: "departmentId",
         label: "Department",
@@ -153,19 +219,43 @@ export function LeavePage() {
         };
       }),
     ];
-  }, [departmentOptions, typeData]);
+  }, [departmentOptions, employeeOptions, typeData]);
+
+  const visibleRequests = useMemo(() => {
+    const source = activeTab === "My leave" ? myLeave : leaveRequests;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return source;
+    return source.filter((request) =>
+      `${request.name} ${request.type} ${request.dateRange}`.toLowerCase().includes(needle),
+    );
+  }, [activeTab, leaveRequests, myLeave, query]);
+
+  const calendarGroups = useMemo(() => {
+    const groups = new Map<string, typeof leaveRequests>();
+    for (const request of visibleRequests) {
+      const key = prettyRange(request.dateRange) || "Upcoming";
+      const list = groups.get(key) ?? [];
+      list.push(request);
+      groups.set(key, list);
+    }
+    return Array.from(groups.entries());
+  }, [visibleRequests]);
+
+  function refreshAll() {
+    return Promise.all([refetch(), refetchMine(), refetchBalances()]);
+  }
 
   function approveLeave(id: string, name: string) {
     void runAction(`Approve ${name}'s leave`, async () => {
       await approveLeaveRequest(id);
-      await Promise.all([refetch(), refetchBalances()]);
+      await refreshAll();
     }).catch(() => undefined);
   }
 
   function rejectLeave(id: string, name: string) {
     void runAction(`Decline ${name}'s leave`, async () => {
-      await rejectLeaveRequest(id, "Team coverage is not available that week.");
-      await Promise.all([refetch(), refetchBalances()]);
+      await rejectLeaveRequest(id, "Declined from the leave queue.");
+      await refreshAll();
     }).catch(() => undefined);
   }
 
@@ -185,13 +275,17 @@ export function LeavePage() {
 
   async function handleRequestLeave(values: Record<string, string>) {
     await runAction("Request leave", async () => {
+      const selectedEmployee = employeeOptions.find(
+        (option) => option.value === values.employeeId,
+      );
       const input = {
         leaveTypeId: values.leaveTypeId,
         startDate: values.startDate,
         endDate: values.endDate,
         durationType: "FULL_DAY" as const,
         note: values.reason,
-        employeeName: values.employeeName,
+        employeeId: values.employeeId,
+        employeeName: selectedEmployee?.label || values.employeeName,
         departmentId: values.departmentId,
       };
       try {
@@ -212,81 +306,67 @@ export function LeavePage() {
           note: values.reason,
         });
       }
-      await Promise.all([refetch(), refetchBalances()]);
+      await refreshAll();
     });
   }
 
   return (
-      <div className={styles.page}>
-        <div className={styles.topBar}>
-          <PageDateLabel className={styles.dateLabel} />
-          {loading ? <p className={styles.dateLabel}>Loading leave…</p> : null}
-          {error ? (
-            <p className={styles.dateLabel} role="alert">
+    <div className={styles.page}>
+      <PageTopBar
+        searchValue={query}
+        onSearchChange={setQuery}
+        status={
+          loading ? (
+            <p className={styles.statusLine}>Loading leave…</p>
+          ) : error ? (
+            <p className={styles.statusLine} role="alert">
               {error}
             </p>
-          ) : null}
-          <div className={styles.topActions}>
-            <button
-              type="button"
-              aria-label="Search"
-              className={styles.iconButton}
-              onClick={() => showToast("Use the search field below", "info")}
-            >
-              <Search size={16} />
-            </button>
-            <NotificationsLink className={styles.iconButton} />
-            <button
-              type="button"
-              aria-label="View options"
-              className={styles.iconButton}
-              onClick={() => showToast("Grid view coming soon", "info")}
-            >
-              <LayoutGrid size={16} />
-            </button>
-            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
-          </div>
-        </div>
+          ) : null
+        }
+      />
 
-        <div className={styles.header}>
-          <div>
-            <p className={styles.eyebrow}>Leave &amp; wellbeing</p>
-            <h1 className={styles.title}>Time away, thoughtfully managed</h1>
-            <p className={styles.subtitle}>
-              Request time off, track balances, and keep your team covered — all
-              in one calm place.
-            </p>
-          </div>
-          <button
-            type="button"
-            className={styles.requestButton}
-            onClick={() => setRequestOpen(true)}
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            Request leave
-          </button>
+      <div className={styles.header}>
+        <div>
+          <p className={styles.eyebrow}>Leave &amp; wellbeing</p>
+          <h1 className={styles.title}>Time away, thoughtfully managed</h1>
+          <p className={styles.subtitle}>
+            Request time off, track balances, and keep your team covered — all in
+            one calm place.
+          </p>
         </div>
+        <button
+          type="button"
+          className={styles.requestButton}
+          onClick={() => setRequestOpen(true)}
+        >
+          <Plus size={16} strokeWidth={2.5} />
+          Request leave
+        </button>
+      </div>
 
+      {leaveBalances.length > 0 ? (
         <div className={styles.balances}>
           {leaveBalances.map((balance) => {
             const Icon = balanceIcons[balance.icon];
-            const percentUsed = (balance.used / balance.total) * 100;
+            const percentUsed =
+              balance.total > 0 ? (balance.used / balance.total) * 100 : 0;
 
             return (
               <article key={balance.id} className={styles.balanceCard}>
                 <div className={styles.balanceTop}>
                   <span className={styles.balanceIcon}>
-                    <Icon size={18} strokeWidth={1.75} />
+                    <Icon size={16} strokeWidth={1.75} />
                   </span>
                   <p className={styles.balanceRemaining}>
-                    <strong>{balance.remaining}</strong> left
+                    {balance.remaining} left
                   </p>
                 </div>
                 <p className={styles.balanceLabel}>{balance.label}</p>
                 <div className={styles.progressTrack}>
                   <div
                     className={styles.progressFill}
-                    style={{ width: `${percentUsed}%` }}
+                    style={{ width: `${Math.min(percentUsed, 100)}%` }}
                   />
                 </div>
                 <p className={styles.balanceMeta}>
@@ -296,55 +376,103 @@ export function LeavePage() {
             );
           })}
         </div>
+      ) : null}
 
-        <div className={styles.tabs}>
-          {leaveTabs.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={`${styles.tab} ${
-                activeTab === tab ? styles.tabActive : ""
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+      <div className={styles.filters}>
+        {leaveTabs.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={`${styles.filterChip} ${
+              activeTab === tab ? styles.filterChipActive : ""
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
 
-        {activeTab === "Requests" && (
+      <section className={styles.panel}>
+        {activeTab === "Team calendar" ? (
           <>
             <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>Leave requests</h2>
+              <h2 className={styles.sectionTitle}>Team calendar</h2>
               <p className={styles.sectionSubtitle}>
-                Review and respond to your team&apos;s requests.
+                Upcoming time off across the organisation.
               </p>
             </div>
-
-            <div className={styles.requestList}>
-              {leaveRequests.map((request) => (
+            {calendarGroups.length === 0 ? (
+              <p className={styles.empty}>No leave on the calendar yet.</p>
+            ) : (
+              calendarGroups.map(([label, items]) => (
+                <div key={label} className={styles.calendarGroup}>
+                  <p className={styles.calendarLabel}>{label}</p>
+                  {items.map((request) => (
+                    <article key={request.id} className={styles.requestRow}>
+                      <div className={styles.requestIdentity}>
+                        <span className={styles.requestAvatar}>
+                          {request.initials}
+                        </span>
+                        <div className={styles.requestDetails}>
+                          <p className={styles.requestName}>{request.name}</p>
+                          <p className={styles.requestMeta}>
+                            {request.type}
+                            {request.days
+                              ? ` · ${request.days} ${request.days === 1 ? "day" : "days"}`
+                              : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={statusClass[request.status]}>
+                        {request.status}
+                      </span>
+                    </article>
+                  ))}
+                </div>
+              ))
+            )}
+          </>
+        ) : (
+          <>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>
+                {activeTab === "My leave" ? "My leave" : "Leave requests"}
+              </h2>
+              <p className={styles.sectionSubtitle}>
+                {activeTab === "My leave"
+                  ? "Your submitted time off."
+                  : "Review and respond to your team's requests."}
+              </p>
+            </div>
+            {visibleRequests.length === 0 ? (
+              <p className={styles.empty}>
+                {activeTab === "My leave"
+                  ? "You have no leave requests yet."
+                  : "No leave requests yet."}
+              </p>
+            ) : (
+              visibleRequests.map((request) => (
                 <article key={request.id} className={styles.requestRow}>
                   <div className={styles.requestIdentity}>
-                    <span
-                      className={styles.requestAvatar}
-                      style={{ background: request.avatarColor }}
-                    >
+                    <span className={styles.requestAvatar}>
                       {request.initials}
                     </span>
                     <div className={styles.requestDetails}>
                       <p className={styles.requestName}>{request.name}</p>
                       <p className={styles.requestMeta}>
-                        {request.type} · {request.dateRange} · {request.days}{" "}
-                        days
+                        {request.type} · {prettyRange(request.dateRange)}
+                        {request.days
+                          ? ` · ${request.days} ${request.days === 1 ? "day" : "days"}`
+                          : ""}
                       </p>
                     </div>
                   </div>
-
                   <div className={styles.requestActions}>
                     <span className={statusClass[request.status]}>
                       {request.status}
                     </span>
-                    {request.status === "Pending" && (
+                    {activeTab === "Requests" && request.status === "Pending" ? (
                       <>
                         <button
                           type="button"
@@ -359,11 +487,12 @@ export function LeavePage() {
                           className={styles.approveButton}
                           onClick={() => approveLeave(request.id, request.name)}
                         >
+                          <Check size={15} strokeWidth={2.5} />
                           Approve
                         </button>
                       </>
-                    )}
-                    {request.extensionStatus.toUpperCase() === "PENDING" && (
+                    ) : null}
+                    {request.extensionStatus.toUpperCase() === "PENDING" ? (
                       <>
                         <button
                           type="button"
@@ -380,23 +509,27 @@ export function LeavePage() {
                           Approve extension
                         </button>
                       </>
-                    )}
+                    ) : null}
                   </div>
                 </article>
-              ))}
-            </div>
+              ))
+            )}
           </>
         )}
+      </section>
 
-        <SimpleModal
-          open={requestOpen}
-          title="Request leave"
-          description="Apply for someone by name and department. If they already have pending or approved leave, this extends that request."
-          fields={createFields}
-          submitLabel="Submit request"
-          onClose={() => setRequestOpen(false)}
-          onSubmit={handleRequestLeave}
-        />
-      </div>
+      <SimpleModal
+        open={requestOpen}
+        title="Request leave"
+        description="Apply for someone by name and department. If they already have pending or approved leave, this extends that request."
+        fields={createFields}
+        submitLabel="Submit request"
+        showClose
+        wide
+        appearance="soft"
+        onClose={() => setRequestOpen(false)}
+        onSubmit={handleRequestLeave}
+      />
+    </div>
   );
 }

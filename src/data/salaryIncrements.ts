@@ -18,6 +18,7 @@ export type SalaryIncrement = {
   effectiveDate: string;
   submittedDate: string;
   incrementAmount?: string;
+  justification?: string;
   status: IncrementStatus;
 };
 

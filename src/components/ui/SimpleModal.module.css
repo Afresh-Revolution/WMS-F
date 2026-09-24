@@ -33,6 +33,36 @@
   margin-bottom: 1rem;
 }
 
+.headRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.headCopy {
+  min-width: 0;
+  flex: 1;
+}
+
+.close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin: -4px -4px 0 0;
+  border: 0;
+  background: transparent;
+  color: #a8a29e;
+  cursor: pointer;
+}
+
+.close:hover {
+  color: #44403c;
+}
+
 .title {
   margin: 0 0 0.35rem;
   font-size: 1.125rem;
@@ -107,6 +137,7 @@
 }
 
 .cancel,
+.secondary,
 .submit {
   display: inline-flex;
   align-items: center;
@@ -118,14 +149,164 @@
   white-space: nowrap;
 }
 
-.cancel {
+.cancel,
+.secondary {
   background: #f5f5f4;
   color: #44403c;
+}
+
+.secondary {
+  background: #fff;
+  border: 1px solid #d6d3d1;
 }
 
 .submit {
   background: var(--afresh-orange);
   color: #fff;
+}
+
+.modalSoft {
+  width: min(100%, 420px);
+  padding: 28px 28px 22px;
+  border-radius: 24px;
+}
+
+.modalSoft.modalWide {
+  width: min(100%, 520px);
+}
+
+.modalSoft .formWide {
+  column-gap: 12px;
+  row-gap: 16px;
+}
+
+.modalSoft .title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--afresh-orange);
+}
+
+.modalSoft .description {
+  margin: 8px 0 0;
+  color: #a8a29e;
+}
+
+.modalSoft .form {
+  gap: 16px;
+}
+
+.modalSoft .field {
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--afresh-ink);
+}
+
+.modalSoft .field span {
+  color: var(--afresh-ink);
+}
+
+.modalSoft .field input,
+.modalSoft .field textarea,
+.modalSoft .field select {
+  padding: 0 18px;
+  border: 0;
+  background: #fff4ee;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--afresh-ink);
+  color-scheme: light;
+}
+
+.modalSoft .field input,
+.modalSoft .field select {
+  height: 48px;
+  border-radius: 999px;
+}
+
+.modalSoft .field select {
+  appearance: none;
+  padding-right: 44px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23c4b4ab' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px;
+}
+
+.modalSoft .field textarea {
+  min-height: 88px;
+  padding: 14px 18px;
+  border-radius: 20px;
+  resize: vertical;
+}
+
+.modalSoft .field input::placeholder,
+.modalSoft .field textarea::placeholder {
+  color: #e0cfc6;
+  font-weight: 500;
+}
+
+.modalSoft .field select[data-empty],
+.modalSoft .field input[data-empty],
+.modalSoft .field input[data-empty]::-webkit-datetime-edit {
+  color: #e0cfc6;
+}
+
+.modalSoft .field select option {
+  color: var(--afresh-ink);
+}
+
+.modalSoft .field input[type="number"]::-webkit-inner-spin-button,
+.modalSoft .field input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+.modalSoft .field input[type="number"] {
+  appearance: textfield;
+}
+
+.modalSoft .field input[type="date"]::-webkit-calendar-picker-indicator,
+.modalSoft .field input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.35;
+}
+
+.modalSoft .field input:focus,
+.modalSoft .field textarea:focus,
+.modalSoft .field select:focus {
+  outline: 2px solid #ffd8c4;
+  outline-offset: 0;
+}
+
+.modalSoft .cancel,
+.modalSoft .secondary,
+.modalSoft .submit {
+  height: 42px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.modalSoft .cancel,
+.modalSoft .secondary {
+  border: 1px solid #ebe6e1;
+  background: #fff;
+  color: #44403c;
+}
+
+.modalSoft .submit {
+  gap: 8px;
+}
+
+.modalSoft .actions {
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 8px;
 }
 
 @media (max-width: 640px) {
@@ -138,6 +319,7 @@
   }
 
   .cancel,
+  .secondary,
   .submit {
     width: 100%;
   }

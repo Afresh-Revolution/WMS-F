@@ -1,19 +1,7 @@
 "use client";
 
-import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
-import {
-  AlertTriangle,
-  Check,
-  ChevronRight,
-  Clock,
-  Download,
-  Plus,
-  RefreshCw,
-  Search,
-} from "lucide-react";
-import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
-import { SimpleModal } from "@/components/ui/SimpleModal";
+import { AlertTriangle, Check, ChevronRight, Clock, Plus } from "lucide-react";
 import {
   taskFilters,
   type Task,
@@ -21,10 +9,12 @@ import {
   type TaskPriority,
   type TaskStatus,
 } from "@/data/tasks";
+import { PageTopBar } from "@/components/layout/PageTopBar";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { managerApi, superAdminApi } from "@/lib/api";
-import { listFrom, mapTask } from "@/lib/api/mappers";
+import { listStaffEmployees, managerApi, superAdminApi } from "@/lib/api";
+import { listFrom, mapEmployee, mapTask } from "@/lib/api/mappers";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import styles from "./TasksPage.module.css";
 
@@ -41,25 +31,6 @@ const statusClass: Record<TaskStatus, string> = {
   Completed: styles.statusCompleted,
 };
 
-const createFields = [
-  { name: "title", label: "Title", required: true },
-  { name: "description", label: "Description", type: "textarea" as const },
-  {
-    name: "priority",
-    label: "Priority",
-    type: "select" as const,
-    defaultValue: "Medium",
-    options: [
-      { label: "High", value: "High" },
-      { label: "Medium", value: "Medium" },
-      { label: "Low", value: "Low" },
-    ],
-  },
-  { name: "assignee", label: "Assignee", required: true },
-  { name: "dueDate", label: "Due date", type: "date" as const, required: true },
-  { name: "department", label: "Department", required: true },
-];
-
 function matchesFilter(status: TaskStatus, filter: TaskFilter): boolean {
   if (filter === "All") return true;
   if (filter === "In Progress") return status === "In Progress";
@@ -67,52 +38,145 @@ function matchesFilter(status: TaskStatus, filter: TaskFilter): boolean {
   return status === "Completed";
 }
 
+function formatDueDate(value: string) {
+  const text = value.trim();
+  if (!text) return "";
+  const isoDay = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const date = isoDay
+    ? new Date(Number(isoDay[1]), Number(isoDay[2]) - 1, Number(isoDay[3]))
+    : new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 export function TasksPage() {
   const manager = useManagerPortal();
   const [activeFilter, setActiveFilter] = useState<TaskFilter>("All");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const { runAction, exportRows } = usePageActions();
+  const { runAction } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
     () => (manager ? managerApi.listTasks() : superAdminApi.tasks.list()),
     [manager],
+  );
+  const { data: employeeData } = useAsyncData(
+    () => listStaffEmployees().catch(() => []),
+    [],
   );
 
   const tasks = useMemo(() => {
     return listFrom(data ?? undefined).map((record) => mapTask(record));
   }, [data]);
 
+  const employees = useMemo(
+    () => (employeeData ?? []).map((record) => mapEmployee(record)),
+    [employeeData],
+  );
+
+  const createFields = useMemo(
+    () => [
+      {
+        name: "title",
+        label: "Task title",
+        required: true,
+        fullWidth: true,
+        placeholder: "What needs to be done?",
+      },
+      {
+        name: "description",
+        label: "Description",
+        type: "textarea" as const,
+        fullWidth: true,
+        rows: 3,
+        placeholder: "Details and context",
+      },
+      {
+        name: "assigneeId",
+        label: "Assign to",
+        type: "select" as const,
+        required: true,
+        defaultValue: "",
+        options: [
+          { label: "Select employee", value: "" },
+          ...employees.map((employee) => ({
+            label: employee.name,
+            value: employee.id,
+          })),
+        ],
+      },
+      {
+        name: "priority",
+        label: "Priority",
+        type: "select" as const,
+        defaultValue: "High",
+        options: [
+          { label: "High", value: "High" },
+          { label: "Medium", value: "Medium" },
+          { label: "Low", value: "Low" },
+        ],
+      },
+      {
+        name: "dueDate",
+        label: "Due date",
+        type: "date" as const,
+        required: true,
+        fullWidth: true,
+        placeholder: "mm/dd/yyyy",
+      },
+    ],
+    [employees],
+  );
+
   const taskStats = useMemo(() => {
-    const inProgress = tasks.filter((task) => task.status === "In Progress").length;
+    const open = tasks.filter((task) => task.status !== "Completed").length;
     const overdue = tasks.filter((task) => task.status === "Overdue").length;
+    const inProgress = tasks.filter((task) => task.status === "In Progress").length;
     const completed = tasks.filter((task) => task.status === "Completed").length;
-    const pending = tasks.filter((task) => task.status === "Not Started").length;
     return [
-      { id: "total", label: "Total tasks", value: String(tasks.length), badge: "Active" },
-      { id: "pending", label: "Pending", value: String(pending), badge: overdue > 0 ? "Urgent" : "Active" },
-      { id: "in-progress", label: "In progress", value: String(inProgress), badge: "Active" },
-      { id: "completed", label: "Completed", value: String(completed), badge: "Done" },
+      { id: "open", label: "Open tasks", value: String(open), hint: "Active" },
+      {
+        id: "overdue",
+        label: "Overdue",
+        value: String(overdue),
+        hint: "Urgent",
+        accent: true,
+      },
+      { id: "progress", label: "In progress", value: String(inProgress), hint: "Now" },
+      { id: "completed", label: "Completed", value: String(completed), hint: "Total" },
     ];
   }, [tasks]);
 
   const filteredTasks = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
+    const needle = query.trim().toLowerCase();
     return tasks.filter((task) => {
       if (!matchesFilter(task.status, activeFilter)) return false;
-      if (!normalizedQuery) return true;
+      if (!needle) return true;
       const haystack =
         `${task.title} ${task.description} ${task.assignee} ${task.department}`.toLowerCase();
-      return haystack.includes(normalizedQuery);
+      return haystack.includes(needle);
     });
   }, [activeFilter, query, tasks]);
 
   async function handleCreate(values: Record<string, string>) {
+    const employee = employees.find((item) => item.id === values.assigneeId);
     await runAction("Create task", async () => {
+      const body = {
+        title: values.title.trim(),
+        description: values.description.trim(),
+        priority: values.priority,
+        dueDate: values.dueDate,
+        deadline: values.dueDate,
+        assigneeId: values.assigneeId,
+        assignee: employee?.name,
+        assigneeName: employee?.name,
+        department: employee?.department,
+        status: "Not Started",
+      };
       if (manager) {
-        await managerApi.createTask({ ...values, status: "Not Started" });
+        await managerApi.createTask(body);
       } else {
-        await superAdminApi.tasks.create({ ...values, status: "Not Started" });
+        await superAdminApi.tasks.create(body);
       }
       refetch();
     });
@@ -130,117 +194,78 @@ export function TasksPage() {
     });
   }
 
-  function handleRefresh() {
-    void runAction("Refresh", async () => {
-      refetch();
-    });
-  }
-
-  function handleExport() {
-    exportRows(
-      filteredTasks.map((task) => ({
-        title: task.title,
-        description: task.description,
-        priority: task.priority,
-        status: task.status,
-        assignee: task.assignee,
-        dueDate: task.dueDate,
-        department: task.department,
-      })),
-      "tasks.csv",
-    );
-  }
-
   return (
-    <>
-      <div className={styles.page}>
-        {loading ? <p>Loading tasks…</p> : null}
-        {error ? <p role="alert">{error}</p> : null}
-        <div className={styles.topBar}>
-          <PageDateLabel className={styles.dateLabel} />
-          <div className={styles.topActions}>
-            <label className={styles.search}>
-              <Search size={15} className={styles.searchIcon} />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search"
-                className={styles.searchInput}
-              />
-            </label>
-            <NotificationsLink className={styles.iconButton} />
-            <button
-              type="button"
-              aria-label="Refresh"
-              className={styles.iconButton}
-              onClick={handleRefresh}
-            >
-              <RefreshCw size={16} />
-            </button>
-            <button
-              type="button"
-              aria-label="Export"
-              className={styles.iconButton}
-              onClick={handleExport}
-            >
-              <Download size={16} />
-            </button>
-            <ProfileLink className={styles.avatarChip}>MC</ProfileLink>
-          </div>
-        </div>
-
-        <div className={styles.header}>
-          <div>
-            <p className={styles.eyebrow}>Tasks</p>
-            <h1 className={styles.title}>Work that moves forward</h1>
-            <p className={styles.subtitle}>
-              Create, assign, and track tasks across individuals, departments, and
-              the whole company.
+    <div className={styles.page}>
+      <PageTopBar
+        searchValue={query}
+        onSearchChange={setQuery}
+        status={
+          loading ? (
+            <p className={styles.statusLine}>Loading tasks…</p>
+          ) : error ? (
+            <p className={styles.statusLine} role="alert">
+              {error}
             </p>
-          </div>
-          <button
-            type="button"
-            className={styles.createButton}
-            onClick={() => setCreateOpen(true)}
+          ) : null
+        }
+      />
+
+      <div className={styles.header}>
+        <div>
+          <p className={styles.eyebrow}>Tasks</p>
+          <h1 className={styles.title}>Work that moves forward</h1>
+          <p className={styles.subtitle}>
+            Create, assign, and track tasks across individuals, departments, and
+            the whole company.
+          </p>
+        </div>
+        <button
+          type="button"
+          className={styles.createButton}
+          onClick={() => setCreateOpen(true)}
+        >
+          <Plus size={16} strokeWidth={2.5} />
+          Create task
+        </button>
+      </div>
+
+      <div className={styles.stats}>
+        {taskStats.map((stat) => (
+          <article
+            key={stat.id}
+            className={`${styles.statCard} ${stat.accent ? styles.statCardAccent : ""}`}
           >
-            <Plus size={16} strokeWidth={2.5} />
-            Create task
-          </button>
-        </div>
-
-        <div className={styles.stats}>
-          {taskStats.map((stat) => (
-            <article key={stat.id} className={styles.statCard}>
-              <div className={styles.statTop}>
-                <p className={styles.statLabel}>{stat.label}</p>
-                <span className={styles.statBadge}>{stat.badge}</span>
-              </div>
+            <p className={styles.statLabel}>{stat.label}</p>
+            <div className={styles.statRow}>
               <p className={styles.statValue}>{stat.value}</p>
-            </article>
-          ))}
-        </div>
+              <span className={styles.statHint}>{stat.hint}</span>
+            </div>
+          </article>
+        ))}
+      </div>
 
-        <div className={styles.filters}>
-          {taskFilters.map((filter) => {
-            const active = activeFilter === filter;
-            return (
-              <button
-                key={filter}
-                type="button"
-                onClick={() => setActiveFilter(filter)}
-                className={`${styles.filterTab} ${active ? styles.filterTabActive : ""}`}
-              >
-                {active && <span className={styles.filterDot} aria-hidden />}
-                {filter}
-              </button>
-            );
-          })}
-        </div>
+      <div className={styles.filters}>
+        {taskFilters.map((filter) => (
+          <button
+            key={filter}
+            type="button"
+            onClick={() => setActiveFilter(filter)}
+            className={`${styles.filterChip} ${
+              activeFilter === filter ? styles.filterChipActive : ""
+            }`}
+          >
+            {filter}
+          </button>
+        ))}
+      </div>
 
+      {filteredTasks.length === 0 ? (
+        <p className={styles.empty}>No tasks match this filter.</p>
+      ) : (
         <div className={styles.list}>
           {filteredTasks.map((task) => {
             const completed = task.status === "Completed";
-
+            const due = formatDueDate(task.dueDate);
             return (
               <article key={task.id} className={styles.card}>
                 <button
@@ -253,7 +278,7 @@ export function TasksPage() {
                   className={`${styles.checkbox} ${completed ? styles.checkboxChecked : ""}`}
                   onClick={() => void toggleComplete(task)}
                 >
-                  {completed ? <Check size={11} strokeWidth={3} /> : null}
+                  {completed ? <Check size={12} strokeWidth={3} /> : null}
                 </button>
 
                 <div className={styles.cardBody}>
@@ -279,42 +304,43 @@ export function TasksPage() {
                   ) : null}
 
                   <div className={styles.cardMeta}>
-                    <span className={styles.metaItem}>
-                      <span
-                        className={styles.assigneeAvatar}
-                        style={{ background: task.assigneeColor }}
-                      >
-                        {task.assigneeInitials}
+                    {task.assignee ? (
+                      <span className={styles.metaItem}>
+                        <span className={styles.assigneeAvatar}>
+                          {task.assigneeInitials}
+                        </span>
+                        {task.assignee}
                       </span>
-                      {task.assignee}
-                    </span>
-                    <span className={styles.metaItem}>
-                      <Clock size={13} />
-                      Due {task.dueDate}
-                    </span>
-                    <span className={styles.metaItem}>{task.department}</span>
+                    ) : null}
+                    {due ? (
+                      <span className={styles.metaItem}>
+                        <Clock size={14} className={styles.metaIcon} />
+                        Due {due}
+                      </span>
+                    ) : null}
+                    {task.department ? (
+                      <span className={styles.metaItem}>{task.department}</span>
+                    ) : null}
                   </div>
                 </div>
                 <ChevronRight size={18} className={styles.chevron} />
               </article>
             );
           })}
-
-          {filteredTasks.length === 0 && (
-            <div className={styles.empty}>No tasks match this filter.</div>
-          )}
         </div>
-      </div>
+      )}
 
       <SimpleModal
         open={createOpen}
         title="Create task"
-        description="Assign work to a team member with a due date and priority."
         fields={createFields}
         submitLabel="Create task"
+        showClose
+        wide
+        appearance="soft"
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />
-    </>
+    </div>
   );
 }

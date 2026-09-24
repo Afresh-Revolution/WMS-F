@@ -149,8 +149,8 @@ export function AccountantOverviewPage() {
             <ul className={styles.list}>
               {bills.length === 0 ? (
                 <li className={styles.empty}>No bills to review.</li>
-              ) : null}
-              {bills.map((bill) => (
+              ) : (
+                bills.map((bill) => (
                 <li key={bill.id} className={styles.listRow}>
                   <div className={styles.listMain}>
                     <p className={styles.listTitle}>{bill.name}</p>
@@ -169,7 +169,8 @@ export function AccountantOverviewPage() {
                     </span>
                   </div>
                 </li>
-              ))}
+                ))
+              )}
             </ul>
           </section>
 
@@ -183,8 +184,8 @@ export function AccountantOverviewPage() {
             <ul className={styles.list}>
               {purchases.length === 0 ? (
                 <li className={styles.empty}>No purchase reviews waiting.</li>
-              ) : null}
-              {purchases.map((item) => (
+              ) : (
+                purchases.map((item) => (
                 <li key={item.id} className={styles.listRow}>
                   <div className={styles.listMain}>
                     <p className={styles.listTitle}>{item.title}</p>
@@ -205,7 +206,8 @@ export function AccountantOverviewPage() {
                     </span>
                   </div>
                 </li>
-              ))}
+                ))
+              )}
             </ul>
           </section>
         </div>
@@ -228,8 +230,8 @@ export function AccountantOverviewPage() {
             <ul className={styles.payrollLines}>
               {payrollSummary.lines.length === 0 ? (
                 <li className={styles.empty}>No payroll figures yet.</li>
-              ) : null}
-              {payrollSummary.lines.map((line) => (
+              ) : (
+                payrollSummary.lines.map((line) => (
                 <li
                   key={line.label}
                   className={`${styles.payrollLine} ${
@@ -239,7 +241,8 @@ export function AccountantOverviewPage() {
                   <span>{line.label}</span>
                   <strong>{line.value}</strong>
                 </li>
-              ))}
+                ))
+              )}
             </ul>
             <Link href="/accountant/payroll" className={styles.payrollButton}>
               Open payroll
@@ -253,8 +256,8 @@ export function AccountantOverviewPage() {
             <ul className={styles.list}>
               {payments.length === 0 ? (
                 <li className={styles.empty}>No recent payments.</li>
-              ) : null}
-              {payments.map((payment) => (
+              ) : (
+                payments.map((payment) => (
                 <li key={payment.id} className={styles.listRow}>
                   <div className={styles.listMain}>
                     <p className={styles.listTitle}>{payment.name}</p>
@@ -264,7 +267,8 @@ export function AccountantOverviewPage() {
                   </div>
                   <p className={styles.listAmount}>{payment.amount}</p>
                 </li>
-              ))}
+                ))
+              )}
             </ul>
             <Link href="/accountant/payments" className={styles.footerLink}>
               Open payments register →

@@ -231,6 +231,18 @@ export const hrApi = {
       apiRequest<void>(`/hr/salary-adjustments/${id}/approve`, {
         method: "PATCH",
       }),
+    reject: (id: Id, body?: Record<string, unknown>) =>
+      apiRequest<void>(`/hr/salary-adjustments/${id}/reject`, {
+        method: "PATCH",
+        body,
+      }),
+    return: (id: Id, body?: Record<string, unknown>) =>
+      apiRequest<void>(`/hr/salary-adjustments/${id}/return`, {
+        method: "PATCH",
+        body,
+      }),
+    get: (id: Id) =>
+      apiRequest<Record<string, unknown>>(`/hr/salary-adjustments/${id}`),
   },
 
   attendance: {

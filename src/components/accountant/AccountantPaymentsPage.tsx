@@ -3,9 +3,10 @@
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Bell, FileText, Paperclip, Search, Wallet } from "lucide-react";
+import { Bell, Download, FileText, Paperclip, Plus, Search, Wallet } from "lucide-react";
 import { AccountantProfileChip } from "@/components/accountant/AccountantProfileChip";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { accountantApi } from "@/lib/api";
@@ -39,6 +40,7 @@ const statusClass: Record<AccountantPaymentStatus, string> = {
 
 export function AccountantPaymentsPage() {
   const [filter, setFilter] = useState<AccountantPaymentFilter>("All");
+  const [recordOpen, setRecordOpen] = useState(false);
   const { runAction, showToast } = usePageActions();
   const { data, loading, error, refetch } = useAsyncData(
     () => accountantApi.payments.list(),
@@ -59,6 +61,34 @@ export function AccountantPaymentsPage() {
     () => payments.reduce((sum, item) => sum + item.amountValue, 0),
     [payments],
   );
+
+  async function handleCreate(values: Record<string, string>) {
+    const amount = Number(values.amount);
+    if (!values.payee || !Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Enter a valid payee and amount");
+    }
+    await runAction(
+      "Record payment",
+      async () => {
+        await accountantApi.payments.create({
+          payee: values.payee,
+          amount,
+          category: values.category,
+          date: values.date || undefined,
+          note: values.note || undefined,
+        });
+        refetch();
+        setRecordOpen(false);
+      },
+      `Payment recorded for ${values.payee}`,
+    );
+  }
+
+  async function handleExport() {
+    await runAction("Export payments", async () => {
+      await accountantApi.payments.export();
+    });
+  }
 
   async function handleUpload(payment: AccountantPaymentRecord) {
     await runAction(
@@ -102,13 +132,33 @@ export function AccountantPaymentsPage() {
       </div>
 
       <div className={styles.header}>
-        <p className={styles.eyebrow}>Accountant · Payments</p>
-        <h1 className={styles.title}>Payments register</h1>
-        <p className={styles.subtitle}>
-          Every outgoing payment recorded across payroll, bills, purchases,
-          expenses and reimbursements. Attach payment evidence for the audit
-          trail.
-        </p>
+        <div>
+          <p className={styles.eyebrow}>Accountant · Payments</p>
+          <h1 className={styles.title}>Payments register</h1>
+          <p className={styles.subtitle}>
+            Every outgoing payment recorded across payroll, bills, purchases,
+            expenses and reimbursements. Attach payment evidence for the audit
+            trail.
+          </p>
+        </div>
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => void handleExport()}
+          >
+            <Download size={16} />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={() => setRecordOpen(true)}
+          >
+            <Plus size={16} />
+            Record payment
+          </button>
+        </div>
       </div>
 
       <section className={styles.summaryCard}>
@@ -216,6 +266,47 @@ export function AccountantPaymentsPage() {
           </div>
         )}
       </div>
+
+      <SimpleModal
+        open={recordOpen}
+        title="Record payment"
+        description="Add a manual or general payment to the finance register."
+        submitLabel="Record payment"
+        showClose
+        fields={[
+          { name: "payee", label: "Payee", required: true },
+          {
+            name: "amount",
+            label: "Amount (₦)",
+            type: "number",
+            required: true,
+            min: 1,
+          },
+          {
+            name: "category",
+            label: "Category",
+            type: "select",
+            defaultValue: "Bill",
+            options: [
+              { label: "Payroll", value: "Payroll" },
+              { label: "Bill", value: "Bill" },
+              { label: "Purchase", value: "Purchase" },
+              { label: "Reimbursement", value: "Reimbursement" },
+              { label: "Expense", value: "Expense" },
+              { label: "Bonus", value: "Bonus" },
+            ],
+          },
+          { name: "date", label: "Date", type: "date" },
+          {
+            name: "note",
+            label: "Note",
+            type: "textarea",
+            placeholder: "Optional reference",
+          },
+        ]}
+        onClose={() => setRecordOpen(false)}
+        onSubmit={handleCreate}
+      />
     </div>
   );
 }

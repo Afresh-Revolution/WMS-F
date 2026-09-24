@@ -20,8 +20,9 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
+import { showCreatedCredentials } from "@/lib/createdCredentials";
 import { superAdminApi, unwrapRecord } from "@/lib/api";
-import { listFrom, mapAccessUser, str } from "@/lib/api/mappers";
+import { firstNameFrom, listFrom, mapAccessUser, readTemporaryPassword, str } from "@/lib/api/mappers";
 import styles from "./UserAccessPage.module.css";
 
 const statusClass: Record<AccessStatus, string> = {
@@ -181,7 +182,17 @@ export function UserAccessPage() {
 
   async function handleCreateAccount(values: Record<string, string>) {
     await runAction("Create account", async () => {
-      await superAdminApi.users.create(values);
+      const created = await superAdminApi.users.create({
+        ...values,
+        fullName: values.name || values.fullName,
+      });
+      const temporaryPassword =
+        readTemporaryPassword(created) || firstNameFrom(values.name || values.fullName);
+      showCreatedCredentials({
+        name: (values.name || values.fullName || "").trim(),
+        email: values.email.trim(),
+        password: temporaryPassword || "No temporary password was returned.",
+      });
       refetch();
     });
   }

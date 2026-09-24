@@ -112,6 +112,10 @@
 }
 
 .header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
   margin-bottom: 22px;
 }
 
@@ -141,6 +145,43 @@
   font-size: 14px;
   line-height: 1.65;
   color: #78716c;
+}
+
+.headerActions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 10px;
+}
+
+.primaryButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.primaryButton {
+  background: var(--afresh-orange);
+  color: #fff;
+}
+
+.primaryButton:hover {
+  background: var(--afresh-orange-dark);
+}
+
+.secondaryButton {
+  border: 1px solid #ebe6e1;
+  background: #fff;
+  color: #44403c;
+}
+
+.secondaryButton:hover {
+  border-color: #d6d3d1;
 }
 
 .summaryCard {
@@ -415,6 +456,10 @@
 
   .title {
     font-size: 36px;
+  }
+
+  .header {
+    flex-direction: column;
   }
 
   .summaryCard {

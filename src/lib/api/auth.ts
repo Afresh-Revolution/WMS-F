@@ -37,6 +37,40 @@ export const DEFAULT_LOGIN_OPTIONS: LoginOptions = {
   ssoEnabled: true,
 };
 
+const LOGIN_OPTIONS_CACHE_KEY = "wms_login_options";
+const LOGIN_OPTIONS_TTL_MS = 15 * 60 * 1000;
+let loginOptionsInFlight: Promise<LoginOptions> | null = null;
+
+function readCachedLoginOptions(): LoginOptions | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(LOGIN_OPTIONS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { expiresAt?: number; options?: LoginOptions };
+    if (!parsed?.options || !parsed.expiresAt || parsed.expiresAt <= Date.now()) {
+      return null;
+    }
+    return parsed.options;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedLoginOptions(options: LoginOptions) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      LOGIN_OPTIONS_CACHE_KEY,
+      JSON.stringify({
+        expiresAt: Date.now() + LOGIN_OPTIONS_TTL_MS,
+        options,
+      }),
+    );
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
 export type LoginResponse = {
   accessToken?: string;
   access_token?: string;
@@ -286,15 +320,28 @@ export const authApi = {
 
   /** Flags for forgot-password, keep-me-signed-in and SSO on the login screen. */
   loginOptions: async (): Promise<LoginOptions> => {
-    try {
-      const response = await apiRequest<Record<string, unknown>>(
-        "/auth/login-options",
-        { auth: false },
-      );
-      return parseLoginOptions(response);
-    } catch {
-      return DEFAULT_LOGIN_OPTIONS;
-    }
+    const cached = readCachedLoginOptions();
+    if (cached) return cached;
+    if (loginOptionsInFlight) return loginOptionsInFlight;
+
+    loginOptionsInFlight = (async () => {
+      try {
+        const response = await apiRequest<Record<string, unknown>>(
+          "/auth/login-options",
+          { auth: false },
+        );
+        const options = parseLoginOptions(response);
+        writeCachedLoginOptions(options);
+        return options;
+      } catch {
+        writeCachedLoginOptions(DEFAULT_LOGIN_OPTIONS);
+        return DEFAULT_LOGIN_OPTIONS;
+      } finally {
+        loginOptionsInFlight = null;
+      }
+    })();
+
+    return loginOptionsInFlight;
   },
 
   /** Super Admin-only legacy route. Kept for recovery, not for staff sign-in. */

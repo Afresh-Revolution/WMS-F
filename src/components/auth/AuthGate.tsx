@@ -2,8 +2,13 @@
 
 import { useLayoutEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { TemporaryPasswordDialog } from "@/components/employees/TemporaryPasswordDialog";
 import { authApi, getSessionToken } from "@/lib/api";
-import { homePathForRole, pathAllowedForRole } from "@/lib/auth/portals";
+import {
+  CHANGE_PASSWORD_PATH,
+  homePathForRole,
+  pathAllowedForRole,
+} from "@/lib/auth/portals";
 import {
   cacheCurrentUser,
   parseAuthUser,
@@ -35,20 +40,23 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       }
 
       let user = readCachedOrJwtUser();
-      if (!user?.role) {
-        try {
-          const me = await authApi.me();
-          const parsed = parseAuthUser(me);
-          if (parsed) {
-            cacheCurrentUser(parsed);
-            user = parsed;
-          }
-        } catch {
-          /* Stay on this route if identity cannot be loaded. */
+      try {
+        const me = await authApi.me();
+        const parsed = parseAuthUser(me);
+        if (parsed) {
+          cacheCurrentUser(parsed);
+          user = parsed;
         }
+      } catch {
+        /* Stay on this route if identity cannot be loaded. */
       }
 
       if (cancelled) return;
+
+      if (user?.mustChangePassword && pathname !== CHANGE_PASSWORD_PATH) {
+        router.replace(CHANGE_PASSWORD_PATH);
+        return;
+      }
 
       if (user?.role && !pathAllowedForRole(pathname, user.role)) {
         router.replace(homePathForRole(user.role));
@@ -68,5 +76,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  return children;
+  return (
+    <>
+      {children}
+      <TemporaryPasswordDialog />
+    </>
+  );
 }

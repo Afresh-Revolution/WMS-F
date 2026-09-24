@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Shield } from "lucide-react";
+import { ChevronRight, Eye, EyeOff, Shield } from "lucide-react";
 import {
   authApi,
   ApiError,
@@ -11,7 +11,7 @@ import {
   DEFAULT_LOGIN_OPTIONS,
   type LoginOptions,
 } from "@/lib/api";
-import { homePathForRole } from "@/lib/auth/portals";
+import { CHANGE_PASSWORD_PATH, homePathForRole } from "@/lib/auth/portals";
 import {
   cacheCurrentUser,
   parseAuthUser,
@@ -44,6 +44,7 @@ export function LoginPage() {
   const [challengeToken, setChallengeToken] = useState("");
   const [forgotOpen, setForgotOpen] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function goToWorkspace() {
     let user = readCachedOrJwtUser();
@@ -57,7 +58,11 @@ export function LoginPage() {
     } catch {
       /* Use the cached/JWT identity if /auth/me is unavailable. */
     }
-    router.replace(homePathForRole(user?.role ?? ""));
+    router.replace(
+      user?.mustChangePassword
+        ? CHANGE_PASSWORD_PATH
+        : homePathForRole(user?.role ?? ""),
+    );
   }
 
   useEffect(() => {
@@ -187,15 +192,29 @@ export function LoginPage() {
 
                   <label className={styles.field}>
                     <span className={styles.label}>Password</span>
-                    <input
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder="••••••••••••"
-                      className={styles.input}
-                      autoComplete="current-password"
-                    />
+                    <span className={styles.passwordField}>
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={password}
+                        onChange={(event) => setPassword(event.target.value)}
+                        placeholder="••••••••••••"
+                        className={styles.input}
+                        autoComplete="current-password"
+                      />
+                      <button
+                        type="button"
+                        className={styles.passwordToggle}
+                        onClick={() => setShowPassword((current) => !current)}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? (
+                          <EyeOff size={18} strokeWidth={1.75} />
+                        ) : (
+                          <Eye size={18} strokeWidth={1.75} />
+                        )}
+                      </button>
+                    </span>
                   </label>
                 </>
               )}

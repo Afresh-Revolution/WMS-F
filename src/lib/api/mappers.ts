@@ -383,6 +383,21 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return null;
 }
 
+export function firstNameFrom(value: unknown): string {
+  if (typeof value === "string") {
+    return value.trim().split(/\s+/).filter(Boolean)[0] || "";
+  }
+  const record = asRecord(value);
+  if (!record) return "";
+  return firstNameFrom(
+    record.firstName ??
+      record.first_name ??
+      record.fullName ??
+      record.full_name ??
+      record.name,
+  );
+}
+
 export function readTemporaryPassword(payload: unknown): string {
   const keyPattern = /temp|plain|generated|initial|login|temporary/i;
 
@@ -484,22 +499,50 @@ export function mapDepartmentRecord(
     "—",
   );
   const icons = ["software", "fashion", "media", "hardware", "hr", "model"] as const;
+  const name = str(record.name);
+  const lowered = name.toLowerCase();
+  const icon =
+    lowered.includes("software") || lowered.includes("engineer")
+      ? "software"
+      : lowered.includes("fashion")
+        ? "fashion"
+        : lowered.includes("media") || lowered.includes("photo")
+          ? "media"
+          : lowered.includes("hardware")
+            ? "hardware"
+            : lowered.includes("human") || lowered === "hr" || lowered.includes(" hr")
+              ? "hr"
+              : lowered.includes("model")
+                ? "model"
+                : icons[index % icons.length];
+  const rawTarget = num(
+    record.targetPercent ?? record.target ?? record.performance,
+  );
+  const targetPercent =
+    rawTarget > 0 && rawTarget <= 1
+      ? Math.round(rawTarget * 100)
+      : Math.round(Math.min(Math.max(rawTarget, 0), 100));
+  const hasNamedHod = managerName !== "—" && managerName.trim() !== "";
   return {
     id: str(record.id ?? record._id ?? index),
-    name: str(record.name),
-    managerInitials: str(record.managerInitials, initials(managerName)),
-    managerName,
+    name,
+    managerInitials: str(
+      record.managerInitials,
+      hasNamedHod ? initials(managerName) : "—",
+    ),
+    managerName: hasNamedHod ? managerName : "No HOD assigned",
     managerAvatarColor: str(
       record.managerAvatarColor,
       avatarColor(managerName),
     ),
     activeCount: num(record.activeCount ?? record.employees ?? record.headcount),
-    targetPercent: num(record.targetPercent ?? record.target ?? record.performance),
+    targetPercent,
     status: str(record.status).toLowerCase().includes("inactive")
       ? "Inactive"
       : "Active",
-    hasHod: Boolean(record.hasHod ?? record.hod ?? managerName !== "—"),
-    icon: icons[index % icons.length],
+    hasHod:
+      record.hasHod === false || record.hod === null ? false : hasNamedHod,
+    icon,
   };
 }
 
@@ -535,14 +578,51 @@ export type MappedTask = {
 };
 
 export function mapTask(record: Record<string, unknown>): MappedTask {
-  const assignee = str(record.assignee ?? record.assigneeName, "Unassigned");
-  const statusRaw = str(record.status);
-  let status: MappedTask["status"] = "Not Started";
-  if (statusRaw.toLowerCase().includes("progress")) status = "In Progress";
-  else if (statusRaw.toLowerCase().includes("overdue")) status = "Overdue";
-  else if (statusRaw.toLowerCase().includes("complete")) status = "Completed";
+  const nested = asRecord(record.data) ?? record;
+  const employee =
+    asRecord(nested.assignee) ??
+    asRecord(nested.employee) ??
+    asRecord(nested.assignedTo) ??
+    asRecord(nested.owner);
+  const assignee = str(
+    nested.assigneeName ??
+      nested.assignedToName ??
+      employee?.fullName ??
+      employee?.name ??
+      (typeof nested.assignee === "string" ? nested.assignee : ""),
+    "Unassigned",
+  );
+  const statusRaw = str(nested.status ?? record.status).toLowerCase();
+  const dueRaw = str(
+    nested.dueDate ?? nested.deadline ?? nested.due_at ?? nested.dueOn,
+  );
+  const isoDay = dueRaw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const dueDateObj = isoDay
+    ? new Date(Number(isoDay[1]), Number(isoDay[2]) - 1, Number(isoDay[3]))
+    : dueRaw
+      ? new Date(dueRaw)
+      : null;
+  const dueValid = dueDateObj && !Number.isNaN(dueDateObj.getTime()) ? dueDateObj : null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isPastDue = dueValid
+    ? new Date(
+        dueValid.getFullYear(),
+        dueValid.getMonth(),
+        dueValid.getDate(),
+      ) < today
+    : false;
 
-  const priorityRaw = str(record.priority, "Medium");
+  let status: MappedTask["status"] = "Not Started";
+  if (statusRaw.includes("complete") || statusRaw.includes("done")) {
+    status = "Completed";
+  } else if (statusRaw.includes("progress")) {
+    status = "In Progress";
+  } else if (statusRaw.includes("overdue") || (isPastDue && !statusRaw.includes("progress"))) {
+    status = "Overdue";
+  }
+
+  const priorityRaw = str(nested.priority ?? record.priority, "Medium");
   const priority = (
     priorityRaw.toLowerCase().includes("high")
       ? "High"
@@ -552,16 +632,27 @@ export function mapTask(record: Record<string, unknown>): MappedTask {
   ) as MappedTask["priority"];
 
   return {
-    id: str(record.id ?? record._id),
-    title: str(record.title ?? record.name),
-    description: str(record.description ?? record.summary),
+    id: str(nested.id ?? nested._id ?? record.id ?? record._id),
+    title: str(nested.title ?? nested.name ?? nested.subject),
+    description: str(
+      nested.description ?? nested.summary ?? nested.details ?? nested.notes,
+    ),
     priority,
     status,
     assignee,
-    assigneeInitials: str(record.assigneeInitials, initials(assignee)),
-    assigneeColor: str(record.assigneeColor, avatarColor(assignee)),
-    dueDate: str(record.dueDate ?? record.deadline ?? record.due_at),
-    department: str(record.department ?? record.departmentName),
+    assigneeInitials: str(
+      nested.assigneeInitials ?? employee?.initials,
+      initials(assignee),
+    ),
+    assigneeColor: str(
+      nested.assigneeColor ?? employee?.avatarColor,
+      avatarColor(assignee),
+    ),
+    dueDate: dueRaw,
+    department: nestedStr(
+      nested.department ?? nested.departmentName ?? employee?.department,
+      ["name", "title", "label"],
+    ),
   };
 }
 
@@ -702,82 +793,307 @@ export function mapLeaveBalance(record: Record<string, unknown>, index: number) 
   };
 }
 
-export function mapMeeting(record: Record<string, unknown>) {
-  const statusRaw = str(record.status ?? record.category).toLowerCase();
-  const tags: ("Upcoming" | "Company-wide" | "Completed")[] = [];
-  if (statusRaw.includes("complete")) tags.push("Completed");
-  else tags.push("Upcoming");
-  if (bool(record.companyWide ?? record.isCompanyWide)) tags.push("Company-wide");
+function parseMeetingDate(value: string) {
+  const text = value.trim();
+  if (!text) return null;
+  const isoDay = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoDay) {
+    return new Date(
+      Number(isoDay[1]),
+      Number(isoDay[2]) - 1,
+      Number(isoDay[3]),
+    );
+  }
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
-  const startDate = str(record.startDate ?? record.date ?? record.scheduledAt);
-  const dayMatch = startDate.match(/\d{1,2}/);
+export function mapMeeting(record: Record<string, unknown>) {
+  const nested = asRecord(record.data) ?? record;
+  const statusRaw = str(
+    nested.status ?? nested.category ?? record.status ?? record.category,
+  ).toLowerCase();
+  const typeRaw = str(
+    nested.type ?? nested.visibility ?? nested.audience ?? nested.kind,
+  ).toLowerCase();
+  const startRaw = str(
+    nested.startDate ??
+      nested.date ??
+      nested.scheduledAt ??
+      nested.startsAt ??
+      nested.startTime,
+  );
+  const parsedDate = parseMeetingDate(startRaw);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const isPast = parsedDate
+    ? new Date(
+        parsedDate.getFullYear(),
+        parsedDate.getMonth(),
+        parsedDate.getDate(),
+      ) < today
+    : false;
+
+  const tags: ("Upcoming" | "Company-wide" | "Completed")[] = [];
+  if (
+    statusRaw.includes("complete") ||
+    statusRaw.includes("ended") ||
+    statusRaw.includes("cancel")
+  ) {
+    tags.push("Completed");
+  } else if (
+    statusRaw.includes("upcoming") ||
+    statusRaw.includes("schedul") ||
+    statusRaw.includes("pending")
+  ) {
+    tags.push("Upcoming");
+  } else if (isPast) {
+    tags.push("Completed");
+  } else {
+    tags.push("Upcoming");
+  }
+  const companyWide = bool(
+    nested.companyWide ??
+      nested.isCompanyWide ??
+      nested.company_wide ??
+      record.companyWide,
+  );
+  if (
+    companyWide ||
+    typeRaw.includes("company") ||
+    statusRaw.includes("company")
+  ) {
+    tags.push("Company-wide");
+  }
+
+  const location = nestedStr(
+    nested.location ?? nested.room ?? nested.venue ?? nested.place,
+    ["name", "title", "label"],
+    str(nested.meetingLink ?? nested.videoLink ?? nested.meetingUrl),
+  );
+  const isVirtual =
+    bool(nested.isVirtual ?? nested.virtual ?? nested.online) ||
+    /virtual|zoom|meet|teams|online|video|link/i.test(location);
+
+  const attendeeList = Array.isArray(nested.attendees)
+    ? nested.attendees
+    : Array.isArray(nested.participants)
+      ? nested.participants
+      : Array.isArray(nested.invitees)
+        ? nested.invitees
+        : null;
+
+  const rawTime = str(nested.time ?? nested.startTime);
+  let time = rawTime;
+  if (!time && /T/.test(startRaw)) {
+    const timed = new Date(startRaw);
+    if (!Number.isNaN(timed.getTime())) {
+      time = timed.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+    }
+  }
 
   return {
-    id: str(record.id ?? record._id),
-    day: num(record.day ?? dayMatch?.[0], 1),
-    title: str(record.title ?? record.name),
+    id: str(nested.id ?? nested._id ?? record.id ?? record._id),
+    day: num(
+      nested.day ?? (parsedDate ? parsedDate.getDate() : undefined),
+      parsedDate ? parsedDate.getDate() : 0,
+    ),
+    month: parsedDate
+      ? parsedDate
+          .toLocaleDateString("en-US", { month: "short" })
+          .toUpperCase()
+      : str(nested.month),
+    date: parsedDate
+      ? `${parsedDate.getFullYear()}-${String(parsedDate.getMonth() + 1).padStart(2, "0")}-${String(parsedDate.getDate()).padStart(2, "0")}`
+      : startRaw,
+    title: str(nested.title ?? nested.name ?? nested.subject),
     tags,
-    time: str(record.time ?? record.startTime),
-    duration: str(record.duration),
-    location: str(record.location ?? record.room),
-    attendees: num(record.attendees ?? record.attendeeCount),
+    time,
+    duration: str(
+      nested.duration ?? nested.length ?? nested.durationMinutes ?? nested.minutes,
+    ),
+    location,
+    attendees: attendeeList
+      ? attendeeList.length
+      : num(
+          nested.attendeeCount ??
+            nested.participantCount ??
+            nested.attendees,
+        ),
     category: (tags.includes("Completed")
       ? "Completed"
       : tags.includes("Company-wide")
         ? "Company-wide"
         : "Upcoming") as "Upcoming" | "Completed" | "Company-wide" | "All",
+    isVirtual,
+    agenda: str(
+      nested.agenda ?? nested.notes ?? nested.description ?? nested.topics,
+    ),
   };
 }
 
 export function mapPromotion(record: Record<string, unknown>) {
-  const name = str(record.name ?? record.employeeName);
+  const nested = asRecord(record.data) ?? record;
+  const employee = asRecord(nested.employee) ?? asRecord(nested.staff);
+  const name = str(
+    nested.name ??
+      nested.employeeName ??
+      employee?.fullName ??
+      employee?.name,
+  );
   return {
-    id: str(record.id ?? record._id),
-    initials: str(record.initials, initials(name)),
+    id: str(nested.id ?? nested._id ?? record.id ?? record._id),
+    initials: str(nested.initials ?? employee?.initials, initials(name)),
     name,
-    avatarColor: str(record.avatarColor, avatarColor(name)),
-    currentRole: str(record.currentRole ?? record.fromRole ?? record.currentTitle),
-    proposedRole: str(record.proposedRole ?? record.toRole ?? record.newTitle),
-    department: str(record.department ?? record.departmentName) || undefined,
-    submittedDate: str(record.submittedDate ?? record.createdAt),
-    effectiveDate: str(record.effectiveDate ?? record.effectiveFrom),
-    status: mapPromotionStatus(record.status),
+    avatarColor: str(
+      nested.avatarColor ?? employee?.avatarColor,
+      avatarColor(name),
+    ),
+    currentRole: str(
+      nested.currentRole ??
+        nested.fromRole ??
+        nested.currentTitle ??
+        nested.currentPosition ??
+        employee?.jobTitle ??
+        employee?.title,
+    ),
+    proposedRole: str(
+      nested.proposedRole ??
+        nested.toRole ??
+        nested.newTitle ??
+        nested.proposedTitle,
+    ),
+    department:
+      str(
+        nested.department ??
+          nested.departmentName ??
+          employee?.department,
+      ) || undefined,
+    submittedDate: str(
+      nested.submittedDate ?? nested.createdAt ?? nested.submittedAt,
+    ),
+    effectiveDate: str(
+      nested.effectiveDate ?? nested.effectiveFrom ?? nested.effectiveAt,
+    ),
+    status: mapPromotionStatus(nested.status ?? record.status),
   };
 }
 
 export function mapSalaryIncrement(record: Record<string, unknown>) {
-  const name = str(record.name ?? record.employeeName);
+  const nested = asRecord(record.data) ?? record;
+  const employee = asRecord(nested.employee);
+  const name = str(
+    nested.name ??
+      nested.employeeName ??
+      employee?.fullName ??
+      employee?.name,
+  );
+  const currentSalary = str(
+    nested.currentSalary ?? nested.currentAmount ?? nested.current,
+  );
+  const proposedSalary = str(
+    nested.proposedSalary ?? nested.proposedAmount ?? nested.proposed,
+  );
+  const currentNum = Number(String(currentSalary).replace(/[^\d.-]/g, ""));
+  const proposedNum = Number(String(proposedSalary).replace(/[^\d.-]/g, ""));
+  const rawPercent = str(
+    nested.incrementPercent ?? nested.percentChange ?? nested.increase,
+  );
+  const computedPercent =
+    currentSalary.trim() &&
+    proposedSalary.trim() &&
+    Number.isFinite(currentNum) &&
+    currentNum > 0 &&
+    Number.isFinite(proposedNum)
+      ? `${proposedNum - currentNum >= 0 ? "+" : ""}${(((proposedNum - currentNum) / currentNum) * 100).toFixed(1)}%`
+      : "";
   return {
-    id: str(record.id ?? record._id),
-    initials: str(record.initials, initials(name)),
+    id: str(nested.id ?? nested._id ?? record.id ?? record._id),
+    initials: str(nested.initials ?? employee?.initials, initials(name)),
     name,
-    avatarColor: str(record.avatarColor, avatarColor(name)),
-    department: str(record.department ?? record.departmentName),
-    currentSalary: str(record.currentSalary ?? record.currentAmount),
-    proposedSalary: str(record.proposedSalary ?? record.proposedAmount),
-    incrementPercent: str(record.incrementPercent ?? record.percentChange, "+0%"),
-    incrementAmount: str(record.incrementAmount ?? record.incrementPercent),
-    effectiveDate: str(record.effectiveDate ?? record.effectiveFrom),
-    submittedDate: str(record.submittedDate ?? record.createdAt),
-    status: mapIncrementStatus(record.status),
+    avatarColor: str(
+      nested.avatarColor ?? employee?.avatarColor,
+      avatarColor(name),
+    ),
+    department: nestedStr(
+      nested.department ?? nested.departmentName ?? employee?.department,
+      ["name", "title", "label"],
+      str(
+        nested.jobTitle ??
+          nested.role ??
+          employee?.jobTitle ??
+          employee?.title,
+      ),
+    ),
+    currentSalary,
+    proposedSalary,
+    incrementPercent: rawPercent && rawPercent !== "+0%" ? rawPercent : computedPercent,
+    incrementAmount: str(
+      nested.incrementAmount ?? nested.incrementPercent,
+      computedPercent,
+    ),
+    effectiveDate: str(nested.effectiveDate ?? nested.effectiveFrom),
+    submittedDate: str(nested.submittedDate ?? nested.createdAt),
+    justification: str(
+      nested.justification ?? nested.reason ?? nested.notes ?? nested.comment,
+    ),
+    status: mapIncrementStatus(nested.status ?? record.status),
   };
 }
 
 export function mapPerformanceReview(record: Record<string, unknown>) {
-  const name = str(record.name ?? record.employeeName);
-  const statusRaw = str(record.status).toLowerCase();
+  const nested = asRecord(record.data) ?? record;
+  const employee =
+    asRecord(nested.employee) ??
+    asRecord(nested.staff) ??
+    asRecord(nested.reviewee);
+  const reviewer =
+    asRecord(nested.reviewer) ??
+    asRecord(nested.reviewedBy) ??
+    asRecord(nested.manager);
+  const name = str(
+    nested.name ??
+      nested.employeeName ??
+      employee?.fullName ??
+      employee?.name,
+  );
+  const statusRaw = str(nested.status ?? record.status).toLowerCase();
   let status: "Completed" | "In review" | "Overdue" = "In review";
-  if (statusRaw.includes("complete")) status = "Completed";
-  else if (statusRaw.includes("overdue")) status = "Overdue";
+  if (statusRaw.includes("complete") || statusRaw.includes("done")) {
+    status = "Completed";
+  } else if (statusRaw.includes("overdue") || statusRaw.includes("late")) {
+    status = "Overdue";
+  }
 
   return {
-    id: str(record.id ?? record._id),
+    id: str(nested.id ?? nested._id ?? record.id ?? record._id),
     name,
-    role: str(record.role ?? record.jobTitle),
-    initials: str(record.initials, initials(name)),
-    avatarColor: str(record.avatarColor, avatarColor(name)),
-    reviewedBy: str(record.reviewedBy ?? record.reviewer),
-    rating: num(record.rating ?? record.score, 0),
+    role: str(
+      nested.role ??
+        nested.jobTitle ??
+        nested.title ??
+        employee?.jobTitle ??
+        employee?.title,
+    ),
+    initials: str(
+      nested.initials ?? employee?.initials,
+      initials(name),
+    ),
+    avatarColor: str(
+      nested.avatarColor ?? employee?.avatarColor,
+      avatarColor(name),
+    ),
+    reviewedBy: str(
+      nested.reviewedBy ??
+        nested.reviewerName ??
+        reviewer?.fullName ??
+        reviewer?.name ??
+        (typeof nested.reviewer === "string" ? nested.reviewer : ""),
+    ),
+    rating: num(nested.rating ?? nested.score ?? nested.averageScore, 0),
     status,
   };
 }

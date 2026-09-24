@@ -23,12 +23,17 @@ import { usePageActions } from "@/hooks/usePageActions";
 import {
   accountantApi,
   accountantSettled,
+  ApiError,
   listLeaveBalances,
   listMyLeave,
 } from "@/lib/api";
 import {
+  asRecord,
+  mapAccountantDocuments,
   mapAccountantExpense,
+  mapAccountantLeaveHistory,
   mapAccountantProfile,
+  unwrapAccountantData,
   unwrapAccountantList,
 } from "@/lib/api/accountantMappers";
 import {
@@ -48,14 +53,16 @@ export function AccountantProfilePage() {
   const { runAction } = usePageActions();
   const titleId = useId();
   const { data, loading, error, refetch } = useAsyncData(async () => {
-    const [profile, employment, leave, balances, expenses] = await Promise.all([
-      accountantApi.profile.get(),
-      accountantSettled(accountantApi.employmentRecord.get()),
-      accountantSettled(listMyLeave()),
-      accountantSettled(listLeaveBalances()),
-      accountantSettled(accountantApi.expenses.list()),
-    ]);
-    return { profile, employment, leave, balances, expenses };
+    const [profile, employment, documents, leave, balances, expenses] =
+      await Promise.all([
+        accountantApi.profile.get(),
+        accountantSettled(accountantApi.employmentRecord.get()),
+        accountantSettled(accountantApi.employmentRecord.documents()),
+        accountantSettled(listMyLeave()),
+        accountantSettled(listLeaveBalances()),
+        accountantSettled(accountantApi.expenses.list()),
+      ]);
+    return { profile, employment, documents, leave, balances, expenses };
   }, []);
 
   const profile = useMemo(
@@ -76,12 +83,25 @@ export function AccountantProfilePage() {
     () => unwrapAccountantList(data?.balances).map(mapLeaveBalance),
     [data],
   );
-  const leaveHistory = useMemo(
-    () => unwrapAccountantList(data?.leave).map(mapEmployeeLeaveRequest),
-    [data],
-  );
+  const leaveHistory = useMemo(() => {
+    const fromLeave = unwrapAccountantList(data?.leave).map(
+      mapEmployeeLeaveRequest,
+    );
+    if (fromLeave.length > 0) return fromLeave;
+    const employment = asRecord(unwrapAccountantData(data?.employment));
+    return mapAccountantLeaveHistory(
+      employment.leave ?? employment.leaveHistory ?? employment.requests,
+    ).map((item) => ({
+      ...item,
+      days: Number.parseInt(String(item.days), 10) || 0,
+    }));
+  }, [data]);
   const expenses = useMemo(
     () => unwrapAccountantList(data?.expenses).map(mapAccountantExpense),
+    [data],
+  );
+  const documents = useMemo(
+    () => mapAccountantDocuments(data?.documents),
     [data],
   );
 
@@ -108,16 +128,34 @@ export function AccountantProfilePage() {
     await runAction(
       "Update profile",
       async () => {
-        await accountantApi.profile.patch({
-          phone,
-          personalEmail,
-          location,
-        });
-        await accountantApi.employmentRecord.patch({
-          phone,
-          personalEmail,
-          location,
-        });
+        try {
+          await accountantApi.profile.patch({
+            phone,
+            personalEmail,
+            location,
+          });
+        } catch (err) {
+          if (!(err instanceof ApiError) || err.status !== 404) throw err;
+          await accountantApi.profile.put({
+            phone,
+            personalEmail,
+            location,
+          });
+        }
+        try {
+          await accountantApi.employmentRecord.patch({
+            phone,
+            personalEmail,
+            location,
+          });
+        } catch (err) {
+          if (!(err instanceof ApiError) || err.status !== 404) throw err;
+          await accountantApi.employmentRecord.put({
+            phone,
+            personalEmail,
+            location,
+          });
+        }
         refetch();
         setEditOpen(false);
       },
@@ -312,6 +350,26 @@ export function AccountantProfilePage() {
                 ))
               )}
             </div>
+          </article>
+
+          <article className={styles.card}>
+            <h3 className={styles.cardTitle}>Documents</h3>
+            {documents.length === 0 ? (
+              <p className={styles.listMeta}>
+                No documents on your employment record.
+              </p>
+            ) : (
+              <ul className={styles.detailList}>
+                {documents.map((doc) => (
+                  <li key={doc.id}>
+                    <span>
+                      <strong>{doc.name}</strong>
+                      {[doc.type, doc.date].filter(Boolean).join(" · ")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </article>
         </div>
       ) : null}

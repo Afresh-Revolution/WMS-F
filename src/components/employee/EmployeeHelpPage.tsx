@@ -29,6 +29,8 @@ const helpItems = [
 ];
 
 export function EmployeeHelpPage() {
+  const { user } = useCurrentUser();
+
   return (
     <div className={styles.page}>
       <div className={styles.topBar}>

@@ -16,10 +16,10 @@ export type PerformanceReview = {
 export const targetTabs: TargetTab[] = ["Reviews", "KPIs", "Goals"];
 
 export const targetStats = [
-  { id: "avg-score", label: "Avg. review score", value: "4.5", badge: "Q2 2026" },
-  { id: "reviews-due", label: "Reviews due", value: "3", badge: "This cycle" },
-  { id: "kpi-attainment", label: "KPI attainment", value: "86%", badge: "Overall" },
-  { id: "total-reviews", label: "Total reviews", value: "2", badge: "Set on record" },
+  { id: "avg-score", label: "Avg review score", value: "4.5", hint: "Q2 2026" },
+  { id: "reviews-due", label: "Reviews due", value: "3", hint: "This cycle" },
+  { id: "kpi-attainment", label: "KPI attainment", value: "86%", hint: "Overall" },
+  { id: "goals-overdue", label: "Goals overdue", value: "2", hint: "Action needed" },
 ] as const;
 
 export const performanceReviews: PerformanceReview[] = [

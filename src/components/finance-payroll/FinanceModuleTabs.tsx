@@ -21,27 +21,24 @@ export function FinanceModuleTabs() {
     <div className={styles.moduleTabs}>
       {financeModuleTabs.map((tab) => {
         const tabHref = moduleRoutes[tab];
-        const href = tabHref ? portalHref(pathname, tabHref) : undefined;
-        const active = href
-          ? pathname === href || pathname.endsWith(tabHref)
-          : false;
-
-        if (href) {
+        if (!tabHref) {
           return (
-            <Link
-              key={tab}
-              href={href}
-              className={`${styles.moduleTab} ${active ? styles.moduleTabActive : ""}`}
-            >
+            <span key={tab} className={`${styles.moduleTab} ${styles.moduleTabDisabled}`}>
               {tab}
-            </Link>
+            </span>
           );
         }
 
+        const href = portalHref(pathname, tabHref);
+        const active = pathname === href || pathname.endsWith(tabHref);
         return (
-          <span key={tab} className={`${styles.moduleTab} ${styles.moduleTabDisabled}`}>
+          <Link
+            key={tab}
+            href={href}
+            className={`${styles.moduleTab} ${active ? styles.moduleTabActive : ""}`}
+          >
             {tab}
-          </span>
+          </Link>
         );
       })}
     </div>

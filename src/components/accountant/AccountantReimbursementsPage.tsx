@@ -13,10 +13,7 @@ import {
   mapAccountantExpense,
   unwrapAccountantList,
 } from "@/lib/api/accountantMappers";
-import {
-  formatExpenseNaira,
-  type AccountantExpense,
-} from "@/data/accountantExpenses";
+import { type AccountantExpense } from "@/data/accountantExpenses";
 import styles from "./AccountantUtilityPages.module.css";
 
 export function AccountantReimbursementsPage() {

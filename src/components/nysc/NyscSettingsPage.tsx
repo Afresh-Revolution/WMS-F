@@ -94,7 +94,9 @@ export function NyscSettingsPage() {
       <h1 className={styles.title}>Workspace preferences</h1>
       <p className={styles.subtitle}>
         These preferences belong to your intern or NYSC profile. Organization
-        settings stay with HR and Super Admin.
+        settings stay with HR and Super Admin. First login uses your first
+        name —{" "}
+        <Link href="/change-password">change that password here</Link>.
       </p>
 
       <form className={styles.form} onSubmit={(event) => void handleSave(event)}>

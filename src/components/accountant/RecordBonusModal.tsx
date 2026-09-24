@@ -34,7 +34,7 @@ export function RecordBonusModal({
   const descriptionId = useId();
   const { data: staffPayload } = useAsyncData(
     () => listStaffEmployees().catch(() => []),
-    [],
+    [open],
   );
   const employees = useMemo(
     () => (staffPayload ?? []).map(mapEmployee).filter((item) => item.id),

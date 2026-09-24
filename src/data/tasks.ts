@@ -22,10 +22,10 @@ export type Task = {
 };
 
 export const taskStats = [
-  { id: "total", label: "Total tasks", value: "6", badge: "Active" },
-  { id: "pending", label: "Pending", value: "1", badge: "Urgent" },
-  { id: "in-progress", label: "In progress", value: "3", badge: "Active" },
-  { id: "completed", label: "Completed", value: "1", badge: "Done" },
+  { id: "open", label: "Open tasks", value: "6", hint: "Active" },
+  { id: "overdue", label: "Overdue", value: "1", hint: "Urgent" },
+  { id: "in-progress", label: "In progress", value: "3", hint: "Now" },
+  { id: "completed", label: "Completed", value: "1", hint: "Total" },
 ] as const;
 
 export const taskFilters: TaskFilter[] = [

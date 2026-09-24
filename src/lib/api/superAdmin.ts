@@ -345,6 +345,18 @@ export const superAdminApi = {
         saRequest<void>(`/hr/salary-adjustments/${id}/approve`, {
           method: "PATCH",
         }),
+      reject: (id: Id, body?: Record<string, unknown>) =>
+        saRequest<void>(`/hr/salary-adjustments/${id}/reject`, {
+          method: "PATCH",
+          body,
+        }),
+      return: (id: Id, body?: Record<string, unknown>) =>
+        saRequest<void>(`/hr/salary-adjustments/${id}/return`, {
+          method: "PATCH",
+          body,
+        }),
+      get: (id: Id) =>
+        saRequest<Record<string, unknown>>(`/hr/salary-adjustments/${id}`),
     },
     attendance: {
       list: (params?: Record<string, unknown>) =>

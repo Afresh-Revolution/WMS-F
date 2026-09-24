@@ -213,6 +213,43 @@
   box-shadow: 0 0 0 3px rgba(237, 90, 40, 0.12);
 }
 
+.passwordField {
+  position: relative;
+  display: block;
+}
+
+.passwordField .input {
+  padding-right: 2.75rem;
+}
+
+.passwordToggle {
+  position: absolute;
+  top: 50%;
+  right: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a8a29e;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.passwordToggle:hover,
+.passwordToggle:focus-visible {
+  color: #57534e;
+}
+
+.passwordToggle:focus-visible {
+  outline: 2px solid rgba(237, 90, 40, 0.35);
+  outline-offset: 1px;
+}
+
 .formRow {
   display: flex;
   align-items: center;

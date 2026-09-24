@@ -1,11 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { Bell, Search } from "lucide-react";
-import { useCurrentUser } from "./CurrentUserProvider";
+import { NotificationsLink, ProfileLink } from "./PageLinks";
 import { PageDateLabel } from "./PageDateLabel";
 import styles from "./PageTopBar.module.css";
-
 type PageTopBarProps = {
   dateLabel?: string;
   searchPlaceholder?: string;
@@ -25,8 +23,6 @@ export function PageTopBar({
   profileInitials,
   status,
 }: PageTopBarProps) {
-  const { user, ready } = useCurrentUser();
-  const initials = user?.initials || (ready ? profileInitials : "") || "";
   const controlled = onSearchChange !== undefined;
 
   return (
@@ -52,6 +48,7 @@ export function PageTopBar({
                 className={styles.searchInput}
                 aria-label={searchPlaceholder}
               />
+              <kbd className={styles.searchKbd}>⌘ K</kbd>
             </label>
           ) : (
             <label className={styles.search}>
@@ -65,16 +62,15 @@ export function PageTopBar({
                   /* page-level filter can wire via onSearchChange */
                 }}
               />
+              <kbd className={styles.searchKbd}>⌘ K</kbd>
             </label>
           )
         ) : null}
-        <Link href="/announcements" className={styles.iconButton} aria-label="Notifications">
+        <NotificationsLink className={styles.iconButton}>
           <span className={styles.notifDot} aria-hidden />
           <Bell size={16} />
-        </Link>
-        <Link href="/profile" className={styles.avatarChip} aria-label="Profile">
-          {initials}
-        </Link>
+        </NotificationsLink>
+        <ProfileLink className={styles.avatarChip}>{profileInitials}</ProfileLink>
       </div>
     </div>
   );

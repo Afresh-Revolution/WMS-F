@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin } from "lucide-react";
+import { ArrowRight, CalendarDays } from "lucide-react";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { mapCheckInWindow } from "@/lib/api/attendanceMappers";
 import type { GpsCheckInBody } from "@/lib/api/attendance";
+import { getClientTimeZone } from "@/lib/pageDate";
 import styles from "./GpsCheckInCard.module.css";
 
 type CheckInPortal = "me" | "intern" | "accountant";
@@ -63,10 +64,38 @@ async function submitCheckIn(portal: CheckInPortal, body: GpsCheckInBody) {
   return attendanceApi.checkIn(body, body.idempotencyKey);
 }
 
+function formatExpectedTime(value: string) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime()) && /T|\d{4}-/.test(value)) {
+    return parsed.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+  const [hours, minutes] = value.split(":");
+  const hour = Number(hours);
+  if (!Number.isFinite(hour)) return value;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  return `${hour % 12 || 12}:${(minutes || "00").slice(0, 2)} ${suffix}`;
+}
+
+function formatTodayLabel(date = new Date()) {
+  return date.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: getClientTimeZone(),
+  });
+}
+
 export function GpsCheckInCard({
   portal,
+  variant = "compact",
 }: {
   portal: CheckInPortal;
+  variant?: "compact" | "desk";
 }) {
   const { runAction } = usePageActions();
   const [busy, setBusy] = useState(false);
@@ -75,7 +104,7 @@ export function GpsCheckInCard({
     [portal],
   );
 
-  if (data == null && !loading) return null;
+  if (data == null && !loading && variant !== "desk") return null;
 
   const checkInWindow = data ? mapCheckInWindow(data) : null;
   const canCheckIn =
@@ -113,6 +142,45 @@ export function GpsCheckInCard({
     }
   }
 
+  const clockedIn = Boolean(checkInWindow?.alreadyCheckedIn);
+  const statusLabel = clockedIn ? "Clocked In" : "Not Clocked In";
+  const expected = formatExpectedTime(checkInWindow?.openingTime ?? "");
+
+  if (variant === "desk") {
+    return (
+      <section className={styles.deskCard}>
+        <AccountantStatusLine
+          loading={loading}
+          error={error}
+          resource="attendance"
+        />
+        <div className={styles.deskHead}>
+          <p className={styles.deskEyebrow}>
+            <CalendarDays size={14} />
+            Attendance
+          </p>
+          <span
+            className={`${styles.deskBadge} ${clockedIn ? styles.deskBadgeOk : ""}`}
+          >
+            {statusLabel}
+          </span>
+        </div>
+        <p className={styles.deskToday}>Today : {formatTodayLabel()}</p>
+        <h2 className={styles.deskTitle}>{statusLabel}</h2>
+        <p className={styles.deskExpected}>Expected: {expected}</p>
+        <button
+          type="button"
+          className={styles.deskButton}
+          disabled={!canCheckIn || busy || loading || clockedIn}
+          onClick={() => void handleCheckIn()}
+        >
+          <ArrowRight size={16} />
+          {busy ? "Clocking in…" : "Clock In"}
+        </button>
+      </section>
+    );
+  }
+
   return (
     <section className={styles.card}>
       <AccountantStatusLine
@@ -122,12 +190,12 @@ export function GpsCheckInCard({
       />
       <div className={styles.header}>
         <span className={styles.icon} aria-hidden>
-          <MapPin size={16} />
+          <CalendarDays size={16} />
         </span>
         <div>
           <h2 className={styles.title}>GPS check-in</h2>
           <p className={styles.copy}>
-            {checkInWindow?.alreadyCheckedIn
+            {clockedIn
               ? "You have already checked in for this schedule today."
               : `Your browser only sends GPS. The server measures distance to ${checkInWindow?.locationName || "the assigned office pin"}. Remote/Onsite on your profile is not a geofence.`}
           </p>

@@ -12,7 +12,7 @@ export function AccountantStatusLine({
   if (!loading && !error) return null;
   return (
     <p className={styles.line} role={error ? "alert" : undefined}>
-      {loading ? `Loading ${resource}…` : `Using cached ${resource} — ${error}`}
+      {loading ? `Loading ${resource}…` : `Could not load ${resource} — ${error}`}
     </p>
   );
 }

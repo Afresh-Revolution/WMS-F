@@ -9,10 +9,22 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { employeeApi } from "@/lib/api";
 import { listFrom, nestedStr, num, str } from "@/lib/api/mappers";
-import type { EmployeeTask, EmployeeTaskStatus } from "@/data/employeeHome";
+import type { EmployeeTaskStatus } from "@/data/employeeHome";
 import styles from "./EmployeeTasksPage.module.css";
 
 type TaskFilter = "All" | "In Progress" | "In Review" | "Overdue" | "Completed";
+
+type EmployeeTask = {
+  id: string;
+  title: string;
+  priority: string;
+  status: string;
+  description: string;
+  assignedBy: string;
+  due: string;
+  timing: string;
+  progress: number;
+};
 
 const filters: TaskFilter[] = [
   "All",
