@@ -96,7 +96,8 @@
 
 .statusReview,
 .statusDraft,
-.statusApproved {
+.statusApproved,
+.statusRejected {
   display: inline-flex;
   align-items: center;
   width: fit-content;
@@ -123,22 +124,25 @@
   color: #067647;
 }
 
-.salaryRow {
+.statusRejected {
+  background: var(--afresh-pink-soft);
+  color: var(--afresh-pink-text);
+}
+
+.positionRow {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 24px;
 }
 
-.salaryCard,
-.incrementCard {
+.positionCard {
   padding: 14px 16px;
   border-radius: 16px;
   background: var(--afresh-orange-soft);
 }
 
-.salaryLabel,
-.incrementLabel {
+.positionLabel {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -147,34 +151,10 @@
   color: #78716c;
 }
 
-.salaryValue {
+.positionValue {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: var(--afresh-orange);
-}
-
-.incrementCard {
-  margin-bottom: 24px;
-  text-align: center;
-}
-
-.incrementLabel {
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #a8a29e;
-}
-
-.incrementValue {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 32px;
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -0.02em;
   color: var(--afresh-orange);
 }
 
@@ -270,7 +250,7 @@
     font-size: 24px;
   }
 
-  .salaryRow {
+  .positionRow {
     grid-template-columns: 1fr;
   }
 }

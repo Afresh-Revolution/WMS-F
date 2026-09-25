@@ -21,6 +21,9 @@ export type Promotion = {
   department?: string;
   submittedDate: string;
   effectiveDate: string;
+  reason?: string;
+  submittedBy?: string;
+  submittedByRole?: string;
   status: PromotionStatus;
 };
 

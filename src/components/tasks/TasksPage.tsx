@@ -11,6 +11,7 @@ import {
 } from "@/data/tasks";
 import { PageTopBar } from "@/components/layout/PageTopBar";
 import { SimpleModal } from "@/components/ui/SimpleModal";
+import { TaskDetailDrawer } from "@/components/tasks/TaskDetailDrawer";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { listStaffEmployees, managerApi, superAdminApi } from "@/lib/api";
@@ -54,6 +55,7 @@ export function TasksPage() {
   const [activeFilter, setActiveFilter] = useState<TaskFilter>("All");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const { runAction } = usePageActions();
 
   const { data, loading, error, refetch } = useAsyncData(
@@ -88,7 +90,7 @@ export function TasksPage() {
         label: "Description",
         type: "textarea" as const,
         fullWidth: true,
-        rows: 3,
+        rows: 2,
         placeholder: "Details and context",
       },
       {
@@ -96,6 +98,7 @@ export function TasksPage() {
         label: "Assign to",
         type: "select" as const,
         required: true,
+        pair: "assign",
         defaultValue: "",
         options: [
           { label: "Select employee", value: "" },
@@ -109,6 +112,7 @@ export function TasksPage() {
         name: "priority",
         label: "Priority",
         type: "select" as const,
+        pair: "assign",
         defaultValue: "High",
         options: [
           { label: "High", value: "High" },
@@ -267,7 +271,11 @@ export function TasksPage() {
             const completed = task.status === "Completed";
             const due = formatDueDate(task.dueDate);
             return (
-              <article key={task.id} className={styles.card}>
+              <article
+                key={task.id}
+                className={styles.card}
+                onClick={() => setSelectedTask(task)}
+              >
                 <button
                   type="button"
                   aria-label={
@@ -276,7 +284,10 @@ export function TasksPage() {
                       : `Mark ${task.title} complete`
                   }
                   className={`${styles.checkbox} ${completed ? styles.checkboxChecked : ""}`}
-                  onClick={() => void toggleComplete(task)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void toggleComplete(task);
+                  }}
                 >
                   {completed ? <Check size={12} strokeWidth={3} /> : null}
                 </button>
@@ -323,7 +334,17 @@ export function TasksPage() {
                     ) : null}
                   </div>
                 </div>
-                <ChevronRight size={18} className={styles.chevron} />
+                <button
+                  type="button"
+                  className={styles.openButton}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedTask(task);
+                  }}
+                  aria-label={`View ${task.title}`}
+                >
+                  <ChevronRight size={18} />
+                </button>
               </article>
             );
           })}
@@ -336,11 +357,19 @@ export function TasksPage() {
         fields={createFields}
         submitLabel="Create task"
         showClose
-        wide
         appearance="soft"
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />
+
+      {selectedTask ? (
+        <TaskDetailDrawer
+          task={selectedTask}
+          manager={manager}
+          onClose={() => setSelectedTask(null)}
+          onUpdated={refetch}
+        />
+      ) : null}
     </div>
   );
 }

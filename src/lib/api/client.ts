@@ -248,6 +248,35 @@ const ERROR_CODE_MESSAGES: Record<string, string> = {
   REJECTION_REASON_REQUIRED: "A rejection reason is required.",
   ACTIVE_PLACEMENT_EXISTS:
     "This person already has an active NYSC or intern placement.",
+  INTERN_ROLE_REQUIRED: "This account is not an intern or NYSC member.",
+  INTERN_PROFILE_REQUIRED: "This account is not linked to an intern profile.",
+  INTERN_PLACEMENT_REQUIRED: "This intern profile has no placement yet.",
+  INTERN_SELF_FIELD_FORBIDDEN:
+    "That field cannot be changed from intern self-service.",
+  RESOURCE_OUT_OF_INTERN_SCOPE:
+    "That task or target is not on this placement.",
+  NYSC_INTERN_PROFILE_NOT_FOUND: "That intern or NYSC profile was not found.",
+  PROFILE_NOT_FOUND: "That intern or NYSC profile was not found.",
+  TASK_NOT_FOUND: "That assigned task was not found.",
+  TARGET_NOT_FOUND: "That assigned target was not found.",
+  MEETING_NOT_FOUND: "That meeting was not found.",
+  NOTIFICATION_NOT_FOUND: "That notification was not found.",
+  PLACEMENT_DOCUMENT_NOT_FOUND: "That placement document was not found.",
+  PLACEMENT_ATTENDANCE_NOT_FOUND: "That attendance record was not found.",
+  INVALID_PROFILE_TYPE: "Type must be NYSC or INTERN.",
+  INSTITUTION_REQUIRED: "Enter the school or institution.",
+  COURSE_REQUIRED: "Enter the course of study.",
+  START_DATE_REQUIRED: "Start date is required.",
+  END_DATE_REQUIRED: "End date is required.",
+  NEW_END_DATE_REQUIRED: "A new end date is required to extend the placement.",
+  INVALID_EXTENSION_DATE: "The new end date must be after the current end date.",
+  INVALID_EXIT_TYPE: "That exit type is not valid.",
+  DOCUMENT_NAME_REQUIRED: "Document name is required.",
+  DOCUMENT_URL_REQUIRED: "Document URL is required.",
+  INVALID_PROGRESS_VALUE: "Progress must be a number of 0 or more.",
+  INVALID_INTERN_PREFERENCES: "Preferences must be an object.",
+  TARGET_NOT_ACTIVE: "Only active or overdue targets can receive progress.",
+  DUPLICATE_ATTENDANCE: "Attendance for that date already exists.",
   VENDOR_NAME_REQUIRED: "Enter a vendor name.",
   FULL_NAME_REQUIRED: "Enter the member's full name.",
   CATEGORY_NOT_FOUND: "Pick a category from the list.",
@@ -301,6 +330,23 @@ function rewriteKnownApiMessage(value: string, code = ""): string {
     return mapped;
   }
   return friendlyForbiddenMessage(trimmed) ?? trimmed;
+}
+
+export function extractErrorCode(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const record = payload as Record<string, unknown>;
+  if (typeof record.code === "string" && record.code.trim()) {
+    return record.code;
+  }
+  const nested = record.error;
+  if (nested && typeof nested === "object") {
+    const code = (nested as Record<string, unknown>).code;
+    if (typeof code === "string" && code.trim()) return code;
+  }
+  if (typeof record.errorCode === "string" && record.errorCode.trim()) {
+    return record.errorCode;
+  }
+  return "";
 }
 
 /** Parse API error payloads (superadmin + /api/v1/auth formats). */

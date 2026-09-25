@@ -10,6 +10,7 @@ import {
 } from "@/data/employees";
 import { PageTopBar } from "@/components/layout/PageTopBar";
 import { EmployeeProfileDrawer } from "@/components/employees/EmployeeProfileDrawer";
+import { ViewToggle } from "@/components/ui/ViewToggle";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import {
@@ -49,6 +50,19 @@ function sameDepartment(employeeDepartment: string, filter: string) {
   if (left.includes(right) || right.includes(left)) return true;
   if (right === "hr" && /(^|\b)(hr|human resources)(\b|$)/.test(left)) return true;
   return false;
+}
+
+function isRecordId(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value.trim(),
+  );
+}
+
+function employeeLocationLine(employee: { location: string; department: string }) {
+  return [employee.location, employee.department]
+    .map((part) => part.trim())
+    .filter((part) => part && !isRecordId(part))
+    .join(" · ");
 }
 
 export function EmployeesPage() {
@@ -322,28 +336,15 @@ export function EmployeesPage() {
               className={styles.staffSearchInput}
             />
           </label>
-          <div className={styles.viewToggle} role="group" aria-label="Directory view">
-            <button
-              type="button"
-              className={`${styles.viewButton} ${
-                viewMode === "grid" ? styles.viewButtonActive : ""
-              }`}
-              aria-pressed={viewMode === "grid"}
-              onClick={() => setViewMode("grid")}
-            >
-              Grid
-            </button>
-            <button
-              type="button"
-              className={`${styles.viewButton} ${
-                viewMode === "list" ? styles.viewButtonActive : ""
-              }`}
-              aria-pressed={viewMode === "list"}
-              onClick={() => setViewMode("list")}
-            >
-              List
-            </button>
-          </div>
+          <ViewToggle
+            aria-label="Directory view"
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { id: "grid", label: "Grid" },
+              { id: "list", label: "List" },
+            ]}
+          />
         </div>
 
         <div className={styles.filters}>
@@ -367,9 +368,7 @@ export function EmployeesPage() {
         {viewMode === "grid" ? (
           <div className={styles.grid}>
             {filteredEmployees.map((employee) => {
-              const locationLine = [employee.location, employee.department]
-                .filter((part) => part.trim())
-                .join(" · ");
+              const locationLine = employeeLocationLine(employee);
               return (
                 <article key={employee.id} className={styles.card}>
                   <div className={styles.cardBody}>
@@ -413,10 +412,15 @@ export function EmployeesPage() {
           </div>
         ) : (
           <div className={styles.list}>
+            <div className={styles.listHead}>
+              <span>Name</span>
+              <span>Location</span>
+              <span>Email</span>
+              <span>Status</span>
+              <span className={styles.listHeadAction}>Profile</span>
+            </div>
             {filteredEmployees.map((employee) => {
-              const locationLine = [employee.location, employee.department]
-                .filter((part) => part.trim())
-                .join(" · ");
+              const locationLine = employeeLocationLine(employee);
               return (
                 <article key={employee.id} className={styles.listRow}>
                   <div className={styles.listIdentity}>

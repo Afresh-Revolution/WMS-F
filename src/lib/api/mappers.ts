@@ -616,9 +616,9 @@ export function mapTask(record: Record<string, unknown>): MappedTask {
   let status: MappedTask["status"] = "Not Started";
   if (statusRaw.includes("complete") || statusRaw.includes("done")) {
     status = "Completed";
-  } else if (statusRaw.includes("progress")) {
+  } else if (statusRaw.includes("progress") || statusRaw.includes("pending")) {
     status = "In Progress";
-  } else if (statusRaw.includes("overdue") || (isPastDue && !statusRaw.includes("progress"))) {
+  } else if (statusRaw.includes("overdue") || (isPastDue && !statusRaw.includes("progress") && !statusRaw.includes("pending"))) {
     status = "Overdue";
   }
 
@@ -977,6 +977,37 @@ export function mapPromotion(record: Record<string, unknown>) {
     ),
     effectiveDate: str(
       nested.effectiveDate ?? nested.effectiveFrom ?? nested.effectiveAt,
+    ),
+    reason: str(
+      nested.reason ??
+        nested.justification ??
+        nested.recommendation ??
+        nested.notes ??
+        nested.comment ??
+        nested.note,
+    ),
+    submittedBy: str(
+      nested.submittedByName ||
+        nested.createdByName ||
+        nested.requesterName ||
+        nestedStr(nested.submittedBy, ["fullName", "name", "email"]) ||
+        nestedStr(nested.createdBy, ["fullName", "name", "email"]) ||
+        nestedStr(nested.requester, ["fullName", "name", "email"]) ||
+        nestedStr(nested.hr, ["fullName", "name", "email"]),
+    ),
+    submittedByRole: str(
+      nested.submittedByRole ||
+        nested.createdByRole ||
+        nested.requesterRole ||
+        (typeof nested.submittedBy === "object"
+          ? nestedStr(nested.submittedBy, ["role", "title", "jobTitle"])
+          : "") ||
+        (typeof nested.createdBy === "object"
+          ? nestedStr(nested.createdBy, ["role", "title", "jobTitle"])
+          : "") ||
+        (typeof nested.requester === "object"
+          ? nestedStr(nested.requester, ["role", "title", "jobTitle"])
+          : ""),
     ),
     status: mapPromotionStatus(nested.status ?? record.status),
   };
@@ -1533,6 +1564,22 @@ function formatPlacementDate(value: unknown): string {
   });
 }
 
+function daysRemainingFromEnd(value: string): number {
+  const parsed = new Date(value);
+  if (!value.trim() || Number.isNaN(parsed.getTime())) return 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const end = new Date(
+    parsed.getFullYear(),
+    parsed.getMonth(),
+    parsed.getDate(),
+  );
+  return Math.max(
+    0,
+    Math.round((end.getTime() - today.getTime()) / 86_400_000),
+  );
+}
+
 export function mapPlacement(record: Record<string, unknown>) {
   const nested = asObject(record.data);
   const root = Object.keys(nested).length > 0 ? { ...record, ...nested } : record;
@@ -1615,6 +1662,18 @@ export function mapPlacement(record: Record<string, unknown>) {
         root.progress ??
         root.completionPercent,
     ),
+    daysRemaining: num(
+      progressObj.daysRemaining ?? root.daysRemaining,
+      daysRemainingFromEnd(
+        str(
+          placement.expectedEndDate ??
+            root.expectedEndDate ??
+            root.endDate ??
+            root.completionDate,
+        ),
+      ),
+    ),
+    userId: str(profile.userId ?? root.userId ?? placement.userId),
     status,
   };
 }

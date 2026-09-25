@@ -3,31 +3,19 @@
 import { useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Check, TrendingUp, X } from "lucide-react";
-import type { SalaryIncrement } from "@/data/salaryIncrements";
+import type { Promotion, PromotionStatus } from "@/data/promotions";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { managerApi, superAdminApi } from "@/lib/api";
-import { mapSalaryIncrement } from "@/lib/api/mappers";
-import styles from "./SalaryIncrementDrawer.module.css";
+import { mapPromotion } from "@/lib/api/mappers";
+import styles from "./PromotionRecommendationDrawer.module.css";
 
-const statusLabels: Record<SalaryIncrement["status"], string> = {
+const statusLabels: Record<PromotionStatus, string> = {
   "Under admin review": "Under Admin Review",
   Draft: "Draft",
   Approved: "Approved",
+  Rejected: "Rejected",
 };
-
-function parseAmount(value: string) {
-  const amount = Number(String(value).replace(/[^\d.-]/g, ""));
-  return Number.isFinite(amount) ? amount : 0;
-}
-
-function formatNaira(value: string) {
-  if (!value.trim()) return "—";
-  if (/₦/.test(value)) return value.replace(/₦\s*/, "₦ ");
-  const amount = parseAmount(value);
-  if (!amount && value !== "0") return value;
-  return `₦ ${Math.round(amount).toLocaleString("en-NG")}`;
-}
 
 function formatEffectiveDate(value: string) {
   const text = value.trim();
@@ -44,28 +32,20 @@ function formatEffectiveDate(value: string) {
   });
 }
 
-function formatPercent(increment: SalaryIncrement) {
-  const labeled = increment.incrementPercent.replace(/\s/g, "");
-  if (labeled && labeled !== "+0%") {
-    return labeled.startsWith("+") || labeled.startsWith("-")
-      ? labeled
-      : `+${labeled}`;
-  }
-  const current = parseAmount(increment.currentSalary);
-  const proposed = parseAmount(increment.proposedSalary);
-  if (!current) return "—";
-  const percent = ((proposed - current) / current) * 100;
-  const sign = percent >= 0 ? "+" : "";
-  return `${sign}${percent.toFixed(1)}%`;
+function formatSubmittedBy(promotion: Promotion) {
+  const role = promotion.submittedByRole?.trim();
+  const name = promotion.submittedBy?.trim();
+  if (role && name) return `${role} · ${name}`;
+  return name || role || "—";
 }
 
-async function loadIncrement(id: string, manager: boolean) {
+async function loadPromotion(id: string, manager: boolean) {
   try {
-    if (manager) return await managerApi.getSalaryRecommendation(id);
+    if (manager) return await managerApi.getPromotion(id);
     try {
-      return await superAdminApi.salaryIncrements.get(id);
+      return await superAdminApi.promotions.get(id);
     } catch {
-      return await superAdminApi.hr.salaryAdjustments.get(id);
+      return await superAdminApi.hr.promotions.get(id);
     }
   } catch {
     return null;
@@ -82,45 +62,45 @@ async function tryActions(attempts: Array<() => Promise<unknown>>) {
       lastError = error;
     }
   }
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Request failed");
+  throw lastError instanceof Error ? lastError : new Error("Request failed");
 }
 
-type SalaryIncrementDrawerProps = {
-  increment: SalaryIncrement;
+type PromotionRecommendationDrawerProps = {
+  promotion: Promotion;
   manager?: boolean;
   onClose: () => void;
   onUpdated: () => void;
 };
 
-export function SalaryIncrementDrawer({
-  increment,
+export function PromotionRecommendationDrawer({
+  promotion,
   manager = false,
   onClose,
   onUpdated,
-}: SalaryIncrementDrawerProps) {
+}: PromotionRecommendationDrawerProps) {
   const { runAction } = usePageActions();
   const { data, loading, error } = useAsyncData(
-    () => loadIncrement(increment.id, manager),
-    [increment.id, manager],
+    () => loadPromotion(promotion.id, manager),
+    [promotion.id, manager],
   );
 
   const detail = useMemo(() => {
-    if (!data) return increment;
-    const mapped = mapSalaryIncrement(data as Record<string, unknown>);
+    if (!data) return promotion;
+    const mapped = mapPromotion(data as Record<string, unknown>);
     return {
-      ...increment,
+      ...promotion,
       ...mapped,
-      name: mapped.name || increment.name,
-      department: mapped.department || increment.department,
-      currentSalary: mapped.currentSalary || increment.currentSalary,
-      proposedSalary: mapped.proposedSalary || increment.proposedSalary,
-      justification: mapped.justification || increment.justification,
-      effectiveDate: mapped.effectiveDate || increment.effectiveDate,
-      initials: mapped.initials || increment.initials,
+      name: mapped.name || promotion.name,
+      department: mapped.department || promotion.department,
+      currentRole: mapped.currentRole || promotion.currentRole,
+      proposedRole: mapped.proposedRole || promotion.proposedRole,
+      reason: mapped.reason || promotion.reason,
+      submittedBy: mapped.submittedBy || promotion.submittedBy,
+      submittedByRole: mapped.submittedByRole || promotion.submittedByRole,
+      effectiveDate: mapped.effectiveDate || promotion.effectiveDate,
+      initials: mapped.initials || promotion.initials,
     };
-  }, [data, increment]);
+  }, [data, promotion]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -138,20 +118,22 @@ export function SalaryIncrementDrawer({
   const statusClass =
     detail.status === "Approved"
       ? styles.statusApproved
-      : detail.status === "Draft"
-        ? styles.statusDraft
-        : styles.statusReview;
+      : detail.status === "Rejected"
+        ? styles.statusRejected
+        : detail.status === "Draft"
+          ? styles.statusDraft
+          : styles.statusReview;
 
   async function handleApprove() {
-    await runAction("Approve increment", async () => {
+    await runAction("Approve promotion", async () => {
       await tryActions(
         manager
-          ? [() => managerApi.approveSalaryRecommendation(detail.id)]
+          ? [() => managerApi.approvePromotion(detail.id)]
           : [
-              () => superAdminApi.hr.salaryAdjustments.approve(detail.id),
-              () => superAdminApi.salaryIncrements.action(detail.id, "approve"),
+              () => superAdminApi.hr.promotions.approve(detail.id),
+              () => superAdminApi.promotions.action(detail.id, "approve"),
               () =>
-                superAdminApi.salaryIncrements.patch(detail.id, {
+                superAdminApi.promotions.patch(detail.id, {
                   status: "approved",
                 }),
             ],
@@ -165,12 +147,12 @@ export function SalaryIncrementDrawer({
     await runAction("Return for correction", async () => {
       await tryActions(
         manager
-          ? [() => managerApi.returnSalaryRecommendation(detail.id)]
+          ? [() => managerApi.returnPromotion(detail.id)]
           : [
-              () => superAdminApi.hr.salaryAdjustments.return(detail.id),
-              () => superAdminApi.salaryIncrements.action(detail.id, "return"),
+              () => superAdminApi.hr.promotions.return(detail.id),
+              () => superAdminApi.promotions.action(detail.id, "return"),
               () =>
-                superAdminApi.salaryIncrements.patch(detail.id, {
+                superAdminApi.promotions.patch(detail.id, {
                   status: "draft",
                 }),
             ],
@@ -181,15 +163,15 @@ export function SalaryIncrementDrawer({
   }
 
   async function handleReject() {
-    await runAction("Reject increment", async () => {
+    await runAction("Reject promotion", async () => {
       await tryActions(
         manager
-          ? [() => managerApi.rejectSalaryRecommendation(detail.id)]
+          ? [() => managerApi.rejectPromotion(detail.id)]
           : [
-              () => superAdminApi.hr.salaryAdjustments.reject(detail.id),
-              () => superAdminApi.salaryIncrements.action(detail.id, "reject"),
+              () => superAdminApi.hr.promotions.reject(detail.id),
+              () => superAdminApi.promotions.action(detail.id, "reject"),
               () =>
-                superAdminApi.salaryIncrements.patch(detail.id, {
+                superAdminApi.promotions.patch(detail.id, {
                   status: "rejected",
                 }),
             ],
@@ -205,22 +187,24 @@ export function SalaryIncrementDrawer({
         className={styles.panel}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="salary-increment-title"
+        aria-labelledby="promotion-recommendation-title"
         onClick={(event) => event.stopPropagation()}
       >
         <header className={styles.head}>
-          <p className={styles.eyebrow}>Salary increment</p>
+          <p className={styles.eyebrow}>Promotion recommendation</p>
           <button
             type="button"
             className={styles.close}
             onClick={onClose}
-            aria-label="Close salary increment"
+            aria-label="Close promotion recommendation"
           >
             <X size={18} strokeWidth={2} />
           </button>
         </header>
 
-        {loading ? <p className={styles.statusLine}>Loading increment…</p> : null}
+        {loading ? (
+          <p className={styles.statusLine}>Loading recommendation…</p>
+        ) : null}
         {error ? (
           <p className={styles.statusLine} role="alert">
             {error}
@@ -235,7 +219,7 @@ export function SalaryIncrementDrawer({
             {detail.initials}
           </span>
           <div>
-            <h2 id="salary-increment-title" className={styles.name}>
+            <h2 id="promotion-recommendation-title" className={styles.name}>
               {detail.name}
             </h2>
             <p className={styles.department}>{detail.department || "—"}</p>
@@ -243,38 +227,33 @@ export function SalaryIncrementDrawer({
         </div>
         <span className={statusClass}>{statusLabels[detail.status]}</span>
 
-        <div className={styles.salaryRow}>
-          <article className={styles.salaryCard}>
-            <p className={styles.salaryLabel}>Current salary</p>
-            <p className={styles.salaryValue}>
-              {formatNaira(detail.currentSalary)}
+        <div className={styles.positionRow}>
+          <article className={styles.positionCard}>
+            <p className={styles.positionLabel}>Current position</p>
+            <p className={styles.positionValue}>
+              {detail.currentRole.trim() || "—"}
             </p>
           </article>
-          <article className={styles.salaryCard}>
-            <p className={styles.salaryLabel}>
+          <article className={styles.positionCard}>
+            <p className={styles.positionLabel}>
               <TrendingUp size={12} strokeWidth={2.25} />
-              Proposed salary
+              Proposed position
             </p>
-            <p className={styles.salaryValue}>
-              {formatNaira(detail.proposedSalary)}
+            <p className={styles.positionValue}>
+              {detail.proposedRole.trim() || "—"}
             </p>
           </article>
         </div>
 
-        <article className={styles.incrementCard}>
-          <p className={styles.incrementLabel}>Increment</p>
-          <p className={styles.incrementValue}>{formatPercent(detail)}</p>
-        </article>
-
         <section className={styles.meta}>
-          <p className={styles.metaLabel}>Justification</p>
-          <p className={styles.metaBody}>
-            {detail.justification?.trim() || "—"}
-          </p>
+          <p className={styles.metaLabel}>Reason for recommendation</p>
+          <p className={styles.metaBody}>{detail.reason?.trim() || "—"}</p>
           <p className={styles.metaLabel}>Effective date</p>
           <p className={styles.metaBody}>
             {formatEffectiveDate(detail.effectiveDate)}
           </p>
+          <p className={styles.metaLabel}>Submitted by</p>
+          <p className={styles.metaBody}>{formatSubmittedBy(detail)}</p>
         </section>
 
         {canDecide ? (
@@ -285,7 +264,7 @@ export function SalaryIncrementDrawer({
               onClick={() => void handleApprove()}
             >
               <Check size={16} strokeWidth={2.5} />
-              Approve increment
+              Approve promotion
             </button>
             <button
               type="button"

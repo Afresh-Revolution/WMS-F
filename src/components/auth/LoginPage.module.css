@@ -207,47 +207,21 @@
   color: #a8a29e;
 }
 
+.inputPill {
+  border: 0;
+  border-radius: 999px;
+  background: #fff4ee;
+  padding: 0.9rem 1.15rem;
+}
+
 .input:focus {
   outline: none;
   border-color: #f0b69a;
   box-shadow: 0 0 0 3px rgba(237, 90, 40, 0.12);
 }
 
-.passwordField {
-  position: relative;
-  display: block;
-}
-
-.passwordField .input {
-  padding-right: 2.75rem;
-}
-
-.passwordToggle {
-  position: absolute;
-  top: 50%;
-  right: 0.7rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #a8a29e;
-  cursor: pointer;
-  transform: translateY(-50%);
-}
-
-.passwordToggle:hover,
-.passwordToggle:focus-visible {
-  color: #57534e;
-}
-
-.passwordToggle:focus-visible {
-  outline: 2px solid rgba(237, 90, 40, 0.35);
-  outline-offset: 1px;
+.inputPill:focus {
+  border-color: transparent;
 }
 
 .formRow {
@@ -327,6 +301,13 @@
   text-align: center;
   font-size: 0.8125rem;
   color: #78716c;
+}
+
+.remembered {
+  margin: 1.35rem 0 0;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: #a8a29e;
 }
 
 .legal {

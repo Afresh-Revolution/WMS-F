@@ -19,7 +19,7 @@ import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { managerApi, superAdminApi } from "@/lib/api";
-import { listFrom, mapPurchaseRequest } from "@/lib/api/mappers";
+import { listFrom, mapDepartment, mapPurchaseRequest } from "@/lib/api/mappers";
 import payrollStyles from "./FinancePayrollPage.module.css";
 import styles from "./FinancePurchasesPage.module.css";
 
@@ -30,12 +30,6 @@ const statusClass: Record<PurchaseStatus, string> = {
   Delivered: styles.statusDelivered,
   Rejected: styles.statusRejected,
 };
-
-const createFields = [
-  { name: "item", label: "Item", required: true },
-  { name: "detail", label: "Details", required: true },
-  { name: "amount", label: "Amount", required: true, placeholder: "₦ 0" },
-];
 
 function isPending(status: PurchaseStatus): boolean {
   return (
@@ -130,6 +124,10 @@ export function FinancePurchasesPage() {
         : superAdminApi.purchaseRequests.list(),
     [manager],
   );
+  const { data: departmentData } = useAsyncData(
+    () => superAdminApi.departments.list(),
+    [],
+  );
 
   const purchaseRequests = useMemo(() => {
     const remote = listFrom(data ?? undefined);
@@ -144,6 +142,64 @@ export function FinancePurchasesPage() {
       .map((record) => mapPurchaseRequest(record));
     return mapped;
   }, [createdRecords, data]);
+
+  const departmentOptions = useMemo(() => {
+    return listFrom(departmentData ?? undefined)
+      .map(mapDepartment)
+      .filter((item) => item.id && item.name)
+      .map((item) => ({ label: item.name, value: item.id }));
+  }, [departmentData]);
+
+  const createFields = useMemo(
+    () => [
+      {
+        name: "item",
+        label: "Item / service description",
+        required: true,
+        fullWidth: true,
+        placeholder: "What needs to be purchased?",
+      },
+      {
+        name: "quantity",
+        label: "Quantity",
+        type: "number" as const,
+        required: true,
+        pair: "qty",
+        defaultValue: "1",
+        min: 1,
+      },
+      {
+        name: "amount",
+        label: "Est. amount (₦)",
+        type: "number" as const,
+        required: true,
+        pair: "qty",
+        defaultValue: "0",
+        min: 0,
+      },
+      {
+        name: "departmentId",
+        label: "Department",
+        type: "select" as const,
+        required: true,
+        fullWidth: true,
+        defaultValue: "",
+        options: [
+          { label: "Select department", value: "" },
+          ...departmentOptions,
+        ],
+      },
+      {
+        name: "reason",
+        label: "Reason",
+        type: "textarea" as const,
+        fullWidth: true,
+        rows: 2,
+        placeholder: "Business justification",
+      },
+    ],
+    [departmentOptions],
+  );
 
   const purchaseStats = useMemo(() => {
     const pending = purchaseRequests.filter((request) => isPending(request.status)).length;
@@ -167,6 +223,26 @@ export function FinancePurchasesPage() {
   }, [activeFilter, purchaseRequests]);
 
   async function handleCreate(values: Record<string, string>) {
+    const item = values.item.trim();
+    const reason = values.reason.trim();
+    const departmentId = values.departmentId.trim();
+    const quantity = Number(values.quantity);
+    const amount = Number(values.amount);
+    if (!item) {
+      throw new Error("Enter the item or service to purchase.");
+    }
+    if (!departmentId) {
+      throw new Error("Choose a department.");
+    }
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      throw new Error("Enter a quantity of 1 or more.");
+    }
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error("Enter a valid estimated amount.");
+    }
+    const departmentName =
+      departmentOptions.find((option) => option.value === departmentId)?.label ??
+      "";
     await runAction("Create request", async () => {
       const body = purchaseWriteBody(values, user?.name || "Manager");
       if (body.title.length < 3) {
@@ -375,9 +451,10 @@ export function FinancePurchasesPage() {
       <SimpleModal
         open={createOpen}
         title="New purchase request"
-        description="Submit a request for procurement review."
         fields={createFields}
         submitLabel="Submit request"
+        showClose
+        appearance="soft"
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />

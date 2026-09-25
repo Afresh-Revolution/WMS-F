@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Download,
   Heart,
+  Megaphone,
   Pin,
   Plus,
   RefreshCw,
@@ -235,55 +236,36 @@ export function AnnouncementsPage() {
 
   const createFields = useMemo(
     () => [
-      { name: "title", label: "Title", fullWidth: true },
       {
-        name: "message",
-        label: "Message",
-        type: "textarea" as const,
+        name: "title",
+        label: "Title",
         required: true,
         fullWidth: true,
+        placeholder: "Announcement title",
       },
       {
         name: "category",
         label: "Category",
         type: "select" as const,
+        required: true,
+        fullWidth: true,
         defaultValue: "General",
         options: [
           { label: "General", value: "General" },
           { label: "HR", value: "HR" },
           { label: "Finance", value: "Finance" },
-          { label: "Events", value: "Events" },
-          { label: "Security", value: "Security" },
-        ],
-      },
-      {
-        name: "priority",
-        label: "Priority",
-        type: "select" as const,
-        defaultValue: "normal",
-        options: [
-          { label: "Normal", value: "normal" },
-          { label: "Important", value: "important" },
-          { label: "Urgent", value: "urgent" },
+          { label: "Urgent", value: "Urgent" },
         ],
       },
       {
         name: "audienceType",
         label: "Audience",
         type: "select" as const,
+        required: true,
+        fullWidth: true,
         defaultValue: "all_staff",
         options: [
           { label: "All staff", value: "all_staff" },
-          { label: "One department", value: "department" },
-        ],
-      },
-      {
-        name: "departmentId",
-        label: "Department",
-        type: "select" as const,
-        defaultValue: "",
-        options: [
-          { label: "Select department", value: "" },
           ...departments.map((department) => ({
             label: department.name,
             value: department.id,
@@ -291,29 +273,19 @@ export function AnnouncementsPage() {
         ],
       },
       {
+        name: "message",
+        label: "Message",
+        type: "textarea" as const,
+        required: true,
+        fullWidth: true,
+        rows: 4,
+        placeholder: "Write your announcement...",
+      },
+      {
         name: "isPinned",
-        label: "Pin to top",
-        type: "select" as const,
+        label: "Pin this announcement",
+        type: "checkbox" as const,
         defaultValue: "false",
-        options: [
-          { label: "No", value: "false" },
-          { label: "Yes", value: "true" },
-        ],
-      },
-      {
-        name: "expiresAt",
-        label: "Expires (optional)",
-        type: "date" as const,
-      },
-      {
-        name: "status",
-        label: "When to send",
-        type: "select" as const,
-        defaultValue: "published",
-        options: [
-          { label: "Publish now", value: "published" },
-          { label: "Save as draft", value: "draft" },
-        ],
       },
     ],
     [departments],
@@ -336,15 +308,23 @@ export function AnnouncementsPage() {
   }, [activeFilter, activeCategory, query, announcements]);
 
   async function handleCreate(values: Record<string, string>) {
-    await runAction(
-      values.status === "draft" ? "Save draft" : "Publish announcement",
-      async () => {
-        await (manager
-          ? publishManagerAnnouncement(values)
-          : publishCompanyAnnouncement(values));
-        refetch();
-      },
-    );
+    const audienceValue = values.audienceType.trim();
+    const isAllStaff = !audienceValue || audienceValue === "all_staff";
+    const payload = {
+      ...values,
+      title: values.title.trim(),
+      message: values.message.trim(),
+      audienceType: isAllStaff ? "all_staff" : "department",
+      departmentId: isAllStaff ? "" : audienceValue,
+      isPinned: values.isPinned,
+      status: "published",
+    };
+    await runAction("Publish announcement", async () => {
+      await (manager
+        ? publishManagerAnnouncement(payload)
+        : publishCompanyAnnouncement(payload));
+      refetch();
+    });
   }
 
   async function unpinAnnouncement(id: string) {
@@ -618,10 +598,11 @@ export function AnnouncementsPage() {
       <SimpleModal
         open={createOpen}
         title="New announcement"
-        description="Publishing sends this to the staff feed. Drafts stay hidden until you publish."
         fields={createFields}
-        submitLabel="Save"
-        wide
+        submitLabel="Publish"
+        submitIcon={<Megaphone size={15} strokeWidth={2.25} />}
+        showClose
+        appearance="soft"
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />

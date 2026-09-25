@@ -23,7 +23,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .eyebrow {
@@ -61,21 +61,21 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 22px;
 }
 
 .avatar {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   flex-shrink: 0;
   border-radius: 999px;
-  font-size: 12px;
+  background: var(--afresh-orange-soft);
+  font-size: 13px;
   font-weight: 700;
   color: var(--afresh-orange);
-  background: var(--afresh-orange-soft);
 }
 
 .name {
@@ -88,145 +88,119 @@
   color: var(--afresh-orange);
 }
 
-.department {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #78716c;
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
 }
 
-.statusReview,
-.statusDraft,
-.statusApproved {
+.typeTag,
+.statusActive,
+.statusExiting,
+.statusExited {
   display: inline-flex;
   align-items: center;
-  width: fit-content;
-  margin-bottom: 20px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.statusReview {
+.typeTag {
   background: var(--afresh-orange-soft);
   color: var(--afresh-orange);
 }
 
-.statusDraft {
-  background: #f5f5f4;
-  color: #78716c;
-}
-
-.statusApproved {
+.statusActive {
   background: #ecfdf3;
   color: #067647;
 }
 
-.salaryRow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-bottom: 10px;
+.statusExiting {
+  background: #fff1ea;
+  color: var(--afresh-orange);
 }
 
-.salaryCard,
-.incrementCard {
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: var(--afresh-orange-soft);
-}
-
-.salaryLabel,
-.incrementLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 0 8px;
-  font-size: 12px;
+.statusExited {
+  background: #f5f5f4;
   color: #78716c;
-}
-
-.salaryValue {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--afresh-orange);
-}
-
-.incrementCard {
-  margin-bottom: 24px;
-  text-align: center;
-}
-
-.incrementLabel {
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #a8a29e;
-}
-
-.incrementValue {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 32px;
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  color: var(--afresh-orange);
 }
 
 .meta {
   display: grid;
-  gap: 6px;
-  margin-bottom: 28px;
+  gap: 12px;
+  margin: 0 0 24px;
 }
 
-.metaLabel {
-  margin: 10px 0 0;
+.metaRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.metaRow dt {
   font-size: 13px;
   color: #a8a29e;
 }
 
-.metaLabel:first-child {
-  margin-top: 0;
-}
-
-.metaBody {
+.metaRow dd {
   margin: 0;
-  font-size: 15px;
-  line-height: 1.45;
+  text-align: right;
+  font-size: 14px;
+  font-weight: 600;
   color: #292524;
 }
 
+.progressBlock {
+  margin-bottom: 28px;
+}
+
+.progressTop {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #a8a29e;
+}
+
+.progressTrack {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f5f0eb;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--afresh-orange);
+}
+
+.progressHint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #a8a29e;
+}
+
 .actions {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: auto;
 }
 
 .primary,
-.secondary,
-.reject {
+.secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 999px;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-}
-
-.primary,
-.secondary {
-  height: 46px;
-  padding: 0 16px;
-  border-radius: 999px;
 }
 
 .primary {
@@ -249,17 +223,6 @@
   border-color: #a8a29e;
 }
 
-.reject {
-  border: 0;
-  background: transparent;
-  padding: 8px;
-  color: var(--afresh-orange);
-}
-
-.reject:hover {
-  color: var(--afresh-orange-dark);
-}
-
 @media (max-width: 480px) {
   .panel {
     width: 100%;
@@ -270,7 +233,7 @@
     font-size: 24px;
   }
 
-  .salaryRow {
+  .actions {
     grid-template-columns: 1fr;
   }
 }

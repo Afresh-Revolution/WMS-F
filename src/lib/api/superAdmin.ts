@@ -1,4 +1,5 @@
 import { apiRequest, buildQuery, ApiError } from "./client";
+import { createNyscInternsManageApi } from "./intern";
 import type { ApiListResponse, Id } from "./types";
 
 const NS = "/super-admin";
@@ -330,6 +331,13 @@ export const superAdminApi = {
           method: "PATCH",
           body,
         }),
+      return: (id: Id, body?: Record<string, unknown>) =>
+        saRequest<void>(`/hr/promotions/${id}/return`, {
+          method: "PATCH",
+          body,
+        }),
+      get: (id: Id) =>
+        saRequest<Record<string, unknown>>(`/hr/promotions/${id}`),
     },
     salaryAdjustments: {
       list: (params?: Record<string, unknown>) =>
@@ -744,7 +752,18 @@ export const superAdminApi = {
   branches: resource("/employers/branches"),
   interns: resource("/interns"),
   nysc: resource("/nysc"),
-  nyscInterns: resource("/nysc-interns"),
+  nyscInterns: {
+    ...resource("/nysc-interns"),
+    ...createNyscInternsManageApi((path, options) => {
+      const suffix =
+        path.startsWith("?") || path === ""
+          ? path
+          : path.startsWith("/")
+            ? path
+            : `/${path}`;
+      return saRequest(`/nysc-interns${suffix}`, options);
+    }),
+  },
   leave: resource("/leave"),
   leaveTypes: resource("/leave/types"),
   promotions: resource("/promotions"),

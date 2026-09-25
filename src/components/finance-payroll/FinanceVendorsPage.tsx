@@ -43,32 +43,29 @@ function formatCompactNaira(total: number) {
 }
 
 const createFields = [
-  { name: "name", label: "Vendor name", required: true },
+  {
+    name: "name",
+    label: "Vendor name",
+    required: true,
+    fullWidth: true,
+  },
   {
     name: "category",
     label: "Category",
-    type: "select" as const,
-    required: true,
-    defaultValue: "Meals",
-    options: [
-      { label: "Meals", value: "Meals" },
-      { label: "Transport", value: "Transport" },
-      { label: "Accommodation", value: "Accommodation" },
-      { label: "Fuel", value: "Fuel" },
-      { label: "Office Supplies", value: "Office Supplies" },
-      { label: "Communication", value: "Communication" },
-      { label: "Travel", value: "Travel" },
-      { label: "Client Entertainment", value: "Client Entertainment" },
-      { label: "Training", value: "Training" },
-      { label: "Software", value: "Software" },
-      { label: "Equipment", value: "Equipment" },
-      { label: "Medical", value: "Medical" },
-      { label: "Internet", value: "Internet" },
-      { label: "Other", value: "Other" },
-    ],
+    fullWidth: true,
+    placeholder: "e.g. IT, Insurance, Utilities",
   },
-  { name: "location", label: "Location", required: true },
-  { name: "email", label: "Email", type: "email" as const, required: true },
+  {
+    name: "email",
+    label: "Contact email",
+    type: "email" as const,
+    fullWidth: true,
+  },
+  {
+    name: "phone",
+    label: "Phone",
+    fullWidth: true,
+  },
 ];
 
 export function FinanceVendorsPage() {
@@ -130,17 +127,22 @@ export function FinanceVendorsPage() {
 
   async function handleCreate(values: Record<string, string>) {
     await runAction("Add vendor", async () => {
-      const body = {
-        name: values.name.trim(),
-        vendorName: values.name.trim(),
-        category: values.category.trim() || "Other",
-        location: values.location.trim(),
-        email: values.email.trim(),
-        status: "active",
-      };
-      if (!body.name) {
+      const name = values.name.trim();
+      const category = values.category.trim();
+      const email = values.email.trim();
+      const phone = values.phone.trim();
+      if (!name) {
         throw new Error("Enter a vendor name.");
       }
+      const body = {
+        name,
+        vendorName: name,
+        category,
+        email,
+        phone,
+        phoneNumber: phone,
+        status: "active",
+      };
       const created = await (manager
         ? managerApi.createVendor(body)
         : superAdminApi.vendors.create({ ...body, active: true }));
@@ -301,9 +303,10 @@ export function FinanceVendorsPage() {
       <SimpleModal
         open={createOpen}
         title="Add vendor"
-        description="Create a supplier record for bills and purchases."
         fields={createFields}
         submitLabel="Add vendor"
+        showClose
+        appearance="soft"
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
       />

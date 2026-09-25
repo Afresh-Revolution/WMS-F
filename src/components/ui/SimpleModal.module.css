@@ -110,6 +110,25 @@
   grid-column: 1 / -1;
 }
 
+.checkField {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--afresh-ink);
+  cursor: pointer;
+}
+
+.checkField input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: #292524;
+}
+
 .field input,
 .field textarea,
 .field select {
@@ -180,12 +199,32 @@
   row-gap: 16px;
 }
 
+.fieldPair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
+.modalSoft .fieldPair {
+  gap: 12px;
+}
+
 .modalSoft .title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
   font-size: 20px;
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: -0.02em;
+  color: var(--afresh-orange);
+}
+
+.modalSoft .titleIcon {
+  display: inline-flex;
+  flex-shrink: 0;
   color: var(--afresh-orange);
 }
 
@@ -207,6 +246,21 @@
 
 .modalSoft .field span {
   color: var(--afresh-ink);
+}
+
+.modalSoft .checkField {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--afresh-ink);
+}
+
+.modalSoft .checkField input {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  accent-color: #1c1917;
 }
 
 .modalSoft .field input,
@@ -238,7 +292,7 @@
 }
 
 .modalSoft .field textarea {
-  min-height: 88px;
+  min-height: 76px;
   padding: 14px 18px;
   border-radius: 20px;
   resize: vertical;
@@ -273,7 +327,18 @@
 .modalSoft .field input[type="date"]::-webkit-calendar-picker-indicator,
 .modalSoft .field input[type="time"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  opacity: 0.35;
+  opacity: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.modalSoft .field input[type="date"],
+.modalSoft .field input[placeholder="mm/dd/yyyy"] {
+  padding-right: 44px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23e0cfc6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='5' width='18' height='16' rx='2'/><path d='M3 10h18M8 3v4M16 3v4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 16px;
 }
 
 .modalSoft .field input:focus,
@@ -310,7 +375,8 @@
 }
 
 @media (max-width: 640px) {
-  .formWide {
+  .formWide,
+  .fieldPair {
     grid-template-columns: 1fr;
   }
 

@@ -19,6 +19,8 @@ export type PlacementMember = {
   emergencyName: string;
   emergencyPhone: string;
   progress: number;
+  daysRemaining?: number;
+  userId?: string;
   status: "Active" | "Exiting soon" | "Exited";
 };
 

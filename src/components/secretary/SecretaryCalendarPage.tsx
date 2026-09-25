@@ -2,7 +2,6 @@
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import {
   Bell,
@@ -14,6 +13,7 @@ import {
   Search,
 } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { ViewToggle } from "@/components/ui/ViewToggle";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { secretaryApi } from "@/lib/api";
 import { listFrom, str } from "@/lib/api/mappers";
@@ -323,24 +323,11 @@ export function SecretaryCalendarPage({
             ))}
           </ul>
         </div>
-        <div className={styles.viewToggle} role="tablist" aria-label="Calendar view">
-          {calendarViews.map((item) => {
-            const active = item.id === view;
-            return (
-              <Link
-                key={item.id}
-                href={item.href}
-                role="tab"
-                aria-selected={active}
-                className={`${styles.viewChip} ${
-                  active ? styles.viewChipActive : ""
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
+        <ViewToggle
+          aria-label="Calendar view"
+          value={view}
+          options={calendarViews}
+        />
       </div>
 
       <section className={view === "week" ? styles.weekSection : styles.board}>
