@@ -1,7 +1,7 @@
 import { ApiError, apiRequest, buildQuery } from "./client";
 import { nyscInternsManageApi } from "./intern";
 import { unwrapList, type ApiListResponse, type Id } from "./types";
-import { mergeLocalEmployees } from "./staffEmployees";
+import { listStaffEmployees } from "./staffEmployees";
 
 export type ManagerListParams = Record<string, unknown>;
 
@@ -95,14 +95,6 @@ function listFromLookups(
 
 function departmentsFromLookups(payload: unknown): Record<string, unknown>[] {
   return listFromLookups(payload, "departments");
-}
-
-async function settledLookupEmployees(loader: () => Promise<unknown>) {
-  try {
-    return listFromLookups(await loader(), "employees");
-  } catch {
-    return [];
-  }
 }
 
 async function settledLookupDepartments(loader: () => Promise<unknown>) {
@@ -591,14 +583,8 @@ export const managerApi = {
     }).then(unwrapData);
   },
 
-  listEmployees(query?: ManagerListParams) {
-    const params = { limit: 200, ...query };
-    return Promise.all([
-      settledDepartments(() => apiRequest(managerPath("/employees", params))),
-      settledDepartments(() => apiRequest("/lookups/employees")),
-      settledLookupEmployees(() => apiRequest("/lookups")),
-      settledDepartments(() => apiRequest(`/users${buildQuery(params)}`)),
-    ]).then((sources) => mergeLocalEmployees(mergeRecords(sources)));
+  listEmployees(_query?: ManagerListParams) {
+    return listStaffEmployees();
   },
 
   listAttendance(query?: ManagerListParams) {
@@ -690,24 +676,24 @@ export const managerApi = {
     throw new ApiError(404, "Employee was not found.");
   },
 
-  listDepartments(query?: ManagerListParams) {
+  async listDepartments(query?: ManagerListParams) {
     const params = { limit: 200, ...query };
-    return Promise.all([
-      settledDepartments(() =>
-        apiRequest(managerPath("/departments", params)),
-      ),
+    const primary = await settledDepartments(() =>
+      apiRequest(managerPath("/departments", params)),
+    );
+    if (primary.length) {
+      return mergeDepartmentRecords([primary, readLocalDepartments()]);
+    }
+    const sources = await Promise.all([
       settledDepartments(() => apiRequest("/lookups/departments")),
       settledLookupDepartments(() => apiRequest("/lookups")),
       settledLookupDepartments(() => apiRequest(managerPath("/lookups"))),
-      settledDepartments(() =>
-        apiRequest(`/departments${buildQuery(params)}`),
-      ),
+      settledDepartments(() => apiRequest(`/departments${buildQuery(params)}`)),
       settledDepartments(() =>
         apiRequest(`/hr/departments${buildQuery(params)}`),
       ),
-    ]).then((sources) =>
-      mergeDepartmentRecords([...sources, readLocalDepartments()]),
-    );
+    ]);
+    return mergeDepartmentRecords([primary, ...sources, readLocalDepartments()]);
   },
 
   createDepartment(body: Record<string, unknown>) {

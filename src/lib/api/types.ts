@@ -110,11 +110,15 @@ export function unwrapRecord(payload: unknown): Record<string, unknown> {
 }
 
 function listFromObject(value: Record<string, unknown>): unknown[] | null {
+  let empty: unknown[] | null = null;
   for (const key of LIST_KEYS) {
-    if (Array.isArray(value[key])) return value[key] as unknown[];
+    if (!Array.isArray(value[key])) continue;
+    if (value[key].length > 0) return value[key] as unknown[];
+    empty ??= value[key] as unknown[];
   }
+  if (Array.isArray(value.data) && value.data.length > 0) return value.data;
   if (Array.isArray(value.data)) return value.data;
-  return null;
+  return empty;
 }
 
 export function unwrapList<T>(response: ApiListResponse<T> | null | undefined): T[] {

@@ -105,12 +105,16 @@ export function EmployeesPage() {
     [],
   );
   const { data: departmentData } = useAsyncData(async () => {
-    const settled = await Promise.allSettled([
-      manager ? managerApi.listDepartments() : Promise.reject(),
-      superAdminApi.departments.list(),
-      lookupsApi.departments(),
-      departmentsApi.list(),
-    ]);
+    if (!addOpen) return null;
+    const settled = await Promise.allSettled(
+      manager
+        ? [managerApi.listDepartments(), lookupsApi.departments()]
+        : [
+            superAdminApi.departments.list(),
+            lookupsApi.departments(),
+            departmentsApi.list(),
+          ],
+    );
     const rows: Record<string, unknown>[] = [];
     const seen = new Set<string>();
     for (const result of settled) {
@@ -123,7 +127,7 @@ export function EmployeesPage() {
       }
     }
     return rows.length ? rows : null;
-  }, [manager]);
+  }, [manager, addOpen]);
 
   const employees = useMemo(() => {
     const rows: MappedEmployee[] = [];

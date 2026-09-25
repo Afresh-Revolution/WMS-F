@@ -28,7 +28,16 @@ function employeeKey(row: Record<string, unknown>): string {
     .trim()
     .toLowerCase();
   const id = str(
-    nested.id ?? nested._id ?? row.id ?? nested.userId ?? user?.id ?? profile?.id,
+    nested.id ??
+      nested._id ??
+      row.id ??
+      nested.userId ??
+      nested.employeeId ??
+      nested.employee_id ??
+      nested.staffId ??
+      nested.staff_id ??
+      user?.id ??
+      profile?.id,
   );
   return email || id;
 }
@@ -48,10 +57,28 @@ function rowsFrom(payload: unknown): Record<string, unknown>[] {
 function employeesFromPayload(payload: unknown): Record<string, unknown>[] {
   const root = asObject(payload);
   const data = asObject(root?.data) ?? root;
-  if (Array.isArray(data?.employees)) return rowsFrom(data.employees);
-  if (Array.isArray(data?.users)) return rowsFrom(data.users);
-  if (Array.isArray(data?.hods)) return rowsFrom(data.hods);
-  if (Array.isArray(data?.staff)) return rowsFrom(data.staff);
+  const collected: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  let sawNamedList = false;
+  for (const list of [
+    data?.employees,
+    data?.users,
+    data?.hods,
+    data?.staff,
+    data?.people,
+    data?.items,
+  ]) {
+    if (!Array.isArray(list)) continue;
+    sawNamedList = true;
+    if (list.length === 0) continue;
+    for (const row of rowsFrom(list)) {
+      const key = employeeKey(row);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      collected.push(row);
+    }
+  }
+  if (collected.length || sawNamedList) return collected;
   return rowsFrom(payload);
 }
 
@@ -60,42 +87,110 @@ function isMissingRoute(error: unknown) {
   return error.status === 404 || error.status === 405 || error.status === 403;
 }
 
-const LIST_QUERY = buildQuery({ page: 1, limit: 200 });
-
-const LIST_PATHS = [
-  "/lookups/employees",
-  "/lookups/hods",
-  "/lookups",
-  `/users${LIST_QUERY}`,
-  "/users",
-  `/hr/employees${LIST_QUERY}`,
-  `/employees${LIST_QUERY}`,
-  "/employees",
-  `/super-admin/employees${LIST_QUERY}`,
-  "/super-admin/employees",
-];
-
-const MANAGER_LIST_PATHS = [
-  `/manager/employees${LIST_QUERY}`,
-  "/manager/employees",
-  "/manager/lookups",
-];
-
-const ACCOUNTANT_LIST_PATHS = [
-  `/accountant/employees${LIST_QUERY}`,
-  "/accountant/lookups",
-];
-
-function isAccountantWorkspace() {
-  const role = readCachedWorkspace()?.roleKey ?? "";
-  return /accountant/i.test(role);
+function isRateLimited(error: unknown) {
+  return error instanceof ApiError && error.status === 429;
 }
 
-function staffListPaths() {
+function readListMeta(payload: unknown) {
+  const root = asObject(payload) ?? {};
+  const data = asObject(root.data) ?? root;
+  const meta =
+    asObject(root.meta) ??
+    asObject(data.meta) ??
+    asObject(root.pagination) ??
+    asObject(data.pagination) ??
+    {};
+  const total = Number(
+    meta.total ?? meta.totalItems ?? meta.count ?? root.total ?? data.total,
+  );
+  const page = Number(meta.page ?? meta.currentPage ?? root.page ?? 1);
+  const limit = Number(
+    meta.limit ?? meta.perPage ?? meta.pageSize ?? root.limit ?? 0,
+  );
+  const inferredPages =
+    Number.isFinite(total) && total > 0 && limit > 0
+      ? Math.ceil(total / limit)
+      : 0;
+  const totalPages = Number(meta.totalPages ?? meta.pages ?? inferredPages);
+  return {
+    total: Number.isFinite(total) && total > 0 ? total : 0,
+    page: Number.isFinite(page) && page > 0 ? page : 1,
+    limit: Number.isFinite(limit) && limit > 0 ? limit : 0,
+    totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 0,
+  };
+}
+
+const PAGE_SIZE = 100;
+
+function workspaceRole() {
+  return readCachedWorkspace()?.roleKey ?? "";
+}
+
+function isAccountantWorkspace() {
+  return /accountant/i.test(workspaceRole());
+}
+
+function isManagerWorkspace() {
+  return /manager|hod/i.test(workspaceRole());
+}
+
+function staffSourcePaths() {
+  const orgWide = ["/lookups/employees", "/users", "/lookups"];
   if (isAccountantWorkspace()) {
-    return [...LIST_PATHS, ...ACCOUNTANT_LIST_PATHS, ...MANAGER_LIST_PATHS];
+    return ["/accountant/employees", ...orgWide, "/manager/employees"];
   }
-  return [...LIST_PATHS, ...MANAGER_LIST_PATHS, ...ACCOUNTANT_LIST_PATHS];
+  if (isManagerWorkspace()) {
+    return ["/manager/employees", ...orgWide];
+  }
+  return [
+    ...orgWide,
+    "/hr/employees",
+    "/employees",
+    "/super-admin/employees",
+    "/manager/employees",
+  ];
+}
+
+function isPagedEmployeePath(path: string) {
+  return /\/employees$/.test(path) || /\/users$/.test(path);
+}
+
+async function requestPayload(path: string) {
+  try {
+    return await apiRequest(path);
+  } catch (error) {
+    if (!isRateLimited(error)) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    return apiRequest(path);
+  }
+}
+
+async function listPagedEmployeeRows(path: string) {
+  if (!isPagedEmployeePath(path)) {
+    return employeesFromPayload(await requestPayload(path));
+  }
+
+  const collected: Record<string, unknown>[] = [];
+  const seen = new Set<string>();
+  for (let page = 1; page <= 20; page += 1) {
+    const payload = await requestPayload(
+      `${path}${buildQuery({ page, limit: PAGE_SIZE, perPage: PAGE_SIZE })}`,
+    );
+    const rows = employeesFromPayload(payload);
+    for (const row of rows) {
+      const key = employeeKey(row);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      collected.push(row);
+    }
+    const meta = readListMeta(payload);
+    if (rows.length === 0) break;
+    if (meta.total > 0 && collected.length >= meta.total) break;
+    if (meta.totalPages > 0 && page >= meta.totalPages) break;
+    if (meta.limit > 0 && rows.length < meta.limit) break;
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return collected;
 }
 
 const CREATE_PATHS = [
@@ -187,10 +282,11 @@ function saveLocalEmployee(
 export async function listStaffEmployees(): Promise<Record<string, unknown>[]> {
   const merged: Record<string, unknown>[] = [];
   const seen = new Set<string>();
+  let lastRateLimit: unknown;
 
-  for (const path of [...new Set(staffListPaths())]) {
+  for (const path of [...new Set(staffSourcePaths())]) {
     try {
-      const rows = employeesFromPayload(await apiRequest(path));
+      const rows = await listPagedEmployeeRows(path);
       for (const row of rows) {
         const key = employeeKey(row);
         if (!key || seen.has(key)) continue;
@@ -198,8 +294,16 @@ export async function listStaffEmployees(): Promise<Record<string, unknown>[]> {
         merged.push(row);
       }
     } catch (error) {
+      if (isRateLimited(error)) {
+        lastRateLimit = error;
+        continue;
+      }
       if (isMissingRoute(error)) continue;
     }
+  }
+
+  if (merged.length === 0 && lastRateLimit instanceof ApiError) {
+    throw lastRateLimit;
   }
 
   return mergeLocalEmployees(merged);
