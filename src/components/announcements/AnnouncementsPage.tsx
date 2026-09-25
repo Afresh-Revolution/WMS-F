@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   Bell,
   Briefcase,
-  ChevronDown,
   ChevronRight,
   Download,
   Heart,
@@ -539,11 +538,7 @@ export function AnnouncementsPage() {
                       {item.date}
                     </p>
                   </div>
-                  {expanded ? (
-                    <ChevronDown size={18} className={styles.chevron} />
-                  ) : (
-                    <ChevronRight size={18} className={styles.chevron} />
-                  )}
+                  <ChevronRight size={18} className={styles.chevron} />
                 </button>
 
                 {expanded && (

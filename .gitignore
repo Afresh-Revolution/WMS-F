@@ -45,6 +45,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# local API stores
+/.data/
+
 # env files
 .env
 .env.local

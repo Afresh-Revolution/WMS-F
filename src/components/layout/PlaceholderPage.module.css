@@ -30,3 +30,23 @@
   line-height: 1.6;
   color: #78716c;
 }
+
+@media (max-width: 768px) {
+  .page {
+    padding: 32px 16px 48px;
+  }
+
+  .title {
+    font-size: 34px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 24px 12px 40px;
+  }
+
+  .title {
+    font-size: 28px;
+  }
+}

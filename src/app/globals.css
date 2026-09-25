@@ -34,6 +34,11 @@ html,
 body {
   height: 100%;
   margin: 0;
+  min-width: 0;
+}
+
+html {
+  overflow-x: clip;
 }
 
 body {
@@ -42,6 +47,13 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+img,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
 }
 
 button,
@@ -69,6 +81,12 @@ input {
 select,
 textarea {
   font: inherit;
+}
+
+input,
+select,
+textarea {
+  max-width: 100%;
 }
 
 /* Shared responsive page utilities */
@@ -106,6 +124,12 @@ textarea {
 
 @media (max-width: 480px) {
   .app-page {
-    padding: 0.85rem 0.85rem 1.5rem;
+    padding: 0.85rem 0.85rem max(1.5rem, env(safe-area-inset-bottom));
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 }

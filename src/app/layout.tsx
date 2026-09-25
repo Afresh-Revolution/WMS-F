@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Sans, Instrument_Serif } from "next/font/google";
 import "./globals.css";
 
@@ -17,6 +17,12 @@ const instrumentSerif = Instrument_Serif({
 export const metadata: Metadata = {
   title: "Afresh",
   description: "Afresh workforce",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

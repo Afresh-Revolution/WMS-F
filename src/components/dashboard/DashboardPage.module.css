@@ -1132,3 +1132,31 @@
     grid-template-columns: 90px 1fr 28px;
   }
 }
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 40px;
+  }
+
+  .heroTitle {
+    font-size: 26px;
+  }
+
+  .metricValue,
+  .statValue {
+    font-size: 32px;
+  }
+
+  .search kbd {
+    display: none;
+  }
+
+  .topBar {
+    flex-wrap: wrap;
+  }
+
+  .perfRow,
+  .chartRow {
+    grid-template-columns: 1fr;
+  }
+}

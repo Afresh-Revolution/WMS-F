@@ -190,7 +190,7 @@
   width: 72px;
   height: 72px;
   flex-shrink: 0;
-  border-radius: 14px;
+  border-radius: 999px;
   background: var(--afresh-orange-soft);
   color: var(--afresh-orange);
   font-size: 22px;
@@ -256,9 +256,6 @@
   align-items: flex-end;
   justify-content: center;
   min-width: 132px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: var(--afresh-orange-soft);
 }
 
 .tabs {
@@ -277,11 +274,15 @@
   justify-content: center;
   min-width: 72px;
   padding: 8px 16px;
+  border: 0;
   border-radius: 999px;
+  background: transparent;
   color: #78716c;
+  font: inherit;
   font-size: 14px;
   font-weight: 500;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .tab:hover {
@@ -325,10 +326,6 @@
   padding: 22px 24px 18px;
   border-radius: 22px;
   background: #fff;
-}
-
-.balanceCard {
-  grid-column: 1 / -1;
 }
 
 .emptyCopy {
@@ -571,6 +568,98 @@
   text-decoration: underline;
 }
 
+.leaveHistoryWrap {
+  margin-top: 8px;
+}
+
+.leaveHistory {
+  overflow: hidden;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(28, 25, 23, 0.04);
+}
+
+.leaveHistoryTitle {
+  margin: 0;
+  padding: 26px 28px 10px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--afresh-orange);
+}
+
+.leaveHistoryList {
+  display: flex;
+  flex-direction: column;
+}
+
+.leaveHistoryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 28px;
+  border-top: 1px solid #f0ece8;
+}
+
+.leaveHistoryType {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1c1917;
+}
+
+.leaveHistoryDates {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: #a8a29e;
+}
+
+.leaveHistoryActions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-shrink: 0;
+}
+
+.leaveHistoryStatus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.leaveHistoryApproved {
+  background: #e8f6ea;
+  color: #5a9a62;
+}
+
+.leaveHistoryPending {
+  background: #fff4d6;
+  color: #c9a227;
+}
+
+.downloadLetter {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--afresh-orange);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.downloadLetter:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 860px) {
   .grid {
     grid-template-columns: 1fr;
@@ -586,7 +675,8 @@
     width: 100%;
   }
 
-  .historyRow {
+  .historyRow,
+  .leaveHistoryRow {
     align-items: flex-start;
   }
 }
@@ -610,9 +700,34 @@
   }
 
   .historyRow,
-  .historyActions {
+  .historyActions,
+  .leaveHistoryRow,
+  .leaveHistoryActions {
     align-items: flex-start;
     flex-direction: column;
     gap: 10px;
+  }
+
+  .leaveHistoryTitle {
+    font-size: 28px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 40px;
+  }
+  .title {
+    font-size: 28px;
+    white-space: normal;
+  }
+  .searchShortcut {
+    display: none;
+  }
+  .search kbd {
+    display: none;
+  }
+  .topBar {
+    flex-wrap: wrap;
   }
 }

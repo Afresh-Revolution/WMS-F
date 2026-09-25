@@ -199,6 +199,15 @@ export function announcementWriteBody(values: Record<string, string>) {
       : expiresAt;
   }
 
+  const author = (values.author ?? values.source ?? "").trim();
+  if (author) {
+    body.author = author;
+    body.source = author;
+    body.publishedBy = author;
+  }
+  const initials = (values.initials ?? "").trim();
+  if (initials) body.initials = initials;
+
   return body;
 }
 
@@ -362,8 +371,31 @@ export function unpinManagerAnnouncement(id: string) {
   );
 }
 
+export async function publishStaffAnnouncement(values: Record<string, string>) {
+  const body = announcementWriteBody(values);
+  try {
+    const created = await firstSuccessful(
+      [
+        () =>
+          apiRequest<unknown>("/employee/announcements", {
+            method: "POST",
+            body,
+          }),
+        () => apiRequest<unknown>(STAFF, { method: "POST", body }),
+      ],
+      "Could not publish that announcement.",
+    );
+    return saveLocalAnnouncement(body, created);
+  } catch {
+    return saveLocalAnnouncement(body);
+  }
+}
+
 export function listStaffAnnouncements() {
-  return apiRequest<unknown>(STAFF);
+  return loadMergedAnnouncements([
+    () => apiRequest<unknown>("/employee/announcements"),
+    () => apiRequest<unknown>(STAFF),
+  ]);
 }
 
 export function getStaffUnreadCount() {

@@ -498,3 +498,28 @@
     font-size: 20px;
   }
 }
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 40px;
+  }
+  .title {
+    font-size: 28px;
+    white-space: normal;
+  }
+  .statValue {
+    font-size: 32px;
+  }
+  .searchKbd {
+    display: none;
+  }
+  .search kbd {
+    display: none;
+  }
+  .topBar {
+    flex-wrap: wrap;
+  }
+  .stats {
+    grid-template-columns: 1fr;
+  }
+}

@@ -32,7 +32,6 @@ import {
   type SecretaryReminder,
   type SecretaryStat,
 } from "@/data/secretary";
-import { SecretaryOverviewClockCard } from "@/components/secretary/SecretaryOverviewClockCard";
 import styles from "./SecretaryOverviewPage.module.css";
 
 export function SecretaryOverviewPage() {
@@ -269,8 +268,6 @@ export function SecretaryOverviewPage() {
           </Link>
         </div>
       </section>
-
-      <SecretaryOverviewClockCard />
 
       <div className={styles.statsRow}>
         {stats.map((stat) => (

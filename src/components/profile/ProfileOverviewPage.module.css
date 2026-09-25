@@ -543,3 +543,16 @@
     flex: 1;
   }
 }
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 40px;
+  }
+  .title {
+    font-size: 28px;
+    white-space: normal;
+  }
+  .topBar {
+    flex-wrap: wrap;
+  }
+}

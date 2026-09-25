@@ -98,6 +98,7 @@ export {
   unpinAdminAnnouncement,
   unpinManagerAnnouncement,
   listStaffAnnouncements,
+  publishStaffAnnouncement,
   getStaffUnreadCount,
   getStaffAnnouncement,
   markStaffAnnouncementRead,

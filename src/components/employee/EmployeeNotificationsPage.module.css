@@ -185,3 +185,18 @@
     font-size: 32px;
   }
 }
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 40px;
+  }
+  .heading h1 {
+    font-size: 28px;
+  }
+  .search kbd {
+    display: none;
+  }
+  .topBar {
+    flex-wrap: wrap;
+  }
+}

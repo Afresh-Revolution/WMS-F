@@ -302,18 +302,20 @@ export function SecretaryEmailDirectoryPage({
             onClick={() => setActiveFilter(stat.filter)}
           >
             <p className={styles.statLabel}>{stat.label}</p>
-            <p className={styles.statValue}>{stat.value}</p>
-            <span
-              className={
-                stat.tone === "action"
-                  ? styles.statTagAction
-                  : stat.tone === "muted"
-                    ? styles.statTagMuted
-                    : styles.statTagSoft
-              }
-            >
-              {stat.tag}
-            </span>
+            <div className={styles.statMain}>
+              <p className={styles.statValue}>{stat.value}</p>
+              <span
+                className={
+                  stat.tone === "action"
+                    ? styles.statTagAction
+                    : stat.tone === "muted"
+                      ? styles.statTagMuted
+                      : styles.statTagSoft
+                }
+              >
+                {stat.tag}
+              </span>
+            </div>
           </button>
         ))}
       </div>

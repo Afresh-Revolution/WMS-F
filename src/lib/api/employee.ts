@@ -268,6 +268,18 @@ export const employeeApi = {
       }).then(unwrapData),
   },
 
+  announcements: {
+    list: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/announcements", query),
+      ).then(unwrapList),
+    create: (body: Record<string, unknown>) =>
+      apiRequest<unknown>(path("/announcements"), {
+        method: "POST",
+        body,
+      }).then(unwrapData),
+  },
+
   performance: (query?: Record<string, unknown>) =>
     apiRequest<ApiListResponse<Record<string, unknown>>>(
       path("/performance", query),
@@ -284,6 +296,19 @@ export const employeeApi = {
       apiRequest<unknown>(path(`/notifications/${id}/read`), {
         method: "PATCH",
       }).then(unwrapData),
+  },
+
+  help: {
+    get: () =>
+      firstWorking(
+        [
+          () => apiRequest<unknown>(path("/help-center")).then(unwrapData),
+          () => apiRequest<unknown>(path("/help")).then(unwrapData),
+          () => apiRequest<unknown>("/help-center").then(unwrapData),
+          () => apiRequest<unknown>("/help").then(unwrapData),
+        ],
+        "Help center was not found",
+      ),
   },
 };
 

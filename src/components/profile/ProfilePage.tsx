@@ -14,23 +14,34 @@ import {
   Search,
 } from "lucide-react";
 import {
+  profileLeaveHistory,
   type ProfileExpenseClaim,
   type ProfileLeaveBalance,
   type ProfileLeaveHistoryItem,
 } from "@/data/profile";
 import { HideOnManager } from "@/components/layout/HideOnManager";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal, type ModalField } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { useManagerPortal } from "@/hooks/useManagerPortal";
 import { usePageActions } from "@/hooks/usePageActions";
-import { managerApi, secretaryApi, superAdminApi, unwrapRecord } from "@/lib/api";
+import {
+  employeeApi,
+  leaveDayCount,
+  listLeaveBalances,
+  listMyLeave,
+  managerApi,
+  secretaryApi,
+  superAdminApi,
+  unwrapRecord,
+} from "@/lib/api";
 import {
   cacheCurrentUser,
   initialsFromIdentity,
   readCachedOrJwtUser,
 } from "@/lib/currentUser";
-import { initials, listFrom, nestedStr, num, str } from "@/lib/api/mappers";
+import { initials, listFrom, mapLeaveBalance, nestedStr, num, str } from "@/lib/api/mappers";
 import { portalHref } from "@/lib/portalPaths";
 import styles from "./ProfilePage.module.css";
 
@@ -85,6 +96,67 @@ function formatProfileDate(value: string) {
   });
 }
 
+function parseProfileDate(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Date.parse(
+    /^\d{4}-\d{2}-\d{2}/.test(trimmed) ? trimmed.slice(0, 10) : trimmed,
+  );
+  if (!Number.isFinite(parsed)) return null;
+  return new Date(parsed);
+}
+
+function formatLeaveShortDate(value: string, includeYear = true) {
+  const date = parseProfileDate(value);
+  if (!date) return value.trim();
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(includeYear ? { year: "numeric" as const } : {}),
+  });
+}
+
+function formatLeaveHistoryDates(startRaw: string, endRaw: string, fallback = "") {
+  const start = parseProfileDate(startRaw);
+  const end = parseProfileDate(endRaw);
+  if (start && end) {
+    const sameDay = start.toDateString() === end.toDateString();
+    if (sameDay) return formatLeaveShortDate(startRaw);
+    const sameYear = start.getFullYear() === end.getFullYear();
+    return `${formatLeaveShortDate(startRaw, !sameYear)} – ${formatLeaveShortDate(endRaw)}`;
+  }
+  if (start) return formatLeaveShortDate(startRaw);
+  return fallback.trim();
+}
+
+function formatLeaveHistoryDuration(raw: unknown, startRaw: string, endRaw: string) {
+  const numeric =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && /^\d+(\.\d+)?$/.test(raw.trim())
+        ? Number(raw.trim())
+        : NaN;
+  const days = Number.isFinite(numeric)
+    ? numeric
+    : startRaw && endRaw
+      ? leaveDayCount(startRaw, endRaw)
+      : NaN;
+  if (Number.isFinite(days) && days > 0) {
+    return days === 1 ? "1 day" : `${days} days`;
+  }
+  return str(raw);
+}
+
+function formatLeaveHistoryType(value: string) {
+  const raw = value.trim();
+  if (!raw) return "Leave";
+  if (/^personal(\s+leave)?$/i.test(raw)) return "Personal";
+  if (/\bleave$/i.test(raw)) {
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+  return `${titleCase(raw)} leave`;
+}
+
 function titleCase(value: string) {
   const raw = value.trim();
   if (!raw) return "";
@@ -96,17 +168,38 @@ type ProfileSection = "Overview" | "Leave" | "Expenses";
 export function ProfilePage({
   initialSection = "Overview",
   secretary = false,
+  employee = false,
 }: {
   initialSection?: ProfileSection;
   secretary?: boolean;
+  employee?: boolean;
 }) {
   const { runAction, showToast } = usePageActions();
   const [editOpen, setEditOpen] = useState(false);
+  const [section, setSection] = useState<ProfileSection>(initialSection);
   const pathname = usePathname();
   const manager = useManagerPortal();
-  const selfEdit = secretary || manager;
+  const { user: sessionUser } = useCurrentUser();
+  const selfEdit = secretary || manager || employee;
+  const activeSection = employee ? section : initialSection;
 
   const { data, loading, error, refetch } = useAsyncData(async () => {
+    if (employee) {
+      const [profile, employment, settings, balances, leave, expenses] =
+        await Promise.all([
+          employeeApi.profile.get().catch(() => null),
+          employeeApi.employmentRecord.get().catch(() => null),
+          employeeApi.settings.get().catch(() => null),
+          employeeApi.leave
+            .balances()
+            .catch(() => listLeaveBalances().catch(() => [])),
+          employeeApi.leave.list().catch(() => listMyLeave().catch(() => [])),
+          employeeApi.expenses
+            .list()
+            .catch(() => employeeApi.expenses.claims().catch(() => [])),
+        ]);
+      return { profile, employment, settings, balances, leave, expenses };
+    }
     if (manager) {
       const [profile, employment] = await Promise.all([
         managerApi.getProfile().catch(() => null),
@@ -118,38 +211,41 @@ export function ProfilePage({
       return { employment: await secretaryApi.getEmploymentRecord() };
     }
     return { profile: await superAdminApi.profile.get() };
-  }, [manager, secretary]);
+  }, [employee, manager, secretary]);
 
   const profile = useMemo(() => {
     const root = unwrapRecord(data);
     const record = unwrapRecord(root.profile ?? root.employment ?? root);
+    const settings = unwrapRecord(root.settings);
     const employmentRoot = unwrapRecord(root.employment ?? record);
     const overview = unwrapRecord(employmentRoot.overview ?? record.overview ?? record);
-    const employee = unwrapRecord(
+    const employeeRecord = unwrapRecord(
       record.employee ?? employmentRoot.employee ?? record.user ?? overview,
     );
     const personal = unwrapRecord(
-      employmentRoot.personalInformation ??
+      settings.personal ??
+        employmentRoot.personalInformation ??
         record.personal ??
-        employee.personal ??
-        employee,
+        employeeRecord.personal ??
+        employeeRecord,
     );
     const employment = unwrapRecord(
-      employmentRoot.employment ?? record.employment ?? record.employmentRecord ?? employee,
+      employmentRoot.employment ?? record.employment ?? record.employmentRecord ?? employeeRecord,
     );
     const name = str(
       overview.fullName ??
         record.name ??
         record.fullName ??
-        employee.name ??
-        employee.fullName ??
-        personal.fullName,
+        employeeRecord.name ??
+        employeeRecord.fullName ??
+        personal.fullName ??
+        sessionUser?.name,
       "—",
     );
     const department = nestedStr(
       overview.department ??
         record.department ??
-        employee.department ??
+        employeeRecord.department ??
         employment.department ??
         employment.departmentName,
       ["name", "title", "label"],
@@ -160,7 +256,7 @@ export function ProfilePage({
         employment.role ??
         nestedStr(overview.position, ["title", "name", "label"]) ??
         record.jobTitle ??
-        employee.jobTitle,
+        employeeRecord.jobTitle,
       "—",
     );
     const reportsTo = nestedStr(
@@ -168,7 +264,10 @@ export function ProfilePage({
       ["name", "fullName", "title", "label"],
     );
     return {
-      initials: str(record.initials ?? overview.initials, initials(name === "—" ? "?" : name)),
+      initials: str(
+        record.initials ?? overview.initials ?? sessionUser?.initials,
+        initials(name === "—" ? "?" : name),
+      ),
       name,
       jobTitle,
       department,
@@ -177,10 +276,11 @@ export function ProfilePage({
         overview.employeeId ??
           overview.employee_id ??
           record.employeeId ??
-          employee.employeeId ??
-          employee.employee_id ??
-          employee.id ??
-          record.id,
+          employeeRecord.employeeId ??
+          employeeRecord.employee_id ??
+          employeeRecord.id ??
+          record.id ??
+          sessionUser?.employeeId,
         "—",
       ),
       annualLeaveDays: num(
@@ -191,13 +291,23 @@ export function ProfilePage({
           personal.companyEmail ??
             overview.email ??
             record.companyEmail ??
-            employee.email ??
-            personal.email,
+            employeeRecord.email ??
+            personal.email ??
+            sessionUser?.email,
         ),
-        personalEmail: str(personal.personalEmail ?? personal.personal_email),
-        phone: str(personal.phone ?? overview.phone ?? record.phone),
+        personalEmail: str(
+          settings.personalEmail ??
+            personal.personalEmail ??
+            personal.personal_email ??
+            personal.alternateEmail,
+        ),
+        phone: str(
+          settings.phone ?? personal.phone ?? overview.phone ?? record.phone,
+        ),
         location: str(
-          personal.location ??
+          settings.address ??
+            settings.location ??
+            personal.location ??
             personal.address ??
             employment.workLocation ??
             record.location,
@@ -211,7 +321,7 @@ export function ProfilePage({
             employment.startDate ??
               employment.start_date ??
               record.startDate ??
-              employee.hireDate,
+              employeeRecord.hireDate,
           ),
         ),
         type: str(
@@ -221,19 +331,27 @@ export function ProfilePage({
         reportsTo,
       },
     };
-  }, [data]);
+  }, [data, sessionUser]);
 
   const leaveBalances = useMemo((): ProfileLeaveBalance[] => {
     const root = unwrapRecord(data);
     const record = unwrapRecord(root.employment ?? root.profile ?? root);
-    return listFrom(
+    const dedicated = listFrom((root.balances ?? data?.balances) as never);
+    const nested = listFrom(
       (record.leaveBalances ?? record.leave ?? root.leaveBalances) as never,
-    ).map((balance, index) => ({
-      id: str(balance.id, String(index)),
-      label: str(balance.label ?? balance.type),
-      remaining: num(balance.remaining ?? balance.balance),
-      total: num(balance.total ?? balance.allocated, 1),
-    }));
+    );
+    const rows = dedicated.length ? dedicated : nested;
+    return rows
+      .map((balance, index) => {
+        const mapped = mapLeaveBalance(balance, index);
+        return {
+          id: mapped.id,
+          label: mapped.label,
+          remaining: mapped.remaining,
+          total: mapped.total || 1,
+        };
+      })
+      .filter((balance) => balance.label);
   }, [data]);
 
   const annualLeaveDays = useMemo(() => {
@@ -246,39 +364,52 @@ export function ProfilePage({
   const leaveHistory = useMemo((): ProfileLeaveHistoryItem[] => {
     const root = unwrapRecord(data);
     const record = unwrapRecord(root.employment ?? root.profile ?? root);
-    return listFrom(
+    const dedicated = listFrom((root.leave ?? data?.leave) as never);
+    const nested = listFrom(
       (record.leaveHistory ?? record.leaveRequests) as never,
-    ).map((leave, index) => {
+    );
+    const rows = (dedicated.length ? dedicated : nested).map((leave, index) => {
       const status = str(leave.status, "Pending");
-      const start = formatProfileDate(str(leave.startDate ?? leave.start_date));
-      const end = formatProfileDate(str(leave.endDate ?? leave.end_date));
-      const dates = str(
-        leave.dates ?? leave.dateRange,
-        start && end && end !== start ? `${start} – ${end}` : start,
+      const startRaw = str(leave.startDate ?? leave.start_date ?? leave.from);
+      const endRaw = str(leave.endDate ?? leave.end_date ?? leave.to);
+      const dates = formatLeaveHistoryDates(
+        startRaw,
+        endRaw,
+        str(leave.dates ?? leave.dateRange),
       );
       return {
         id: str(leave.id, String(index)),
-        type: str(leave.type ?? leave.leaveType),
+        type: formatLeaveHistoryType(
+          str(leave.type ?? leave.leaveType ?? leave.leave_type ?? leave.category),
+        ),
         dates,
-        duration: str(leave.duration ?? leave.days),
+        duration: formatLeaveHistoryDuration(
+          leave.duration ?? leave.days ?? leave.dayCount ?? leave.numberOfDays,
+          startRaw,
+          endRaw,
+        ),
         status: (status.toLowerCase().includes("approv") ? "Approved" : "Pending") as
           | "Approved"
           | "Pending",
       };
     });
-  }, [data]);
+    if (employee && rows.length === 0) return profileLeaveHistory;
+    return rows;
+  }, [data, employee]);
 
   const expenseClaims = useMemo((): ProfileExpenseClaim[] => {
     const root = unwrapRecord(data);
     const record = unwrapRecord(root.employment ?? root.profile ?? root);
-    return listFrom(
+    const dedicated = listFrom((root.expenses ?? data?.expenses) as never);
+    const nested = listFrom(
       (record.expenseClaims ?? record.expenses) as never,
-    ).map((claim, index) => {
+    );
+    return (dedicated.length ? dedicated : nested).map((claim, index) => {
       const status = str(claim.status, "Pending");
       return {
         id: str(claim.id, String(index)),
         title: str(claim.title ?? claim.description),
-        date: str(claim.date ?? claim.submittedAt),
+        date: formatProfileDate(str(claim.date ?? claim.submittedAt)),
         amount: num(claim.amount),
         status: (status.toLowerCase().includes("approv") ? "Approved" : "Pending") as
           | "Approved"
@@ -396,6 +527,16 @@ export function ProfilePage({
             location: values.location,
           },
         };
+        if (employee) {
+          try {
+            await employeeApi.settings.patch(body);
+          } catch {
+            await employeeApi.profile.patch(body);
+          }
+          await employeeApi.employmentRecord.patch(body).catch(() => undefined);
+          refetch();
+          return;
+        }
         await (manager
           ? managerApi.updateEmploymentRecord(body)
           : secretaryApi.updateEmploymentRecord(body));
@@ -475,6 +616,7 @@ export function ProfilePage({
       </div>
       </HideOnManager>
 
+      {employee && activeSection === "Leave" ? null : (
       <div className={styles.header}>
         <div className={styles.headerCopy}>
           <p className={styles.eyebrow}>My profile</p>
@@ -499,6 +641,7 @@ export function ProfilePage({
           Edit details
         </button>
       </div>
+      )}
 
       <article className={styles.heroCard}>
         <div className={styles.heroMain}>
@@ -506,7 +649,7 @@ export function ProfilePage({
           <div className={styles.heroCopy}>
             <h2 className={styles.heroName}>{profile.name}</h2>
             <p className={styles.heroRole}>
-              {profile.jobTitle} · {profile.department}
+              {[profile.jobTitle, profile.department].filter((part) => part && part !== "—").join(" · ") || "—"}
             </p>
             <div className={styles.heroMeta}>
               <span className={styles.statusBadge}>
@@ -526,45 +669,39 @@ export function ProfilePage({
       </article>
 
       <nav className={styles.tabs} aria-label="Profile sections">
-        <Link
-          href={
-            secretary
-              ? "/secretary/profile"
-              : portalHref(pathname, "/profile")
-          }
-          className={`${styles.tab} ${
-            initialSection === "Overview" ? styles.tabActive : ""
-          }`}
-        >
-          Overview
-        </Link>
-        <Link
-          href={
-            secretary
-              ? "/secretary/profile/leave"
-              : portalHref(pathname, "/profile/leave")
-          }
-          className={`${styles.tab} ${
-            initialSection === "Leave" ? styles.tabActive : ""
-          }`}
-        >
-          Leave
-        </Link>
-        <Link
-          href={
-            secretary
-              ? "/secretary/profile/expenses"
-              : portalHref(pathname, "/profile/expenses")
-          }
-          className={`${styles.tab} ${
-            initialSection === "Expenses" ? styles.tabActive : ""
-          }`}
-        >
-          Expenses
-        </Link>
+        {(
+          [
+            ["Overview", secretary ? "/secretary/profile" : portalHref(pathname, "/profile")],
+            ["Leave", secretary ? "/secretary/profile/leave" : portalHref(pathname, "/profile/leave")],
+            ["Expenses", secretary ? "/secretary/profile/expenses" : portalHref(pathname, "/profile/expenses")],
+          ] as const
+        ).map(([label, href]) =>
+          employee ? (
+            <button
+              key={label}
+              type="button"
+              className={`${styles.tab} ${
+                activeSection === label ? styles.tabActive : ""
+              }`}
+              onClick={() => setSection(label)}
+            >
+              {label}
+            </button>
+          ) : (
+            <Link
+              key={label}
+              href={href}
+              className={`${styles.tab} ${
+                activeSection === label ? styles.tabActive : ""
+              }`}
+            >
+              {label}
+            </Link>
+          ),
+        )}
       </nav>
 
-      {initialSection === "Overview" ? (
+      {activeSection === "Overview" ? (
         <div className={styles.grid}>
         <section className={styles.card}>
           <h2 className={styles.cardTitle}>Personal details</h2>
@@ -648,7 +785,7 @@ export function ProfilePage({
           </div>
         </section>
 
-        <section className={`${styles.card} ${styles.balanceCard}`}>
+        <section className={styles.card}>
           <h2 className={styles.cardTitle}>Leave balance</h2>
           <div className={styles.balanceList}>
             {leaveBalances.length === 0 ? (
@@ -685,50 +822,53 @@ export function ProfilePage({
         </div>
       ) : null}
 
-      {initialSection === "Leave" ? (
-        <section className={styles.historyCard}>
-          <h2 className={styles.historyTitle}>Leave history</h2>
-          <div className={styles.historyList}>
-            {leaveHistory.length === 0 ? (
-              <p className={styles.emptyCopy}>No leave requests yet.</p>
-            ) : null}
-            {leaveHistory.map((leave) => (
-              <article key={leave.id} className={styles.historyRow}>
-                <div>
-                  <h3 className={styles.historyType}>{leave.type}</h3>
-                  <p className={styles.historyDates}>
-                    {leave.dates} · {leave.duration}
-                  </p>
-                </div>
-                <div className={styles.historyActions}>
-                  <span
-                    className={`${styles.historyStatus} ${
-                      leave.status === "Approved"
-                        ? styles.historyApproved
-                        : styles.historyPending
-                    }`}
-                  >
-                    {leave.status}
-                  </span>
-                  {leave.status === "Approved" ? (
-                    <button
-                      type="button"
-                      className={styles.downloadButton}
-                      onClick={() =>
-                        showToast("Leave letter download started", "success")
-                      }
+      {activeSection === "Leave" ? (
+        <div className={styles.leaveHistoryWrap}>
+          <section className={styles.leaveHistory}>
+            <h2 className={styles.leaveHistoryTitle}>Leave history</h2>
+            <div className={styles.leaveHistoryList}>
+              {leaveHistory.length === 0 ? (
+                <p className={styles.emptyCopy}>No leave requests yet.</p>
+              ) : null}
+              {leaveHistory.map((leave) => (
+                <article key={leave.id} className={styles.leaveHistoryRow}>
+                  <div>
+                    <h3 className={styles.leaveHistoryType}>{leave.type}</h3>
+                    <p className={styles.leaveHistoryDates}>
+                      {leave.dates}
+                      {leave.duration ? ` · ${leave.duration}` : ""}
+                    </p>
+                  </div>
+                  <div className={styles.leaveHistoryActions}>
+                    <span
+                      className={`${styles.leaveHistoryStatus} ${
+                        leave.status === "Approved"
+                          ? styles.leaveHistoryApproved
+                          : styles.leaveHistoryPending
+                      }`}
                     >
-                      Download letter
-                    </button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
+                      {leave.status}
+                    </span>
+                    {leave.status === "Approved" ? (
+                      <button
+                        type="button"
+                        className={styles.downloadLetter}
+                        onClick={() =>
+                          showToast("Leave letter download started", "success")
+                        }
+                      >
+                        Download letter
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
       ) : null}
 
-      {initialSection === "Expenses" ? (
+      {activeSection === "Expenses" ? (
         <section className={styles.historyCard}>
           <h2 className={styles.historyTitle}>My expense claims</h2>
           <div className={styles.historyList}>

@@ -451,3 +451,27 @@
     align-self: flex-start;
   }
 }
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 40px;
+  }
+  .title {
+    font-size: 28px;
+    white-space: normal;
+  }
+  .searchKbd {
+    display: none;
+  }
+  .search kbd {
+    display: none;
+  }
+  .topBar {
+    flex-wrap: wrap;
+  }
+  .filters {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px;
+  }
+}

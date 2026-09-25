@@ -511,3 +511,31 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 40px;
+  }
+  .heading h1 {
+    font-size: 28px;
+  }
+  .search kbd {
+    display: none;
+  }
+  .topBar {
+    flex-wrap: wrap;
+  }
+  .filters {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px;
+  }
+  .modal {
+    max-height: min(94dvh, 100%);
+  }
+  .createButton {
+    width: 100%;
+    justify-content: center;
+    margin-top: 0;
+  }
+}

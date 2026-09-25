@@ -152,3 +152,17 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+@media (max-width: 480px) {
+  .button {
+    width: 100%;
+  }
+
+  .deskTitle {
+    font-size: 26px;
+  }
+
+  .deskHead {
+    flex-wrap: wrap;
+  }
+}

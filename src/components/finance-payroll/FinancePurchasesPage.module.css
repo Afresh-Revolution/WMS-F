@@ -284,3 +284,25 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 480px) {
+  .statValue {
+    font-size: 32px;
+  }
+  .topBar {
+    flex-wrap: wrap;
+  }
+  .filters {
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px;
+  }
+  .stats {
+    grid-template-columns: 1fr;
+  }
+  .newButton {
+    width: 100%;
+    justify-content: center;
+    margin-top: 0;
+  }
+}

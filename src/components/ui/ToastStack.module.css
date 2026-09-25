@@ -38,3 +38,12 @@
 .info {
   background: #292524;
 }
+
+@media (max-width: 480px) {
+  .stack {
+    left: 0.75rem;
+    right: 0.75rem;
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    max-width: none;
+  }
+}

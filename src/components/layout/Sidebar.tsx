@@ -36,7 +36,6 @@ import {
   UserRound,
   CircleHelp,
   Settings,
-  SlidersHorizontal,
   LogOut,
   BookUser,
   Bell,
@@ -123,14 +122,9 @@ const employeePrimaryNav: NavItem[] = [
     icon: Megaphone,
   },
   {
-    href: "/employee/notifications",
-    label: "Notifications",
-    icon: Bell,
-  },
-  {
-    href: "/employee/settings",
-    label: "Settings",
-    icon: SlidersHorizontal,
+    href: "/employee/account-settings",
+    label: "Account Settings",
+    icon: Settings,
   },
 ];
 

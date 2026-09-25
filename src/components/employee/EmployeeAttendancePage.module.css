@@ -381,3 +381,18 @@
     font-size: 26px;
   }
 }
+
+@media (max-width: 480px) {
+  .statValue {
+    font-size: 32px;
+  }
+  .search kbd {
+    display: none;
+  }
+  .topBar {
+    flex-wrap: wrap;
+  }
+  .modal {
+    max-height: min(94dvh, 100%);
+  }
+}

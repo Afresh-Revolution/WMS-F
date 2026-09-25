@@ -584,3 +584,46 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 40px;
+  }
+
+  .topBar,
+  .topActions {
+    flex-wrap: wrap;
+  }
+
+  .search {
+    order: 3;
+    width: 100%;
+  }
+
+  .search kbd {
+    display: none;
+  }
+
+  .hero {
+    padding: 20px 16px 64px;
+  }
+
+  .hero::after {
+    width: 200px;
+    height: 200px;
+  }
+
+  .heroTitle {
+    font-size: 24px;
+  }
+
+  .heroAwaiting {
+    position: static;
+    margin-top: 16px;
+  }
+
+  .stats,
+  .awaiting {
+    grid-template-columns: 1fr;
+  }
+}

@@ -246,7 +246,7 @@ export function EmployeeProfilePage() {
     { label: "Address", value: profile.address, icon: MapPin, wide: true },
   ];
 
-  const settingsHref = manager ? "/manager/settings" : "/employee/settings";
+  const settingsHref = manager ? "/manager/settings" : "/employee/account-settings";
 
   return (
     <div className={styles.page}>

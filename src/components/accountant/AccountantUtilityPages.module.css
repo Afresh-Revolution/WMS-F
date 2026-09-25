@@ -257,3 +257,63 @@
   justify-content: space-between;
   gap: 16px;
 }
+
+@media (max-width: 768px) {
+  .page {
+    padding: 20px 16px 48px;
+  }
+
+  .topBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topActions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .search {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  .title {
+    font-size: 34px;
+  }
+
+  .cardRow {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 40px;
+  }
+
+  .title {
+    font-size: 28px;
+    white-space: normal;
+  }
+
+  .searchKbd {
+    display: none;
+  }
+
+  .search kbd {
+    display: none;
+  }
+
+  .topBar {
+    flex-wrap: wrap;
+  }
+
+  .saveButton,
+  .actionButton {
+    width: 100%;
+    justify-content: center;
+  }
+}

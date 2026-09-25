@@ -27,6 +27,28 @@ function isTimeoutError(error: unknown) {
   );
 }
 
+function errorDetail(error: unknown) {
+  if (!(error instanceof Error)) return String(error);
+  const cause =
+    error.cause instanceof Error
+      ? error.cause.message
+      : error.cause
+        ? String(error.cause)
+        : "";
+  return cause ? `${error.message} (${cause})` : error.message;
+}
+
+async function wakeBackend(apiRoot: string) {
+  try {
+    await fetch(`${apiRoot}/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch {
+    /* Render cold starts often reset the first connection. */
+  }
+}
+
 async function fetchBackend(
   targetUrl: string,
   init: RequestInit,
@@ -44,15 +66,17 @@ async function fetchBackend(
       });
     } catch (error) {
       lastError = error;
-      const detail = error instanceof Error ? error.message : String(error);
       console.error(
         `[api-proxy] attempt ${attempt}/${attempts} failed:`,
         targetUrl,
-        detail,
+        errorDetail(error),
       );
       const retryMutating =
         !canRetrySafely && attempt < attempts && !isTimeoutError(error);
       if (attempt < attempts && (canRetrySafely || retryMutating)) {
+        if (attempt === 1) {
+          await wakeBackend(resolveApiRoot());
+        }
         await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
         continue;
       }
@@ -107,7 +131,7 @@ export async function proxyToBackend(
       cache: "no-store",
     });
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = errorDetail(error);
     console.error("[api-proxy] fetch failed:", targetUrl, detail);
     return Response.json(
       {

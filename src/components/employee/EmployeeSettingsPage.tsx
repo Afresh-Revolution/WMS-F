@@ -22,7 +22,7 @@ import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { asRecord, employeeApi, notificationsApi, profileApi } from "@/lib/api";
-import { initials, nestedStr, str, unwrapRecord } from "@/lib/api/mappers";
+import { bool, initials, nestedStr, str, unwrapRecord } from "@/lib/api/mappers";
 import { formatRoleLabel } from "@/lib/currentUser";
 import styles from "./EmployeeSettingsPage.module.css";
 
@@ -170,11 +170,14 @@ export function EmployeeSettingsPage() {
         employment.jobTitle,
         employment.job_title,
         overview.position,
+        overview.jobTitle,
         employee.jobTitle,
+        employee.job_title,
       ),
       department: firstText(
         overview.department,
         employment.departmentName,
+        employment.department_name,
         employment.department,
         employee.department,
       ),
@@ -188,16 +191,18 @@ export function EmployeeSettingsPage() {
         userRecord.avatarUrl,
         employee.avatarUrl,
       ),
-      emailAlerts:
+      emailAlerts: bool(
         preferences.email ??
-        preferences.emailNotifications ??
-        asRecord(preferences.channels).email ??
+          preferences.emailNotifications ??
+          asRecord(preferences.channels).email,
         true,
-      inAppAlerts:
+      ),
+      inAppAlerts: bool(
         preferences.inApp ??
-        preferences.push ??
-        asRecord(preferences.channels).inApp ??
+          preferences.push ??
+          asRecord(preferences.channels).inApp,
         true,
+      ),
       theme: firstText(settings.theme, asRecord(settings.preferences).theme, "light"),
     };
   }, [data, user]);
@@ -206,8 +211,8 @@ export function EmployeeSettingsPage() {
     setDisplayName(record.displayName);
     setPhone(record.phone);
     setBio(record.bio);
-    setEmailAlerts(Boolean(record.emailAlerts));
-    setInAppAlerts(Boolean(record.inAppAlerts));
+    setEmailAlerts(record.emailAlerts);
+    setInAppAlerts(record.inAppAlerts);
     setTheme(record.theme === "dark" ? "dark" : "light");
   }, [record]);
 
@@ -253,6 +258,8 @@ export function EmployeeSettingsPage() {
         await notificationsApi.preferences.update({
           email: emailAlerts,
           inApp: inAppAlerts,
+          emailNotifications: emailAlerts,
+          push: inAppAlerts,
         });
         await refetch();
       },
@@ -265,7 +272,11 @@ export function EmployeeSettingsPage() {
     await runAction(
       "Save appearance",
       async () => {
-        await employeeApi.settings.patch({ theme, preferences: { theme } });
+        try {
+          await employeeApi.settings.patch({ theme, preferences: { theme } });
+        } catch {
+          await employeeApi.profile.patch({ theme, preferences: { theme } });
+        }
         await refetch();
       },
       "Appearance saved",
@@ -307,12 +318,6 @@ export function EmployeeSettingsPage() {
     <div className={styles.page}>
       <header className={styles.topBar}>
         <PageDateLabel />
-        {loading ? <p className={styles.empty}>Loading settings…</p> : null}
-        {error ? (
-          <p className={styles.empty} role="alert">
-            {error}
-          </p>
-        ) : null}
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />
@@ -331,9 +336,15 @@ export function EmployeeSettingsPage() {
         <h1>Your settings</h1>
         <span>
           Manage your profile, notifications, security and preferences
-          {record.workEmail ? ` — ${record.workEmail}` : ""}.
+          {record.workEmail ? ` — ${record.workEmail}` : ""}
         </span>
       </div>
+      {loading ? <p className={styles.empty}>Loading settings…</p> : null}
+      {error ? (
+        <p className={styles.empty} role="alert">
+          {error}
+        </p>
+      ) : null}
 
       <div className={styles.layout}>
         <nav className={styles.sectionNav} aria-label="Settings sections">

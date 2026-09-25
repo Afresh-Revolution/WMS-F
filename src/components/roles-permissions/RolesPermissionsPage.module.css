@@ -275,3 +275,55 @@
     overflow-x: auto;
   }
 }
+
+@media (max-width: 768px) {
+  .page {
+    padding: 20px 16px 48px;
+  }
+  .topBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .topActions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .topSearch {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+  .title {
+    font-size: 34px;
+    white-space: normal;
+  }
+  .tableWrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 16px 12px 40px;
+  }
+  .title {
+    font-size: 28px;
+    white-space: normal;
+  }
+  .searchShortcut {
+    display: none;
+  }
+  .search kbd {
+    display: none;
+  }
+  .topBar {
+    flex-wrap: wrap;
+  }
+}

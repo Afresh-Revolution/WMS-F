@@ -208,3 +208,14 @@
     width: 100%;
   }
 }
+
+@media (max-width: 768px) {
+  .actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .title {
+    font-size: 34px;
+    white-space: normal;
+  }
+}
