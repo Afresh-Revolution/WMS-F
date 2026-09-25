@@ -79,7 +79,7 @@ export function AccountantBonusesPage() {
           note: values.note || "Bonus recorded",
         });
         setRecorded((current) => [
-          mapAccountantBonus(asRecord(created)),
+          mapAccountantBonus(asRecord(created), 0),
           ...current,
         ]);
         refetch();

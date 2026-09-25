@@ -105,7 +105,7 @@ export function AccountantExpensesPage() {
           status: "PENDING",
         });
         setRecorded((current) => [
-          mapAccountantExpense(asRecord(created)),
+          mapAccountantExpense(asRecord(created), 0),
           ...current,
         ]);
         refetch();

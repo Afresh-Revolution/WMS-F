@@ -72,13 +72,13 @@ function isSecretaryOrgScopeError(error: unknown) {
 
 async function withSharedMeetingFallback<T>(
   secretaryCall: () => Promise<T>,
-  sharedCall: () => Promise<T>,
+  sharedCall: () => Promise<T> | T,
 ) {
   try {
     return await secretaryCall();
   } catch (error) {
     if (isSecretaryOrgScopeError(error)) {
-      return sharedCall();
+      return await sharedCall();
     }
     throw error;
   }
