@@ -69,10 +69,18 @@ export type EmployeeReimbursement = {
   amount: string;
 };
 
+export type EmployeeRecordCategory =
+  | "Documents"
+  | "Promotions"
+  | "Salary Increments"
+  | "Disciplinary";
+
 export type EmployeeRecordItem = {
   id: string;
   title: string;
-  category: "Contract" | "Identity" | "Leave" | "Performance";
+  category: EmployeeRecordCategory;
+  kind: string;
   date: string;
+  fileUrl: string;
   status: "Available" | "Pending";
 };

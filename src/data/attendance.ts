@@ -176,6 +176,7 @@ export type AttendanceAuditLog = {
 
 export type PersonalAttendanceDay = {
   id: string;
+  workDate: string;
   dateLabel: string;
   weekday: string;
   clockIn: string;

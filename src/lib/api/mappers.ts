@@ -718,15 +718,54 @@ export function mapLeaveRequest(record: Record<string, unknown>) {
   };
 }
 
+function formatLeaveCardDate(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  const date = /T/.test(raw) ? new Date(raw) : new Date(`${raw}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return raw;
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function leaveCardTypeLabel(name: string) {
+  const text = name.replace(/\s+leave$/i, "").trim();
+  if (!text) return "Leave";
+  return /leave$/i.test(name.trim()) ? name.trim() : `${text} leave`;
+}
+
+function leaveRequestCode(nested: Record<string, unknown>, id: string) {
+  const explicit = str(
+    nested.code ??
+      nested.reference ??
+      nested.leaveCode ??
+      nested.requestCode ??
+      nested.requestId ??
+      nested.number,
+  );
+  if (/^lv[-_]/i.test(explicit)) return explicit.replace("_", "-").toUpperCase();
+  if (/^\d+$/.test(explicit)) return `LV-${explicit}`;
+  const digits = `${explicit}${id}`.replace(/\D/g, "");
+  if (digits.length >= 4) return `LV-${digits.slice(-4)}`;
+  return explicit || `LV-${id.slice(0, 4).toUpperCase()}`;
+}
+
 export function mapEmployeeLeaveRequest(record: Record<string, unknown>) {
   const mapped = mapLeaveRequest(record);
   const nested = asRecord(record.data) ?? record;
+  const reviewer = asRecord(
+    nested.approvedBy ?? nested.reviewedBy ?? nested.decidedBy ?? nested.approver,
+  );
   const start = str(nested.startDate ?? nested.from ?? nested.start);
   const end = str(nested.endDate ?? nested.to ?? nested.end);
-  const dates = start
-    ? end && end !== start
-      ? `${start} – ${end}`
-      : start
+  const startLabel = formatLeaveCardDate(start);
+  const endLabel = formatLeaveCardDate(end);
+  const dates = startLabel
+    ? endLabel && endLabel !== startLabel
+      ? `${startLabel} – ${endLabel}`
+      : startLabel
     : str(nested.dateRange ?? nested.period ?? nested.dates);
   const statusRaw = str(nested.status).toUpperCase();
   let status: "Pending" | "Approved" | "Rejected" | "Withdrawn" | "Cancelled" =
@@ -736,22 +775,35 @@ export function mapEmployeeLeaveRequest(record: Record<string, unknown>) {
     status = "Rejected";
   } else if (statusRaw.includes("WITHDRAW")) status = "Withdrawn";
   else if (statusRaw.includes("CANCEL")) status = "Cancelled";
-  const note = str(
-    nested.note ??
-      nested.reason ??
-      nested.comment ??
-      nested.reviewComment ??
-      nested.decisionNote,
+  const reason = str(nested.reason ?? nested.note ?? nested.notes);
+  const reviewComment = str(
+    nested.reviewComment ??
+      nested.decisionNote ??
+      nested.approvalComment ??
+      nested.approverComment ??
+      nested.reviewerComment ??
+      nested.comments,
   );
+  const reviewerName = str(
+    nested.approvedByName ??
+      nested.reviewedByName ??
+      nested.approverName ??
+      reviewer?.name ??
+      reviewer?.fullName ??
+      nested.approver,
+  );
+  const id = str(nested.id ?? nested._id, mapped.id);
   return {
-    id: str(nested.id ?? nested._id, mapped.id),
-    code: str(nested.id ?? nested._id, mapped.id).slice(0, 8),
-    type: str(nested.leaveTypeName, mapped.type || "Leave"),
+    id,
+    code: leaveRequestCode(nested, id),
+    type: leaveCardTypeLabel(str(nested.leaveTypeName, mapped.type || "Leave")),
     days: num(nested.duration ?? nested.workingDays, mapped.days),
     status,
     dates,
-    reason: note,
-    note,
+    reason,
+    note: reason,
+    reviewerName,
+    reviewComment,
   };
 }
 

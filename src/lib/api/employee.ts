@@ -1,4 +1,4 @@
-import { apiRequest, buildQuery } from "./client";
+import { ApiError, apiRequest, buildQuery } from "./client";
 import type { GpsCheckInBody } from "./attendance";
 import { unwrapList, unwrapData, type ApiListResponse, type Id } from "./types";
 
@@ -6,6 +6,29 @@ const BASE = "/employee";
 
 function path(suffix: string, query?: Record<string, unknown>) {
   return `${BASE}${suffix}${buildQuery(query)}`;
+}
+
+async function firstWorking<T>(
+  attempts: Array<() => Promise<T>>,
+  fallbackMessage: string,
+) {
+  let lastError: unknown;
+  for (const attempt of attempts) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
+      if (
+        error instanceof ApiError &&
+        (error.status === 404 || error.status === 405 || error.status === 403)
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  if (lastError instanceof Error) throw lastError;
+  throw new ApiError(404, fallbackMessage);
 }
 
 export const employeeApi = {
@@ -137,10 +160,68 @@ export const employeeApi = {
           : undefined,
       }).then(unwrapData),
     clockIn: (body: Record<string, unknown> = {}) =>
-      apiRequest<unknown>(path("/attendance/clock-in"), {
-        method: "POST",
-        body,
-      }).then(unwrapData),
+      firstWorking(
+        [
+          () =>
+            apiRequest<unknown>(path("/attendance/clock-in"), {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>("/attendance/clock-in", {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>(path("/attendance/check-in"), {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+        ],
+        "Clock-in API was not found.",
+      ),
+    clockOut: (body: Record<string, unknown> = {}) =>
+      firstWorking(
+        [
+          () =>
+            apiRequest<unknown>(path("/attendance/clock-out"), {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>("/attendance/clock-out", {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>(path("/attendance/check-out"), {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+        ],
+        "Clock-out API was not found.",
+      ),
+    requestCorrection: (id: Id, body: Record<string, unknown>) =>
+      firstWorking(
+        [
+          () =>
+            apiRequest<unknown>(path(`/attendance/${id}/correct`), {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>(path(`/attendance/history/${id}/correct`), {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>(path("/attendance/corrections"), {
+              method: "POST",
+              body: { ...body, attendanceId: id, recordId: id },
+            }).then(unwrapData),
+        ],
+        "Correction API was not found.",
+      ),
   },
 
   expenses: {
@@ -180,6 +261,11 @@ export const employeeApi = {
       apiRequest<ApiListResponse<Record<string, unknown>>>(
         path("/reimbursements", query),
       ).then(unwrapList),
+    create: (body: Record<string, unknown>) =>
+      apiRequest<unknown>(path("/reimbursements"), {
+        method: "POST",
+        body,
+      }).then(unwrapData),
   },
 
   performance: (query?: Record<string, unknown>) =>

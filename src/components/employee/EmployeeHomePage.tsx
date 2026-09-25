@@ -25,6 +25,7 @@ import {
   str,
 } from "@/lib/api/mappers";
 import { employeeStatCards } from "@/data/employeeHome";
+import { EmployeeOverviewClockCard } from "@/components/employee/EmployeeOverviewClockCard";
 import styles from "./EmployeeHomePage.module.css";
 
 function statusClass(status: string) {
@@ -252,11 +253,16 @@ export function EmployeeHomePage() {
           <h1>Good morning, {firstNameFrom(displayName)}.</h1>
           <p>{role || "Employee"}</p>
           <p>{email}</p>
-          <Link href="/employee/leave" className={styles.heroButton}>
+          <Link href="/employee/leave?apply=1" className={styles.heroButton}>
             Apply for leave <ChevronRight size={14} />
           </Link>
         </div>
       </section>
+
+      <EmployeeOverviewClockCard
+        name={displayName}
+        department={nestedStr(profile.department, ["name", "title", "label"])}
+      />
 
       <section className={styles.stats} aria-label="Employee summary">
         {stats.map((stat) => (

@@ -2,166 +2,288 @@
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
-import { HideOnManager } from "@/components/layout/HideOnManager";
+import { Bell, Check, FileText, Receipt, Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import {
+  type Notification,
+  type NotificationFilter,
+  type NotificationType,
+} from "@/data/notifications";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { employeeApi, notificationsApi } from "@/lib/api";
-import { bool, listFrom, str } from "@/lib/api/mappers";
-import styles from "./EmployeeNotificationsPage.module.css";
+import { formatRelativeTime, listFrom, str } from "@/lib/api/mappers";
+import styles from "@/components/notifications/NotificationsPage.module.css";
 
-type EmployeeNotification = {
-  id: string;
-  message: string;
-  time: string;
-  unread: boolean;
-};
+const filters: NotificationFilter[] = ["All", "Unread", "Workflow", "System"];
+
+function WorkflowIcon({ item }: { item: Notification }) {
+  const haystack = `${item.referenceId ?? ""} ${item.message}`.toLowerCase();
+  if (haystack.startsWith("ex") || haystack.includes("expense")) {
+    return <Receipt size={18} strokeWidth={2} />;
+  }
+  return <FileText size={18} strokeWidth={2} />;
+}
+
+function mapType(value: unknown, referenceId?: string): NotificationType {
+  const type = str(value).toLowerCase();
+  if (type.includes("system") || type.includes("alert") || type.includes("announce")) {
+    return "System";
+  }
+  if (
+    type.includes("work") ||
+    type.includes("leave") ||
+    type.includes("expense") ||
+    type.includes("purchase") ||
+    type.includes("approval") ||
+    referenceId
+  ) {
+    return "Workflow";
+  }
+  return referenceId ? "Workflow" : "System";
+}
+
+function isUnread(record: Record<string, unknown>) {
+  if (typeof record.unread === "boolean") return record.unread;
+  if (typeof record.isUnread === "boolean") return record.isUnread;
+  if (typeof record.isRead === "boolean") return !record.isRead;
+  if (typeof record.read === "boolean") return !record.read;
+  return !record.readAt;
+}
+
+function extractReference(record: Record<string, unknown>, message: string) {
+  const explicit = str(
+    record.referenceId ??
+      record.reference_id ??
+      record.reference ??
+      record.code ??
+      record.ref,
+  );
+  if (explicit) return explicit;
+  return message.match(/\b([A-Z]{1,4}-\d{2,})\b/)?.[1];
+}
 
 function mapNotification(
   record: Record<string, unknown>,
   index: number,
-): EmployeeNotification {
+): Notification {
+  const message = str(record.message ?? record.body ?? record.title);
+  const referenceId = extractReference(record, message);
+  const timeRaw =
+    record.timeAgo ??
+    record.relativeTime ??
+    record.createdAt ??
+    record.created_at ??
+    record.publishedAt ??
+    record.date ??
+    record.time;
   return {
-    id: str(record.id ?? index),
-    message: str(record.message ?? record.body ?? record.title),
-    time: str(record.timeAgo ?? record.createdAt ?? record.time),
-    unread: bool(record.unread ?? record.isUnread ?? !record.readAt, true),
+    id: str(record.id ?? record._id, String(index)),
+    type: mapType(record.type ?? record.category ?? record.kind, referenceId),
+    referenceId,
+    message,
+    timeAgo: timeRaw ? formatRelativeTime(timeRaw) : undefined,
+    unread: isUnread(record),
   };
+}
+
+async function loadEmployeeNotifications() {
+  try {
+    return await employeeApi.notifications.list();
+  } catch {
+    return notificationsApi.list();
+  }
 }
 
 export function EmployeeNotificationsPage() {
   const { user } = useCurrentUser();
   const { runAction } = usePageActions();
-  const [localRead, setLocalRead] = useState<Set<string>>(new Set());
-  const { data } = useAsyncData(async () => {
-    try {
-      return await employeeApi.notifications.list();
-    } catch {
-      try {
-        return await notificationsApi.list();
-      } catch {
-        return null;
-      }
-    }
-  }, []);
+  const [filter, setFilter] = useState<NotificationFilter>("All");
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const { data, loading, error, refetch } = useAsyncData(
+    () => loadEmployeeNotifications(),
+    [],
+  );
 
-  const notifications = useMemo(() => {
-    const live = listFrom(data ?? undefined).map(mapNotification);
-    return live.map((item) =>
-      localRead.has(item.id) ? { ...item, unread: false } : item,
-    );
-  }, [data, localRead]);
+  const items = useMemo(() => {
+    return listFrom(data ?? undefined)
+      .map((record, index) => mapNotification(record, index))
+      .map((item) => (readIds.has(item.id) ? { ...item, unread: false } : item));
+  }, [data, readIds]);
 
-  const unread = notifications.filter((item) => item.unread);
+  const visible = useMemo(
+    () =>
+      items.filter((item) => {
+        if (filter === "All") return true;
+        if (filter === "Unread") return item.unread;
+        return item.type === filter;
+      }),
+    [filter, items],
+  );
+
+  const unread = items.filter((item) => item.unread);
 
   function markLocal(ids: string[]) {
-    setLocalRead((current) => {
+    setReadIds((current) => {
       const next = new Set(current);
       for (const id of ids) next.add(id);
       return next;
     });
   }
 
-  async function handleMarkRead(item: EmployeeNotification) {
+  async function markOneRead(item: Notification) {
     if (!item.unread) return;
-    try {
-      await runAction(
-        "Mark as read",
-        async () => {
-          if (!item.id.startsWith("local-")) {
-            await notificationsApi.markRead(item.id);
-          }
-          markLocal([item.id]);
-        },
-        "Notification marked as read",
+    await runAction("Mark notification read", async () => {
+      await employeeApi.notifications.markRead(item.id).catch(() =>
+        notificationsApi.markRead(item.id),
       );
-    } catch {
-      /* runAction already showed the API error */
-    }
+      markLocal([item.id]);
+      refetch();
+    });
   }
 
-  async function handleMarkAllRead() {
+  async function markAllRead() {
     if (unread.length === 0) return;
-    try {
-      await runAction(
-        "Mark all as read",
-        async () => {
-          const remote = unread.filter((item) => !item.id.startsWith("local-"));
-          if (remote.length > 0) {
-            await Promise.all(
-              remote.map((item) => employeeApi.notifications.markRead(item.id)),
-            );
-          }
-          markLocal(unread.map((item) => item.id));
-        },
-        "All notifications marked as read",
-      );
-    } catch {
-      /* runAction already showed the API error */
-    }
+    await runAction("Mark all as read", async () => {
+      await notificationsApi.markAllRead().catch(async () => {
+        await Promise.all(
+          unread.map((item) =>
+            employeeApi.notifications.markRead(item.id).catch(() => undefined),
+          ),
+        );
+      });
+      markLocal(unread.map((item) => item.id));
+      refetch();
+    });
   }
 
   return (
     <div className={styles.page}>
-      <HideOnManager>
       <header className={styles.topBar}>
         <PageDateLabel />
         <div className={styles.topActions}>
-          <label className={styles.search}>
-            <Search size={14} />
-            <input aria-label="Search" placeholder="Search" readOnly />
-            <kbd>⌘ K</kbd>
+          <label className={styles.topSearch}>
+            <Search size={14} className={styles.topSearchIcon} />
+            <input
+              className={styles.topSearchInput}
+              aria-label="Search"
+              placeholder="Search"
+              readOnly
+            />
+            <kbd className={styles.searchShortcut}>⌘ K</kbd>
           </label>
           <NotificationsLink className={styles.iconButton} />
-          <ProfileLink className={styles.profileButton}>
+          <ProfileLink className={styles.avatarChip}>
             {user?.initials || "—"}
           </ProfileLink>
         </div>
       </header>
-      </HideOnManager>
 
-      <div className={styles.heading}>
+      <div className={styles.header}>
         <div>
-          <p>Notifications</p>
-          <h1>Your alerts</h1>
-          <span>
-            Leave, tasks, meetings and company updates for your workspace.
-          </span>
+          <p className={styles.eyebrow}>Communication · Notifications</p>
+          <h1 className={styles.title}>Notifications</h1>
+          <p className={styles.subtitle}>
+            Approval activity, workflow updates and company-wide alerts in one
+            place.
+          </p>
         </div>
         <button
           type="button"
-          className={styles.markAll}
-          onClick={() => void handleMarkAllRead()}
+          className={styles.markReadButton}
+          onClick={() => void markAllRead()}
           disabled={unread.length === 0}
         >
+          <Check size={15} strokeWidth={2} />
           Mark all as read
         </button>
       </div>
 
-      <section className={styles.list} aria-label="Notifications">
-        {notifications.length === 0 ? (
-          <p className={styles.empty}>No notifications yet.</p>
-        ) : (
-          notifications.map((item) => (
+      <div className={styles.toolbar}>
+        <div className={styles.summaryCard}>
+          <div className={styles.summaryIcon}>
+            <Bell size={16} strokeWidth={2} />
+          </div>
+          <div className={styles.summaryText}>
+            <p className={styles.summaryUnread}>{unread.length} unread</p>
+            <p className={styles.summaryTotal}>
+              {visible.length} total in this view
+            </p>
+          </div>
+        </div>
+        <div className={styles.filters}>
+          {filters.map((item) => (
             <button
-              key={item.id}
+              key={item}
               type="button"
-              className={`${styles.card} ${item.unread ? styles.cardUnread : ""}`}
-              onClick={() => void handleMarkRead(item)}
+              onClick={() => setFilter(item)}
+              className={`${styles.filterChip} ${
+                filter === item ? styles.filterChipActive : ""
+              }`}
             >
-              <span className={styles.cardTop}>
-                <span className={styles.message}>{item.message}</span>
-                {item.unread ? (
-                  <span className={styles.unreadDot} aria-label="Unread" />
-                ) : null}
-              </span>
-              {item.time ? <span className={styles.time}>{item.time}</span> : null}
+              {item}
             </button>
-          ))
-        )}
-      </section>
+          ))}
+        </div>
+      </div>
+
+      {visible.length > 0 ? (
+        <div className={styles.listWrap}>
+          {visible.map((item) => (
+            <article
+              key={item.id}
+              className={`${styles.item} ${item.unread ? styles.itemUnread : ""}`}
+              onClick={() => void markOneRead(item)}
+            >
+              <div
+                className={`${styles.itemIcon} ${
+                  item.type === "Workflow"
+                    ? styles.itemIconWorkflow
+                    : styles.itemIconSystem
+                }`}
+              >
+                {item.type === "Workflow" ? (
+                  <WorkflowIcon item={item} />
+                ) : (
+                  <Bell size={18} strokeWidth={2} />
+                )}
+              </div>
+              <div className={styles.itemBody}>
+                <div className={styles.itemMeta}>
+                  {item.referenceId ? (
+                    <span className={styles.referenceId}>{item.referenceId}</span>
+                  ) : null}
+                  <span
+                    className={`${styles.tag} ${
+                      item.type === "Workflow"
+                        ? styles.tagWorkflow
+                        : styles.tagSystem
+                    }`}
+                  >
+                    {item.type}
+                  </span>
+                  {item.unread ? (
+                    <span className={styles.unreadDot} aria-label="Unread" />
+                  ) : null}
+                </div>
+                <p className={styles.message}>{item.message}</p>
+                {item.timeAgo ? <p className={styles.timeAgo}>{item.timeAgo}</p> : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className={styles.listWrap}>
+          <div className={styles.empty}>
+            {loading
+              ? "Loading notifications…"
+              : error
+                ? error
+                : "No notifications in this view."}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

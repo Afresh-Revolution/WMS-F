@@ -132,7 +132,43 @@ function durationBetween(checkInAt: string, checkOutAt: string): string {
   const end = new Date(checkOutAt).getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return "—";
   const mins = Math.round((end - start) / 60000);
-  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  return `${Math.floor(mins / 60)}h ${String(mins % 60).padStart(2, "0")}m`;
+}
+
+function minutesOnClock(value: string) {
+  const match = value.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function lagosHm(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Africa/Lagos",
+  });
+}
+
+function minutesLateFromRecord(checkInAt: string, lateMinutes: number) {
+  if (lateMinutes > 0) return lateMinutes;
+  if (!checkInAt) return 0;
+  const arrived = minutesOnClock(lagosHm(checkInAt));
+  const open = minutesOnClock(defaultAttendancePolicy.clockIn) ?? 8 * 60;
+  const lateAfter = open + defaultAttendancePolicy.graceMinutes;
+  if (arrived == null) return 0;
+  return Math.max(0, arrived - lateAfter);
+}
+
+function minutesEarlyFromRecord(checkOutAt: string, earlyMinutes: number) {
+  if (earlyMinutes > 0) return earlyMinutes;
+  if (!checkOutAt) return 0;
+  const left = minutesOnClock(lagosHm(checkOutAt));
+  const close = minutesOnClock(defaultAttendancePolicy.clockOut) ?? 17 * 60;
+  if (left == null) return 0;
+  return Math.max(0, close - left);
 }
 
 export type MappedAttendanceRecord = {
@@ -704,15 +740,23 @@ export function formatExpectedClock(value: string) {
 export function mapPersonalHistory(payload: unknown): PersonalAttendanceDay[] {
   return unwrapAttendanceList(payload).map((record, index) => {
     const mapped = mapAttendanceRecord(record);
-    const lateMinutes = num(
-      record.lateMinutes ?? record.lateByMinutes ?? record.minutesLate,
+    const lateMinutes = minutesLateFromRecord(
+      mapped.checkInAt,
+      num(record.lateMinutes ?? record.lateByMinutes ?? record.minutesLate),
+    );
+    const earlyMinutes = minutesEarlyFromRecord(
+      mapped.checkOutAt,
+      num(record.earlyMinutes ?? record.earlyByMinutes ?? record.minutesEarly),
     );
     const lateLabel =
       mapped.status === "Late"
         ? `Late by ${lateMinutes || 1} minute${lateMinutes === 1 ? "" : "s"}`
-        : "";
+        : mapped.status === "Early Departure"
+          ? `Left early by ${earlyMinutes || 1} minute${earlyMinutes === 1 ? "" : "s"}`
+          : "";
     return {
       id: mapped.id || String(index),
+      workDate: mapped.workDate,
       dateLabel: formatLagosDateLabel(mapped.workDate),
       weekday: formatLagosWeekday(mapped.workDate),
       clockIn: mapped.clockIn,

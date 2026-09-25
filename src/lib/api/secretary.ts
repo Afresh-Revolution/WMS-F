@@ -156,6 +156,29 @@ function newLocalId(prefix: string) {
     : `${prefix}-${Date.now()}`;
 }
 
+async function firstWorking<T>(
+  attempts: Array<() => Promise<T>>,
+  fallbackMessage: string,
+) {
+  let lastError: unknown;
+  for (const attempt of attempts) {
+    try {
+      return await attempt();
+    } catch (error) {
+      lastError = error;
+      if (
+        error instanceof ApiError &&
+        (error.status === 404 || error.status === 405 || error.status === 403)
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
+  if (lastError instanceof Error) throw lastError;
+  throw new ApiError(404, fallbackMessage);
+}
+
 export const secretaryApi = {
   getScope() {
     return get("/scope");
@@ -167,6 +190,60 @@ export const secretaryApi = {
 
   getOverview(query?: SecretaryListParams) {
     return get("/dashboard", query);
+  },
+
+  attendance: {
+    status() {
+      return firstWorking(
+        [
+          () => get("/attendance/status"),
+          () => apiRequest<unknown>("/attendance/me/status").then(unwrapData),
+          () =>
+            apiRequest<unknown>("/employee/attendance/status").then(unwrapData),
+        ],
+        "Attendance status was not found.",
+      );
+    },
+
+    clockIn(body: SecretaryMutationBody = {}) {
+      return firstWorking(
+        [
+          () => mutate("/attendance/clock-in", "POST", body),
+          () =>
+            apiRequest<unknown>("/attendance/clock-in", {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>("/employee/attendance/clock-in", {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () => mutate("/attendance/check-in", "POST", body),
+        ],
+        "Clock-in API was not found.",
+      );
+    },
+
+    clockOut(body: SecretaryMutationBody = {}) {
+      return firstWorking(
+        [
+          () => mutate("/attendance/clock-out", "POST", body),
+          () =>
+            apiRequest<unknown>("/attendance/clock-out", {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>("/employee/attendance/clock-out", {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () => mutate("/attendance/check-out", "POST", body),
+        ],
+        "Clock-out API was not found.",
+      );
+    },
   },
 
   getEmploymentRecord(query?: SecretaryListParams) {

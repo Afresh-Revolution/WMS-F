@@ -195,7 +195,7 @@ const LEAVE_TYPES_CACHE = "wms_leave_types";
 const SEEDED_LEAVE_TYPES: LeaveTypeOption[] = [
   {
     id: "ANNUAL",
-    name: "Annual Leave",
+    name: "Annual",
     code: "ANNUAL",
     defaultDays: 25,
     paid: true,
@@ -204,7 +204,7 @@ const SEEDED_LEAVE_TYPES: LeaveTypeOption[] = [
   },
   {
     id: "SICK",
-    name: "Sick Leave",
+    name: "Sick",
     code: "SICK",
     defaultDays: 10,
     paid: true,
@@ -213,7 +213,7 @@ const SEEDED_LEAVE_TYPES: LeaveTypeOption[] = [
   },
   {
     id: "PERSONAL",
-    name: "Personal Leave",
+    name: "Personal",
     code: "PERSONAL",
     defaultDays: 5,
     paid: true,
@@ -221,15 +221,39 @@ const SEEDED_LEAVE_TYPES: LeaveTypeOption[] = [
     status: "active",
   },
   {
-    id: "UNPAID",
-    name: "Unpaid Leave",
-    code: "UNPAID",
-    defaultDays: 0,
-    paid: false,
+    id: "COMPASSIONATE",
+    name: "Compassionate",
+    code: "COMPASSIONATE",
+    defaultDays: 5,
+    paid: true,
     requiresDocument: false,
     status: "active",
   },
 ];
+
+const LEAVE_TYPE_ORDER = ["annual", "sick", "personal", "compassion"];
+
+export function displayLeaveTypeName(name: string) {
+  const text = name.replace(/\s+leave$/i, "").trim();
+  if (/compassion/i.test(text)) return "Compassionate";
+  if (/annual/i.test(text)) return "Annual";
+  if (/sick/i.test(text)) return "Sick";
+  if (/personal/i.test(text)) return "Personal";
+  return text || name;
+}
+
+export function sortLeaveTypes(types: LeaveTypeOption[]) {
+  return [...types].sort((a, b) => {
+    const rank = (item: LeaveTypeOption) => {
+      const key = `${item.code} ${item.name}`.toLowerCase();
+      const index = LEAVE_TYPE_ORDER.findIndex((token) => key.includes(token));
+      return index < 0 ? LEAVE_TYPE_ORDER.length : index;
+    };
+    const diff = rank(a) - rank(b);
+    if (diff !== 0) return diff;
+    return displayLeaveTypeName(a.name).localeCompare(displayLeaveTypeName(b.name));
+  });
+}
 
 function readCachedLeaveTypes(): LeaveTypeOption[] {
   if (typeof window === "undefined") return [];
@@ -290,29 +314,34 @@ export async function listLeaveTypes(): Promise<LeaveTypeOption[]> {
   const merged: LeaveTypeOption[] = [];
 
   for (const path of [
+    "/lookups/leave-types",
     `${EMPLOYEE}/types`,
     `${SHARED}/types`,
     "/hr/leave/types",
     "/super-admin/leave/types",
-    "/lookups/leave-types",
   ]) {
     try {
       for (const item of parseLeaveTypes(await apiRequest(path))) {
-        if (seen.has(item.id)) continue;
+        const key = item.id || item.code;
+        if (!key || seen.has(key) || (item.code && seen.has(item.code))) continue;
         seen.add(item.id);
-        merged.push(item);
-      }
-      if (merged.length) {
-        writeCachedLeaveTypes(merged);
-        return merged;
+        if (item.code) seen.add(item.code);
+        merged.push({ ...item, name: displayLeaveTypeName(item.name) });
       }
     } catch {
       /* try the next catalog */
     }
+    if (merged.length >= 4) break;
+  }
+
+  if (merged.length) {
+    const sorted = sortLeaveTypes(merged);
+    writeCachedLeaveTypes(sorted);
+    return sorted;
   }
 
   const cached = readCachedLeaveTypes();
-  if (cached.length) return cached;
+  if (cached.length) return sortLeaveTypes(cached);
   return SEEDED_LEAVE_TYPES;
 }
 

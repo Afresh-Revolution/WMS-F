@@ -1,15 +1,16 @@
 "use client";
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { Download, Plus, Search, X } from "lucide-react";
+import { ChevronDown, Download, Plus, Search, X } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import {
   applyForLeave,
+  displayLeaveTypeName,
   employeeBalanceCards,
   getEmployeeLeave,
   leaveDayCount,
@@ -18,7 +19,6 @@ import {
   listLeaveTypes,
   listMyLeave,
   remainingDaysForType,
-  withdrawLeaveRequest,
 } from "@/lib/api";
 import { listFrom, mapEmployeeLeaveRequest } from "@/lib/api/mappers";
 import styles from "./EmployeeLeavePage.module.css";
@@ -49,11 +49,10 @@ export function EmployeeLeavePage({
   const [applyOpen, setApplyOpen] = useState(false);
   const [letter, setLetter] = useState<string | null>(null);
   const [leaveTypeId, setLeaveTypeId] = useState("");
-  const [durationType, setDurationType] = useState<"FULL_DAY" | "HALF_DAY">(
-    "FULL_DAY",
-  );
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const typeSelectRef = useRef<HTMLDivElement>(null);
   const { user } = useCurrentUser();
   const { runAction } = usePageActions();
 
@@ -77,8 +76,7 @@ export function EmployeeLeavePage({
   );
   const selectedType =
     leaveTypes.find((item) => item.id === leaveTypeId) ?? leaveTypes[0];
-  const estimatedDays =
-    durationType === "HALF_DAY" ? 0.5 : leaveDayCount(startDate, endDate);
+  const estimatedDays = leaveDayCount(startDate, endDate);
 
   const requests = useMemo(
     () =>
@@ -96,35 +94,55 @@ export function EmployeeLeavePage({
   }, [initialFilter]);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("apply") === "1") setApplyOpen(true);
+  }, []);
+
+  useEffect(() => {
     if (!leaveTypeId && leaveTypes[0]?.id) setLeaveTypeId(leaveTypes[0].id);
   }, [leaveTypeId, leaveTypes]);
 
   useEffect(() => {
-    if (!applyOpen) return;
+    if (!applyOpen) {
+      setTypeMenuOpen(false);
+      return;
+    }
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setApplyOpen(false);
+      if (event.key === "Escape") {
+        if (typeMenuOpen) {
+          setTypeMenuOpen(false);
+          return;
+        }
+        setApplyOpen(false);
+      }
+    }
+    function closeOnPointer(event: MouseEvent) {
+      if (
+        typeSelectRef.current &&
+        !typeSelectRef.current.contains(event.target as Node)
+      ) {
+        setTypeMenuOpen(false);
+      }
     }
     document.body.style.overflow = "hidden";
     window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("mousedown", closeOnPointer);
     return () => {
       document.body.style.overflow = "";
       window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("mousedown", closeOnPointer);
     };
-  }, [applyOpen]);
+  }, [applyOpen, typeMenuOpen]);
 
   async function handleApply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const typeId =
       leaveTypeId || selectedType?.id || String(form.get("type") ?? "");
-    const note = String(form.get("note") ?? form.get("reason") ?? "").trim();
+    const note = String(form.get("reason") ?? form.get("note") ?? "").trim();
     const from = startDate || String(form.get("startDate") ?? "");
-    const to =
-      durationType === "HALF_DAY"
-        ? from
-        : endDate || String(form.get("endDate") ?? from);
-    const days =
-      durationType === "HALF_DAY" ? 0.5 : leaveDayCount(from, to);
+    const to = endDate || String(form.get("endDate") ?? from);
+    const days = leaveDayCount(from, to);
     const remaining = remainingDaysForType(balanceData, selectedType);
     const fileUrl = String(form.get("fileUrl") ?? "").trim();
     const fileName = String(form.get("fileName") ?? "supporting-document").trim();
@@ -153,7 +171,7 @@ export function EmployeeLeavePage({
             leaveTypeId: typeId,
             startDate: from,
             endDate: to,
-            durationType,
+            durationType: "FULL_DAY",
             note,
             attachments,
           });
@@ -164,24 +182,8 @@ export function EmployeeLeavePage({
       setApplyOpen(false);
       setStartDate("");
       setEndDate("");
-      setDurationType("FULL_DAY");
     } catch {
       // runAction displays the API error.
-    }
-  }
-
-  async function withdrawRequest(id: string) {
-    try {
-      await runAction(
-        "Withdraw leave",
-        async () => {
-          await withdrawLeaveRequest(id, "Plans changed");
-          await Promise.all([refetch(), refetchBalances()]);
-        },
-        "Leave request withdrawn",
-      );
-    } catch {
-      /* toast already shown */
     }
   }
 
@@ -281,30 +283,26 @@ export function EmployeeLeavePage({
                   {request.status}
                 </span>
               </div>
-              <p>
+              <p className={styles.requestMeta}>
                 {request.dates}
-                {request.note ? ` · ${request.note}` : ""}
+                {request.reason ? ` · ${request.reason}` : ""}
               </p>
+              {request.reviewerName || request.reviewComment ? (
+                <p className={styles.requestReview}>
+                  {request.reviewerName
+                    ? `${request.reviewerName}: “${(request.reviewComment || request.status).replace(/[.]+$/, "")}.”`
+                    : `“${request.reviewComment}”`}
+                </p>
+              ) : null}
             </div>
-            {request.status === "Approved" ? (
-              <button
-                type="button"
-                className={styles.letterButton}
-                onClick={() => void openDecisionLetter(request.id)}
-              >
-                <Download size={14} />
-                Decision letter
-              </button>
-            ) : null}
-            {request.status === "Pending" ? (
-              <button
-                type="button"
-                className={styles.letterButton}
-                onClick={() => void withdrawRequest(request.id)}
-              >
-                Withdraw
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className={styles.letterButton}
+              onClick={() => void openDecisionLetter(request.id)}
+            >
+              <Download size={16} />
+              Decision letter
+            </button>
           </article>
         ))}
         {requests.length === 0 ? (
@@ -336,7 +334,7 @@ export function EmployeeLeavePage({
                 </button>
                 <h2 id="apply-leave-title">Apply for leave</h2>
                 <p className={styles.modalDescription}>
-                  Your request goes to your manager, then HR, for approval.
+                  Your request goes to your HOD / HR for approval.
                 </p>
                 {typesError ? (
                   <p className={styles.empty} role="alert">
@@ -345,45 +343,58 @@ export function EmployeeLeavePage({
                 ) : null}
                 <form onSubmit={handleApply}>
                   <div className={styles.modalFields}>
-                    <label className={styles.modalField}>
+                    <div className={styles.modalField}>
                       <span>Leave type</span>
-                      <select
-                        name="type"
-                        value={selectedType?.id ?? ""}
-                        onChange={(event) => setLeaveTypeId(event.target.value)}
-                        required
-                      >
-                        {leaveTypes.length === 0 ? (
-                          <option value="" disabled>
-                            No leave types loaded
-                          </option>
-                        ) : (
-                          leaveTypes.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.name}
-                            </option>
-                          ))
-                        )}
-                      </select>
-                    </label>
-                    <label className={styles.modalField}>
-                      <span>Duration</span>
-                      <select
-                        value={durationType}
-                        onChange={(event) => {
-                          const next = event.target.value as
-                            | "FULL_DAY"
-                            | "HALF_DAY";
-                          setDurationType(next);
-                          if (next === "HALF_DAY" && startDate) {
-                            setEndDate(startDate);
-                          }
-                        }}
-                      >
-                        <option value="FULL_DAY">Full day</option>
-                        <option value="HALF_DAY">Half day</option>
-                      </select>
-                    </label>
+                      <div className={styles.typeSelect} ref={typeSelectRef}>
+                        <button
+                          type="button"
+                          className={styles.typeTrigger}
+                          aria-haspopup="listbox"
+                          aria-expanded={typeMenuOpen}
+                          onClick={() => setTypeMenuOpen((open) => !open)}
+                        >
+                          <span>
+                            {selectedType
+                              ? displayLeaveTypeName(selectedType.name)
+                              : "No leave types loaded"}
+                          </span>
+                          <ChevronDown size={16} />
+                        </button>
+                        {typeMenuOpen ? (
+                          <ul className={styles.typeMenu} role="listbox">
+                            {leaveTypes.map((item) => {
+                              const active = item.id === selectedType?.id;
+                              return (
+                                <li key={item.id}>
+                                  <button
+                                    type="button"
+                                    role="option"
+                                    aria-selected={active}
+                                    className={
+                                      active
+                                        ? styles.typeOptionActive
+                                        : styles.typeOption
+                                    }
+                                    onClick={() => {
+                                      setLeaveTypeId(item.id);
+                                      setTypeMenuOpen(false);
+                                    }}
+                                  >
+                                    {displayLeaveTypeName(item.name)}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                        <input
+                          type="hidden"
+                          name="type"
+                          value={selectedType?.id ?? ""}
+                          required
+                        />
+                      </div>
+                    </div>
                     <div className={styles.dateFields}>
                       <label className={styles.modalField}>
                         <span>From</span>
@@ -392,11 +403,7 @@ export function EmployeeLeavePage({
                           type="date"
                           required
                           value={startDate}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            setStartDate(value);
-                            if (durationType === "HALF_DAY") setEndDate(value);
-                          }}
+                          onChange={(event) => setStartDate(event.target.value)}
                         />
                       </label>
                       <label className={styles.modalField}>
@@ -405,26 +412,16 @@ export function EmployeeLeavePage({
                           name="endDate"
                           type="date"
                           required
-                          value={
-                            durationType === "HALF_DAY" ? startDate : endDate
-                          }
+                          value={endDate}
                           onChange={(event) => setEndDate(event.target.value)}
-                          disabled={durationType === "HALF_DAY"}
                         />
                       </label>
                     </div>
                     <p className={styles.duration}>
-                      Estimated working days:{" "}
-                      <strong>
-                        {estimatedDays > 0
-                          ? `${estimatedDays} ${estimatedDays === 1 ? "day" : "days"}`
-                          : "—"}
-                      </strong>
-                      <span>
-                        {" "}
-                        Weekends are not counted. The server confirms the
-                        final duration.
-                      </span>
+                      Duration:{" "}
+                      {estimatedDays > 0
+                        ? `${estimatedDays} ${estimatedDays === 1 ? "day" : "days"}`
+                        : "—"}
                     </p>
                     {selectedType?.requiresDocument ? (
                       <>
@@ -453,9 +450,9 @@ export function EmployeeLeavePage({
                     ) : null}
                     <label className={styles.modalField}>
                       <span>
-                        Note <b>*</b>
+                        Reason <b>*</b>
                       </span>
-                      <textarea name="note" rows={4} required />
+                      <textarea name="reason" rows={4} required />
                     </label>
                   </div>
                   <div className={styles.modalActions}>

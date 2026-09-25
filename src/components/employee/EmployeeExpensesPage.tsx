@@ -1,8 +1,9 @@
 "use client";
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
-import { useMemo, useState, type FormEvent } from "react";
-import { Paperclip, Plus, Search, Upload, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, Paperclip, Plus, Search, Upload, X } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
@@ -15,7 +16,7 @@ import type {
 } from "@/data/employeeHome";
 import styles from "./EmployeeExpensesPage.module.css";
 
-const MAX_RECEIPT_BYTES = 700 * 1024;
+const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 
 const expenseCategories = [
   "Travel",
@@ -128,7 +129,9 @@ export function EmployeeExpensesPage({
   const [filter, setFilter] = useState<ExpenseFilter>(initialFilter);
   const [createOpen, setCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const categoryRef = useRef<HTMLDivElement>(null);
   const { data, loading, error, refetch } = useAsyncData(
     () => employeeApi.expenses.list({ limit: 50 }),
     [],
@@ -157,8 +160,37 @@ export function EmployeeExpensesPage({
 
   function closeCreate() {
     setCreateOpen(false);
+    setCategoryOpen(false);
     setForm(emptyForm);
   }
+
+  useEffect(() => {
+    if (!createOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      if (categoryOpen) {
+        setCategoryOpen(false);
+        return;
+      }
+      closeCreate();
+    }
+    function onPointer(event: MouseEvent) {
+      if (
+        categoryRef.current &&
+        !categoryRef.current.contains(event.target as Node)
+      ) {
+        setCategoryOpen(false);
+      }
+    }
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", onPointer);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", onPointer);
+    };
+  }, [createOpen, categoryOpen]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -177,7 +209,7 @@ export function EmployeeExpensesPage({
             throw new Error("Attach a receipt. Most categories require one.");
           }
           if (receiptFile.size > MAX_RECEIPT_BYTES) {
-            throw new Error("Receipt files must be 700 KB or smaller.");
+            throw new Error("Receipt files must be 10 MB or smaller.");
           }
           await employeeApi.expenses.create({
             description: form.description.trim(),
@@ -294,131 +326,160 @@ export function EmployeeExpensesPage({
         )}
       </section>
 
-      {createOpen ? (
-        <div
-          className={styles.modalBackdrop}
-          role="presentation"
-          onClick={closeCreate}
-        >
-          <section
-            className={styles.modal}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="new-expense-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              className={styles.modalClose}
-              aria-label="Close"
+      {createOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className={styles.modalBackdrop}
+              role="presentation"
               onClick={closeCreate}
             >
-              <X size={16} />
-            </button>
-            <h2 id="new-expense-title">New expense</h2>
-            <p>Submitted to Accounts for review.</p>
-            <form className={styles.expenseForm} onSubmit={handleSubmit}>
-              <label className={styles.formField}>
-                <span>
-                  Description <em>*</em>
-                </span>
-                <input
-                  value={form.description}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      description: event.target.value,
-                    }))
-                  }
-                  placeholder="e.g. Client lunch"
-                  required
-                />
-              </label>
-              <div className={styles.formPair}>
-                <label className={styles.formField}>
-                  <span>Category</span>
-                  <select
-                    value={form.category}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        category: event.target.value,
-                      }))
-                    }
-                  >
-                    {expenseCategories.map((category) => (
-                      <option key={category}>{category}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.formField}>
-                  <span>
-                    Amount (₦) <em>*</em>
-                  </span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={form.amount}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        amount: event.target.value,
-                      }))
-                    }
-                    placeholder="0"
-                    required
-                  />
-                </label>
-              </div>
-              <label className={styles.uploadField}>
-                <span>Receipt</span>
-                <div className={styles.dropZone}>
-                  <span className={styles.uploadIcon}>
-                    <Upload size={17} />
-                  </span>
-                  <strong>
-                    {form.receiptFile
-                      ? form.receiptFile.name
-                      : "Drop a file or click to upload"}
-                  </strong>
-                  <small>
-                    <Paperclip size={11} />
-                    PDF, DOCX, JPG or PNG · up to 700 KB
-                  </small>
-                  <input
-                    type="file"
-                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                    required
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        receiptFile: event.target.files?.[0] ?? null,
-                      }))
-                    }
-                  />
-                </div>
-              </label>
-              <div className={styles.modalActions}>
+              <section
+                className={styles.modal}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="new-expense-title"
+                onClick={(event) => event.stopPropagation()}
+              >
                 <button
                   type="button"
-                  className={styles.modalCancel}
+                  className={styles.modalClose}
+                  aria-label="Close"
                   onClick={closeCreate}
                 >
-                  Cancel
+                  <X size={17} />
                 </button>
-                <button
-                  type="submit"
-                  className={styles.modalSubmit}
-                  disabled={submitting}
-                >
-                  <Plus size={15} />
-                  {submitting ? "Submitting…" : "Submit expense"}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
-      ) : null}
+                <h2 id="new-expense-title">New expense</h2>
+                <p>Submitted to Accounts for review.</p>
+                <form className={styles.expenseForm} onSubmit={handleSubmit}>
+                  <label className={styles.formField}>
+                    <span>
+                      Description <em>*</em>
+                    </span>
+                    <input
+                      value={form.description}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                      placeholder="e.g. Client lunch"
+                      required
+                    />
+                  </label>
+                  <div className={styles.formPair}>
+                    <div className={styles.formField}>
+                      <span>Category</span>
+                      <div className={styles.categorySelect} ref={categoryRef}>
+                        <button
+                          type="button"
+                          className={styles.categoryTrigger}
+                          aria-haspopup="listbox"
+                          aria-expanded={categoryOpen}
+                          onClick={() => setCategoryOpen((open) => !open)}
+                        >
+                          <span>{form.category}</span>
+                          <ChevronDown size={16} />
+                        </button>
+                        {categoryOpen ? (
+                          <ul className={styles.categoryMenu} role="listbox">
+                            {expenseCategories.map((category) => (
+                              <li key={category}>
+                                <button
+                                  type="button"
+                                  role="option"
+                                  aria-selected={form.category === category}
+                                  className={
+                                    form.category === category
+                                      ? styles.categoryOptionActive
+                                      : styles.categoryOption
+                                  }
+                                  onClick={() => {
+                                    setForm((current) => ({
+                                      ...current,
+                                      category,
+                                    }));
+                                    setCategoryOpen(false);
+                                  }}
+                                >
+                                  {category}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    </div>
+                    <label className={styles.formField}>
+                      <span>
+                        Amount (₦) <em>*</em>
+                      </span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={form.amount}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            amount: event.target.value,
+                          }))
+                        }
+                        placeholder="0"
+                        required
+                      />
+                    </label>
+                  </div>
+                  <label className={styles.uploadField}>
+                    <span>Receipt</span>
+                    <div className={styles.dropZone}>
+                      <span className={styles.uploadIcon}>
+                        <Upload size={18} />
+                      </span>
+                      <strong>
+                        {form.receiptFile
+                          ? form.receiptFile.name
+                          : "Drop a file or click to upload"}
+                      </strong>
+                      <small>
+                        <Paperclip size={12} />
+                        PDF, DOCX, JPG or PNG · up to 10 MB
+                      </small>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        required
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            receiptFile: event.target.files?.[0] ?? null,
+                          }))
+                        }
+                      />
+                    </div>
+                  </label>
+                  <div className={styles.modalActions}>
+                    <button
+                      type="button"
+                      className={styles.modalCancel}
+                      onClick={closeCreate}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className={styles.modalSubmit}
+                      disabled={submitting}
+                    >
+                      <Plus size={15} />
+                      {submitting ? "Submitting…" : "Submit expense"}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

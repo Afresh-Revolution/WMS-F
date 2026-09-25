@@ -105,6 +105,7 @@ export {
 } from "./companyAnnouncements";
 export {
   listLeaveTypes,
+  displayLeaveTypeName,
   listMyLeave,
   listLeaveBalances,
   listOrganisationLeave,

@@ -27,6 +27,8 @@ import {
   Mail,
   BellRing,
   FileText,
+  Fingerprint,
+  Folder,
   HardDrive,
   Activity,
   FileSearch,
@@ -34,9 +36,11 @@ import {
   UserRound,
   CircleHelp,
   Settings,
+  SlidersHorizontal,
   LogOut,
   BookUser,
   Bell,
+  RefreshCw,
 } from "lucide-react";
 import { AfreshLogo } from "./AfreshLogo";
 import { useCurrentUser } from "./CurrentUserProvider";
@@ -109,25 +113,24 @@ const employeePrimaryNav: NavItem[] = [
   {
     href: "/employee/reimbursements",
     label: "My Reimbursements",
-    icon: BadgeDollarSign,
+    icon: RefreshCw,
   },
-  { href: "/employee/records", label: "My Records", icon: FileText },
+  { href: "/employee/attendance", label: "Attendance", icon: Fingerprint },
+  { href: "/employee/records", label: "My Records", icon: Folder },
   {
     href: "/employee/announcements",
     label: "Announcements",
     icon: Megaphone,
-    badge: "2",
   },
   {
     href: "/employee/notifications",
     label: "Notifications",
     icon: Bell,
-    badge: "3",
   },
   {
     href: "/employee/settings",
-    label: "Account Settings",
-    icon: Settings,
+    label: "Settings",
+    icon: SlidersHorizontal,
   },
 ];
 
