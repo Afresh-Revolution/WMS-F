@@ -14,6 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { AccountantStatusLine } from "@/components/accountant/AccountantStatusLine";
+import { ManagerOverviewClockCard } from "@/components/manager/ManagerOverviewClockCard";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import {
   listManagerAnnouncements,
@@ -515,6 +516,8 @@ export function ManagerHomePage() {
           </strong>
         </p>
       </section>
+
+      <ManagerOverviewClockCard />
 
       <section className={styles.stats} aria-label="Workforce summary">
         {headlineStats.map((stat) => (

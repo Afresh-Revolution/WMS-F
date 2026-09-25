@@ -5,10 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronRight, Plus, Search } from "lucide-react";
-import {
-  placementMembers as samplePlacementMembers,
-  type PlacementFilter,
-} from "@/data/placements";
+import { type PlacementFilter } from "@/data/placements";
 import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
@@ -126,8 +123,6 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     setActiveFilter(initialFilter);
   }, [initialFilter]);
 
-  const statusParam = statusQuery[activeFilter];
-
   const { data, loading, error, refetch } = useAsyncData(
     () =>
       manager
@@ -229,8 +224,8 @@ export function PlacementsPage({ initialFilter = "Active" }: PlacementsPageProps
     const mapped = listFrom(data ?? undefined).map((record) =>
       mapPlacement(record),
     );
-    return mapped.length > 0 || loading ? mapped : samplePlacementMembers;
-  }, [data, loading]);
+    return mapped;
+  }, [data]);
 
   const placementStats = useMemo(() => {
     const active = placementMembers.filter((m) => m.status === "Active").length;

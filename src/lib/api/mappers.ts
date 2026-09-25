@@ -1163,18 +1163,19 @@ export function mapAnnouncement(record: Record<string, unknown>) {
       ? !isRead
       : bool(nested.unread ?? nested.isUnread);
 
-  const publishedAt = str(
-    nested.publishedAt ?? nested.date ?? nested.createdAt,
-  );
-  let date = publishedAt;
-  const parsed = publishedAt ? new Date(publishedAt) : null;
-  if (parsed && !Number.isNaN(parsed.getTime()) && publishedAt.includes("T")) {
-    date = parsed.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  }
+  const publishedRaw =
+    nested.publishedAt ??
+    nested.published_at ??
+    nested.publishedOn ??
+    nested.postedAt ??
+    nested.issuedAt ??
+    nested.date ??
+    nested.createdAt ??
+    nested.created_at ??
+    nested.updatedAt;
+  const publishedDate = parseDateValue(publishedRaw);
+  const publishedAt = publishedDate ? publishedDate.toISOString() : str(publishedRaw);
+  const date = formatAnnouncementDate(publishedRaw);
 
   const source =
     str(nested.source) ||
@@ -1191,6 +1192,7 @@ export function mapAnnouncement(record: Record<string, unknown>) {
     title: str(nested.title),
     source,
     date,
+    publishedAt,
     body: str(nested.message ?? nested.body ?? nested.content ?? nested.description),
     tags,
     pinned,
@@ -1199,6 +1201,64 @@ export function mapAnnouncement(record: Record<string, unknown>) {
     status,
     priority,
   };
+}
+
+function parseDateValue(value: unknown): Date | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const ms = value < 1e12 ? value * 1000 : value;
+    const parsed = new Date(ms);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const text = str(value).trim();
+  if (!text) return null;
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (ymd) {
+    const parsed = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function formatRelativeTime(value: unknown): string {
+  const parsed = parseDateValue(value);
+  if (!parsed) return str(value);
+  const diffMs = Date.now() - parsed.getTime();
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diffMs < minute) return "Just now";
+  if (diffMs < hour) return `${Math.max(1, Math.floor(diffMs / minute))}m ago`;
+  if (diffMs < day) return `${Math.max(1, Math.floor(diffMs / hour))}h ago`;
+  if (diffMs < 7 * day) return `${Math.max(1, Math.floor(diffMs / day))}d ago`;
+  if (parsed.getFullYear() === new Date().getFullYear()) {
+    return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatAnnouncementDate(value: unknown): string {
+  const parsed = parseDateValue(value);
+  if (!parsed) return str(value);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const that = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  const diffDays = Math.round((that.getTime() - today.getTime()) / 86_400_000);
+  if (diffDays === 0) return "Today";
+  if (diffDays === -1) return "Yesterday";
+  if (parsed.getFullYear() === now.getFullYear()) {
+    return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function formatEventDate(value: unknown): string {

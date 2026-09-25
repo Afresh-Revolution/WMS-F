@@ -136,40 +136,18 @@
   color: #78716c;
 }
 
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  margin-top: 8px;
-}
-
-.exportButton {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 16px;
-  border: 1px solid #ebe6e1;
-  border-radius: 999px;
-  background: #fff;
-  color: #44403c;
-  font-size: 14px;
-  font-weight: 600;
-}
-
 .addButton {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  margin-top: 28px;
   padding: 12px 18px;
   border-radius: 999px;
   background: var(--afresh-orange);
   color: #fff;
   font-size: 14px;
   font-weight: 600;
-  box-shadow: 0 8px 20px rgba(237, 90, 40, 0.22);
 }
 
 .stats {
@@ -203,7 +181,7 @@
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--afresh-orange);
+  color: #a8a29e;
 }
 
 .statValue {
@@ -235,9 +213,14 @@
 
 .filters {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 18px;
+  gap: 4px;
+  margin-bottom: 20px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #f0ece8;
 }
 
 .filterChip {
@@ -245,7 +228,7 @@
   border-radius: 999px;
   font-size: 14px;
   font-weight: 500;
-  color: #44403c;
+  color: #78716c;
 }
 
 .filterChipActive {
@@ -263,14 +246,13 @@
 .card {
   display: flex;
   flex-direction: column;
-  border: 1px solid #ebe6e1;
-  border-radius: 16px;
+  padding: 20px 20px 18px;
+  border-radius: 20px;
   background: #fff;
-  overflow: hidden;
 }
 
 .cardBody {
-  padding: 18px 20px 16px;
+  padding: 0 0 16px;
 }
 
 .cardHead {
@@ -384,16 +366,15 @@
   justify-content: center;
   gap: 4px;
   width: 100%;
+  height: 40px;
   margin-top: auto;
-  padding: 12px 20px;
-  border: 0;
-  border-top: 1px solid #f5f5f4;
-  border-radius: 0 0 16px 16px;
-  background: #fafaf9;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
   font: inherit;
   font-size: 13px;
   font-weight: 600;
-  color: #78716c;
+  color: #44403c;
   text-align: center;
   text-decoration: none;
   cursor: pointer;
@@ -401,7 +382,7 @@
 
 .cardFooter:hover {
   color: var(--afresh-orange);
-  background: #f5f5f4;
+  border-color: #f3e7df;
 }
 
 .empty {
@@ -437,6 +418,10 @@
   .title {
     font-size: 34px;
     white-space: normal;
+  }
+
+  .addButton {
+    margin-top: 0;
   }
 }
 

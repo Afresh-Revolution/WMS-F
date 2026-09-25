@@ -9,6 +9,7 @@ export type Announcement = {
   title: string;
   source: string;
   date: string;
+  publishedAt?: string;
   body: string;
   tags: { label: string; tone: AnnouncementTagTone }[];
   pinned: boolean;
@@ -33,7 +34,7 @@ export const announcements: Announcement[] = [
     title: "July payroll processing update",
     source: "Finance Dept",
     date: "Today",
-    body: "The July 2026 payroll run will be processed on Tuesday 28th. All outstanding timesheets must be approved by 5 PM today. Please contact the Finance team for any queries.",
+    body: "The July 2026 payroll run will be processed on Wednesday 28th. All outstanding timesheets must be approved by 5 PM today. Please contact the Finance team for any queries.",
     tags: [
       { label: "Finance", tone: "finance" },
       { label: "Pinned", tone: "pinned" },

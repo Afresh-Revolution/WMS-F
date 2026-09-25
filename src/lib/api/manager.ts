@@ -671,10 +671,31 @@ export const managerApi = {
   },
 
   clockOut(body: unknown = {}) {
-    return apiRequest<unknown>(managerPath("/attendance/clock-out"), {
-      method: "POST",
-      body,
-    }).then(unwrapData);
+    return firstWorkingRoute(
+      [
+        () =>
+          apiRequest<unknown>(managerPath("/attendance/clock-out"), {
+            method: "POST",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>(managerPath("/attendance/check-out"), {
+            method: "POST",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>("/employee/attendance/clock-out", {
+            method: "POST",
+            body,
+          }).then(unwrapData),
+        () =>
+          apiRequest<unknown>("/attendance/clock-out", {
+            method: "POST",
+            body,
+          }).then(unwrapData),
+      ],
+      "Clock-out API was not found.",
+    );
   },
 
   async getEmployee(id: Id) {

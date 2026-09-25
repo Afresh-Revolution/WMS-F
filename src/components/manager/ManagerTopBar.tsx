@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, Search, X } from "lucide-react";
+import { Bell, Search } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
@@ -25,24 +25,13 @@ export function ManagerTopBar() {
             className={styles.searchInput}
             aria-label="Search"
           />
-          {search ? (
-            <button
-              type="button"
-              className={styles.clearButton}
-              aria-label="Clear search"
-              onClick={() => setSearch("")}
-            >
-              <X size={14} />
-            </button>
-          ) : (
-            <X size={14} className={styles.clearHint} aria-hidden />
-          )}
+          <kbd className={styles.searchKbd}>⌘ K</kbd>
         </label>
         <NotificationsLink className={styles.iconButton}>
           <Bell size={16} />
         </NotificationsLink>
         <ProfileLink className={styles.avatar}>
-          {user?.initials || "M"}
+          {user?.initials || "MC"}
         </ProfileLink>
       </div>
     </div>

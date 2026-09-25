@@ -1,7 +1,7 @@
 "use client";
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Bell,
@@ -46,7 +46,26 @@ import {
 import { listFrom, mapAnnouncement, str, unwrapRecord } from "@/lib/api/mappers";
 import styles from "./AnnouncementsPage.module.css";
 
-const filters: AnnouncementFilter[] = ["All", "Drafts", "Pinned"];
+const adminFilters: AnnouncementFilter[] = ["All", "Drafts", "Pinned"];
+const managerFilters: AnnouncementFilter[] = ["All", "Unread", "Pinned"];
+
+function formatStatValue(value: string) {
+  const numeric = Number(String(value).replace(/,/g, ""));
+  if (!Number.isFinite(numeric)) return value;
+  return numeric.toLocaleString("en-US");
+}
+
+function currentMonthLabel(date = new Date()) {
+  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+}
+
+function isInCurrentMonth(value?: string) {
+  if (!value) return false;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  const now = new Date();
+  return parsed.getMonth() === now.getMonth() && parsed.getFullYear() === now.getFullYear();
+}
 
 const categories: {
   id: AnnouncementCategory;
@@ -83,6 +102,7 @@ export function AnnouncementsPage() {
   const [activeCategory, setActiveCategory] = useState<AnnouncementCategory>("All");
   const [query, setQuery] = useState("");
   const [expandedId, setExpandedId] = useState("");
+  const [didAutoExpand, setDidAutoExpand] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const { runAction, exportRows } = usePageActions();
 
@@ -114,6 +134,18 @@ export function AnnouncementsPage() {
     return listFrom(data ?? undefined).map((record) => mapAnnouncement(record));
   }, [data]);
 
+  useEffect(() => {
+    if (!manager || announcements.length === 0) return;
+    if (!didAutoExpand) {
+      setExpandedId(announcements[0].id);
+      setDidAutoExpand(true);
+      return;
+    }
+    if (expandedId && !announcements.some((item) => item.id === expandedId)) {
+      setExpandedId(announcements[0].id);
+    }
+  }, [announcements, didAutoExpand, expandedId, manager]);
+
   const departments = useMemo(
     () =>
       listFrom(departmentData ?? undefined)
@@ -128,9 +160,45 @@ export function AnnouncementsPage() {
   const announcementStats = useMemo(() => {
     const dash = unwrapRecord(dashboardData);
     const pinned = announcements.filter((item) => item.pinned).length;
+    const unread = announcements.filter((item) => item.unread).length;
     const drafts = announcements.filter(
       (item) => item.status === "draft" || item.status === "scheduled",
     ).length;
+    if (manager) {
+      const thisMonth = announcements.filter((item) =>
+        isInCurrentMonth(item.publishedAt || item.date),
+      ).length;
+      return [
+        {
+          id: "unread",
+          label: "Unread",
+          value: formatStatValue(str(dash.unread ?? dash.unreadCount, String(unread))),
+          badge: "New",
+        },
+        {
+          id: "pinned",
+          label: "Pinned",
+          value: formatStatValue(str(dash.pinned ?? dash.pinnedCount, String(pinned))),
+          badge: "Active",
+        },
+        {
+          id: "month",
+          label: "Total This Month",
+          value: formatStatValue(
+            str(dash.thisMonth ?? dash.totalThisMonth ?? dash.monthCount, String(thisMonth)),
+          ),
+          badge: str(dash.monthLabel ?? dash.periodLabel, currentMonthLabel()),
+        },
+        {
+          id: "recipients",
+          label: "Recipients",
+          value: formatStatValue(
+            str(dash.recipients ?? dash.recipientCount ?? dash.totalRecipients, "—"),
+          ),
+          badge: "All staff",
+        },
+      ];
+    }
     return [
       {
         id: "unread",
@@ -163,7 +231,7 @@ export function AnnouncementsPage() {
         badge: "All staff",
       },
     ];
-  }, [announcements, dashboardData]);
+  }, [announcements, dashboardData, manager]);
 
   const createFields = useMemo(
     () => [
@@ -373,21 +441,12 @@ export function AnnouncementsPage() {
             </p>
           </div>
           <div className={styles.headerActions}>
-            {manager ? (
-              <label className={styles.search}>
-                <Search size={15} className={styles.searchIcon} />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search"
-                  className={styles.searchInput}
-                />
-              </label>
-            ) : null}
-            <button type="button" className={styles.exportButton} onClick={handleExport}>
-              <Download size={15} />
-              Export
-            </button>
+            {manager ? null : (
+              <button type="button" className={styles.exportButton} onClick={handleExport}>
+                <Download size={15} />
+                Export
+              </button>
+            )}
             <button
               type="button"
               className={styles.newButton}
@@ -400,17 +459,20 @@ export function AnnouncementsPage() {
         </div>
 
         <div className={styles.stats}>
-          {announcementStats.map((stat) => (
-            <article key={stat.id} className={styles.statCard}>
+          {announcementStats.map((stat, index) => (
+            <article
+              key={stat.id}
+              className={`${styles.statCard} ${
+                manager && index === 0 ? styles.statCardFeatured : ""
+              }`}
+            >
               <div className={styles.statTop}>
                 <p className={styles.statLabel}>{stat.label}</p>
                 <span
                   className={`${styles.badge} ${
-                    stat.badge === "New"
-                      ? styles.badgeNew
-                      : stat.badge === "Active"
-                        ? styles.badgeActive
-                        : styles.badgeMuted
+                    stat.badge === "New" || stat.badge === "Active"
+                      ? styles.badgeActive
+                      : styles.badgeMuted
                   }`}
                 >
                   {stat.badge}
@@ -423,7 +485,7 @@ export function AnnouncementsPage() {
 
         <div className={styles.toolbar}>
           <div className={styles.filters}>
-            {filters.map((filter) => (
+            {(manager ? managerFilters : adminFilters).map((filter) => (
               <button
                 key={filter}
                 type="button"
@@ -508,34 +570,36 @@ export function AnnouncementsPage() {
                   <>
                     <p className={styles.body}>{item.body}</p>
                     <div className={styles.cardFooter}>
-                      {item.status === "draft" || item.status === "scheduled" ? (
-                        <button
-                          type="button"
-                          className={styles.unpinButton}
-                          onClick={() => void publishDraft(item.id)}
-                        >
-                          Publish
-                        </button>
-                      ) : null}
-                      {item.pinned ? (
-                        <button
-                          type="button"
-                          className={styles.unpinButton}
-                          onClick={() => void unpinAnnouncement(item.id)}
-                        >
-                          <Pin size={14} strokeWidth={2} />
-                          Unpin
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className={styles.unpinButton}
-                          onClick={() => void pinAnnouncement(item.id)}
-                        >
-                          <Pin size={14} strokeWidth={2} />
-                          Pin
-                        </button>
-                      )}
+                      <div className={styles.cardFooterActions}>
+                        {item.status === "draft" || item.status === "scheduled" ? (
+                          <button
+                            type="button"
+                            className={styles.unpinButton}
+                            onClick={() => void publishDraft(item.id)}
+                          >
+                            Publish
+                          </button>
+                        ) : null}
+                        {item.pinned ? (
+                          <button
+                            type="button"
+                            className={styles.unpinButton}
+                            onClick={() => void unpinAnnouncement(item.id)}
+                          >
+                            <Pin size={14} strokeWidth={2} />
+                            Unpin
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className={styles.unpinButton}
+                            onClick={() => void pinAnnouncement(item.id)}
+                          >
+                            <Pin size={14} strokeWidth={2} />
+                            Pin
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}
@@ -544,7 +608,9 @@ export function AnnouncementsPage() {
           })}
 
           {filtered.length === 0 && (
-            <div className={styles.empty}>No announcements in this view.</div>
+            <div className={styles.empty}>
+              {loading ? "Loading announcements…" : "No announcements in this view."}
+            </div>
           )}
         </div>
       </div>

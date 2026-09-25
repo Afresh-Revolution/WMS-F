@@ -104,7 +104,11 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
+}
+
+.markReadButton:disabled {
+  opacity: 0.45;
 }
 
 .eyebrow {
@@ -125,6 +129,7 @@
   line-height: 1.05;
   letter-spacing: -0.02em;
   color: var(--afresh-orange);
+  white-space: nowrap;
 }
 
 .subtitle {
@@ -140,7 +145,7 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  margin-top: 8px;
+  margin-top: 36px;
   height: 40px;
   padding: 0 16px;
   border: 1px solid #ebe6e1;
@@ -239,6 +244,11 @@
   padding: 18px 20px;
   border-bottom: 1px solid #f5f5f4;
   cursor: pointer;
+  background: #fff;
+}
+
+.item:hover {
+  background: #fffdfb;
 }
 
 .item:last-child {
@@ -338,6 +348,10 @@
 @media (max-width: 900px) {
   .header {
     flex-direction: column;
+  }
+
+  .markReadButton {
+    margin-top: 0;
   }
 
   .title {

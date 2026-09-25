@@ -16,7 +16,6 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   matchesVendorFilter,
-  vendors as sampleVendors,
   type Vendor,
   type VendorFilter,
 } from "@/data/financeVendors";
@@ -98,8 +97,8 @@ export function FinanceVendorsPage() {
         return true;
       })
       .map((record) => mapVendor(record));
-    return mapped.length > 0 || loading ? mapped : sampleVendors;
-  }, [createdRecords, data, loading]);
+    return mapped;
+  }, [createdRecords, data]);
 
   const vendorStats = useMemo(() => {
     const openBills = vendors.reduce((sum, vendor) => sum + vendor.openBills, 0);

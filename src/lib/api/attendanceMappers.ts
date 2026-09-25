@@ -641,7 +641,13 @@ export function mapCheckInWindow(payload: unknown) {
   const window = asAttendanceRecord(first.window);
   return {
     canCheckIn: Boolean(data.canCheckIn ?? first.canCheckIn),
-    alreadyCheckedIn: Boolean(first.alreadyCheckedIn),
+    alreadyCheckedIn: Boolean(
+      first.alreadyCheckedIn ??
+        data.alreadyCheckedIn ??
+        data.checkedIn ??
+        data.isCheckedIn ??
+        data.clockedIn,
+    ),
     reason: str(first.reason ?? window.reason, "OPEN"),
     openingTime: str(window.openingTime, defaultAttendancePolicy.clockIn),
     closingTime: str(window.closingTime, defaultAttendancePolicy.clockOut),
@@ -659,8 +665,26 @@ export function mapCheckInWindow(payload: unknown) {
       ).id,
     ),
     status: mapGpsStatus(data.status ?? first.status ?? data.todayStatus),
-    checkInAt: str(data.checkInAt ?? first.checkInAt),
-    checkOutAt: str(data.checkOutAt ?? first.checkOutAt),
+    checkInAt: str(
+      data.checkInAt ??
+        data.clockInAt ??
+        data.clockedInAt ??
+        data.checkIn ??
+        data.clockIn ??
+        first.checkInAt ??
+        first.clockInAt ??
+        first.checkIn ??
+        first.clockIn,
+    ),
+    checkOutAt: str(
+      data.checkOutAt ??
+        data.clockOutAt ??
+        data.clockedOutAt ??
+        data.checkOut ??
+        data.clockOut ??
+        first.checkOutAt ??
+        first.clockOut,
+    ),
   };
 }
 

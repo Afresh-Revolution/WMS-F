@@ -1,5 +1,5 @@
-import { EmployeeNotificationsPage } from "@/components/employee/EmployeeNotificationsPage";
+import { ManagerNotificationsPage } from "@/components/manager/ManagerNotificationsPage";
 
 export default function ManagerNotificationsRoute() {
-  return <EmployeeNotificationsPage />;
+  return <ManagerNotificationsPage />;
 }

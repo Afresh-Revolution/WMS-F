@@ -91,7 +91,10 @@ export function FinanceExpensesPage() {
         id: "submitted",
         label: "Submitted this month",
         value: String(expenseClaims.length),
-        badge: "Jul 2026",
+        badge: new Date().toLocaleDateString("en-US", {
+          month: "short",
+          year: "numeric",
+        }),
       },
       {
         id: "pending",

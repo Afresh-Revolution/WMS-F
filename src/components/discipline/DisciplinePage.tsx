@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import {
   actionTypeOptions,
-  disciplineCases as sampleDisciplineCases,
   type DisciplineCase,
   type DisciplineFilter,
 } from "@/data/discipline";
@@ -57,6 +56,15 @@ type DisciplinePageProps = {
   viewRecordId?: string;
 };
 
+function decodeRecordId(value?: string | null) {
+  if (!value) return null;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 export function DisciplinePage({
   modalOpen = false,
   initialFilter = "Active",
@@ -71,7 +79,7 @@ export function DisciplinePage({
   const [query, setQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(modalOpen);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(
-    viewRecordId ?? null,
+    decodeRecordId(viewRecordId),
   );
   const [employee, setEmployee] = useState("");
   const [actionType, setActionType] = useState("Warning");
@@ -112,8 +120,8 @@ export function DisciplinePage({
         issuedBy: item.issuedBy || "Manager",
       };
     });
-    return enriched.length > 0 || loading ? enriched : sampleDisciplineCases;
-  }, [data, employees, loading]);
+    return enriched;
+  }, [data, employees]);
 
   const disciplineStats = useMemo(() => {
     const open = disciplineCases.filter((item) => item.status === "Active").length;
@@ -152,7 +160,7 @@ export function DisciplinePage({
   }, [modalOpen]);
 
   useEffect(() => {
-    setSelectedRecordId(viewRecordId ?? null);
+    setSelectedRecordId(decodeRecordId(viewRecordId));
   }, [viewRecordId]);
 
   useEffect(() => {

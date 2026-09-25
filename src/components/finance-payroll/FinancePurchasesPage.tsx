@@ -10,7 +10,6 @@ import { SimpleModal } from "@/components/ui/SimpleModal";
 import {
   matchesPurchaseFilter,
   purchaseFilters,
-  purchaseRequests as samplePurchaseRequests,
   type PurchaseFilter,
   type PurchaseRequest,
   type PurchaseStatus,
@@ -143,8 +142,8 @@ export function FinancePurchasesPage() {
         return true;
       })
       .map((record) => mapPurchaseRequest(record));
-    return mapped.length > 0 || loading ? mapped : samplePurchaseRequests;
-  }, [createdRecords, data, loading]);
+    return mapped;
+  }, [createdRecords, data]);
 
   const purchaseStats = useMemo(() => {
     const pending = purchaseRequests.filter((request) => isPending(request.status)).length;
