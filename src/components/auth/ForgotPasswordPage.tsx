@@ -7,6 +7,18 @@ import { authApi } from "@/lib/api";
 import { AuthShell } from "@/components/auth/AuthShell";
 import styles from "./LoginPage.module.css";
 
+function SsoMark() {
+  return (
+    <span className={styles.ssoMark} aria-hidden>
+      A
+    </span>
+  );
+}
+
+function startSso() {
+  window.location.assign("/api/v1/auth/sso");
+}
+
 export function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -64,6 +76,15 @@ export function ForgotPasswordPage() {
           {!loading ? <ChevronRight size={18} strokeWidth={2.25} aria-hidden /> : null}
         </button>
       </form>
+
+      <div className={styles.divider}>
+        <span>or</span>
+      </div>
+
+      <button type="button" className={styles.ssoButton} onClick={startSso}>
+        <SsoMark />
+        Continue with SSO
+      </button>
 
       <p className={styles.remembered}>
         Remembered it?{" "}
