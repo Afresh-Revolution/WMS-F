@@ -1,5 +1,5 @@
 import { ApiError, apiRequest, buildQuery } from "./client";
-import type { Id } from "./types";
+import { unwrapList, type Id } from "./types";
 
 export type SecretaryListParams = Record<string, unknown>;
 export type SecretaryRecord = Record<string, unknown>;
@@ -72,13 +72,13 @@ function isSecretaryOrgScopeError(error: unknown) {
 
 async function withSharedMeetingFallback<T>(
   secretaryCall: () => Promise<T>,
-  sharedCall: () => Promise<T>,
+  sharedCall: () => Promise<T> | T,
 ) {
   try {
     return await secretaryCall();
   } catch (error) {
     if (isSecretaryOrgScopeError(error)) {
-      return sharedCall();
+      return await sharedCall();
     }
     throw error;
   }
@@ -569,11 +569,43 @@ export const secretaryApi = {
   },
 
   listNotifications(query?: SecretaryListParams) {
-    return list("/notifications", ["notifications", "items", "records"], query);
+    return firstWorking(
+      [
+        () =>
+          list("/notifications", ["notifications", "items", "records"], query),
+        () =>
+          apiRequest<unknown>(`/notifications${buildQuery(query)}`).then(
+            (payload) => unwrapList<SecretaryRecord>(payload),
+          ),
+      ],
+      "Notifications were not found.",
+    );
   },
 
   markNotificationRead(id: Id) {
-    return mutate(`/notifications/${id}/read`, "PATCH");
+    return firstWorking(
+      [
+        () => mutate(`/notifications/${id}/read`, "PATCH"),
+        () =>
+          apiRequest<unknown>(`/notifications/${id}/read`, {
+            method: "PATCH",
+          }).then(unwrapData),
+      ],
+      "Notification could not be marked as read.",
+    );
+  },
+
+  markAllNotificationsRead() {
+    return firstWorking(
+      [
+        () => mutate("/notifications/read-all", "PATCH"),
+        () =>
+          apiRequest<unknown>("/notifications/read-all", {
+            method: "PATCH",
+          }).then(unwrapData),
+      ],
+      "Notifications could not be marked as read.",
+    );
   },
 
   listAuditLogs(query?: SecretaryListParams) {

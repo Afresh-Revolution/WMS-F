@@ -1,68 +1,144 @@
 "use client";
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { createPortal } from "react-dom";
-import { ChevronDown, Download, Plus, Search, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Briefcase,
+  Check,
+  Clock,
+  Heart,
+  Plane,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import {
   applyForLeave,
+  approveLeaveExtension,
+  approveLeaveRequest,
   displayLeaveTypeName,
-  employeeBalanceCards,
-  getEmployeeLeave,
   leaveDayCount,
-  leaveDecisionLetter,
   listLeaveBalances,
   listLeaveTypes,
   listMyLeave,
+  listOrganisationLeave,
+  rejectLeaveExtension,
+  rejectLeaveRequest,
   remainingDaysForType,
 } from "@/lib/api";
-import { listFrom, mapEmployeeLeaveRequest } from "@/lib/api/mappers";
+import { listFrom, mapLeaveBalance, mapLeaveRequest } from "@/lib/api/mappers";
+import {
+  leaveTabs,
+  type LeaveRequestStatus,
+  type LeaveTab,
+} from "@/data/leave";
 import styles from "./EmployeeLeavePage.module.css";
 
-type LeaveFilter = "All" | "Pending" | "Approved" | "Rejected";
+type LeaveStatusFilter = "All" | "Pending" | "Approved" | "Rejected";
 
-const filters: LeaveFilter[] = ["All", "Pending", "Approved", "Rejected"];
+const balanceIcons = {
+  annual: Plane,
+  sick: Heart,
+  parental: Clock,
+  personal: Briefcase,
+} as const;
 
-const statusQuery: Record<LeaveFilter, string | undefined> = {
-  All: undefined,
-  Pending: "PENDING",
-  Approved: "APPROVED",
-  Rejected: "REJECTED",
+const statusClass: Record<LeaveRequestStatus, string> = {
+  Pending: styles.statusPending,
+  Approved: styles.statusApproved,
+  Declined: styles.statusDeclined,
 };
 
-function statusClass(status: string) {
-  if (status === "Approved") return styles.approved;
-  if (status === "Rejected" || status === "Cancelled") return styles.rejected;
-  return styles.pending;
+const requestLeaveFields = [
+  {
+    name: "leaveTypeId",
+    label: "Leave type",
+    type: "select" as const,
+    required: true,
+    fullWidth: true,
+    options: [] as { label: string; value: string }[],
+  },
+  {
+    name: "startDate",
+    label: "From",
+    type: "date" as const,
+    required: true,
+    placeholder: "mm/dd/yyyy",
+  },
+  {
+    name: "endDate",
+    label: "To",
+    type: "date" as const,
+    required: true,
+    placeholder: "mm/dd/yyyy",
+  },
+  {
+    name: "reason",
+    label: "Note",
+    type: "textarea" as const,
+    placeholder: "Optional context for your manager",
+    fullWidth: true,
+    rows: 3,
+  },
+];
+
+function formatShortDate(value: string) {
+  const text = value.trim();
+  if (!text) return "";
+  const date = /T/.test(text) ? new Date(text) : new Date(`${text}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return text;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function prettyRange(range: string) {
+  const parts = range
+    .split(/\s*[–-]\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    return `${formatShortDate(parts[0])} – ${formatShortDate(parts[1])}`;
+  }
+  return formatShortDate(range) || range;
+}
+
+function matchesStatus(
+  status: LeaveRequestStatus,
+  filter: LeaveStatusFilter,
+) {
+  if (filter === "All") return true;
+  if (filter === "Approved") return status === "Approved";
+  if (filter === "Rejected") return status === "Declined";
+  return status === "Pending";
 }
 
 export function EmployeeLeavePage({
   initialFilter = "All",
 }: {
-  initialFilter?: LeaveFilter;
+  initialFilter?: LeaveStatusFilter;
 }) {
-  const [filter, setFilter] = useState<LeaveFilter>(initialFilter);
-  const [applyOpen, setApplyOpen] = useState(false);
-  const [letter, setLetter] = useState<string | null>(null);
-  const [leaveTypeId, setLeaveTypeId] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
-  const typeSelectRef = useRef<HTMLDivElement>(null);
   const { user } = useCurrentUser();
   const { runAction } = usePageActions();
-
-  const status = statusQuery[filter];
-  const { data, error, refetch } = useAsyncData(
-    () => listMyLeave(status),
-    [status],
+  const [activeTab, setActiveTab] = useState<LeaveTab>(
+    initialFilter === "All" ? "Requests" : "My leave",
   );
-  const { data: typeData, error: typesError } = useAsyncData(
-    () => listLeaveTypes(),
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const { data: teamData, loading, error, refetch } = useAsyncData(
+    () => listOrganisationLeave().catch(() => []),
+    [],
+  );
+  const { data: myLeaveData, refetch: refetchMine } = useAsyncData(
+    () => listMyLeave().catch(() => []),
+    [],
+  );
+  const { data: typeData } = useAsyncData(
+    () => listLeaveTypes().catch(() => []),
     [],
   );
   const { data: balanceData, refetch: refetchBalances } = useAsyncData(
@@ -70,142 +146,154 @@ export function EmployeeLeavePage({
     [],
   );
 
-  const leaveTypes = useMemo(
-    () => (Array.isArray(typeData) ? typeData.filter((item) => item.id) : []),
-    [typeData],
-  );
-  const selectedType =
-    leaveTypes.find((item) => item.id === leaveTypeId) ?? leaveTypes[0];
-  const estimatedDays = leaveDayCount(startDate, endDate);
-
-  const requests = useMemo(
-    () =>
-      listFrom(data ?? undefined).map((record) => mapEmployeeLeaveRequest(record)),
-    [data],
-  );
-
-  const balances = useMemo(
-    () => employeeBalanceCards(balanceData, leaveTypes),
-    [balanceData, leaveTypes],
-  );
-
-  useEffect(() => {
-    setFilter(initialFilter);
-  }, [initialFilter]);
-
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("apply") === "1") setApplyOpen(true);
+    if (params.get("apply") === "1") setRequestOpen(true);
   }, []);
 
   useEffect(() => {
-    if (!leaveTypeId && leaveTypes[0]?.id) setLeaveTypeId(leaveTypes[0].id);
-  }, [leaveTypeId, leaveTypes]);
+    setActiveTab(initialFilter === "All" ? "Requests" : "My leave");
+  }, [initialFilter]);
 
-  useEffect(() => {
-    if (!applyOpen) {
-      setTypeMenuOpen(false);
-      return;
-    }
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        if (typeMenuOpen) {
-          setTypeMenuOpen(false);
-          return;
-        }
-        setApplyOpen(false);
-      }
-    }
-    function closeOnPointer(event: MouseEvent) {
-      if (
-        typeSelectRef.current &&
-        !typeSelectRef.current.contains(event.target as Node)
-      ) {
-        setTypeMenuOpen(false);
-      }
-    }
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("mousedown", closeOnPointer);
-    return () => {
-      document.body.style.overflow = "";
-      window.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("mousedown", closeOnPointer);
-    };
-  }, [applyOpen, typeMenuOpen]);
+  const teamRequests = useMemo(
+    () =>
+      listFrom(teamData ?? undefined).map((record) => mapLeaveRequest(record)),
+    [teamData],
+  );
 
-  async function handleApply(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const typeId =
-      leaveTypeId || selectedType?.id || String(form.get("type") ?? "");
-    const note = String(form.get("reason") ?? form.get("note") ?? "").trim();
-    const from = startDate || String(form.get("startDate") ?? "");
-    const to = endDate || String(form.get("endDate") ?? from);
-    const days = leaveDayCount(from, to);
-    const remaining = remainingDaysForType(balanceData, selectedType);
-    const fileUrl = String(form.get("fileUrl") ?? "").trim();
-    const fileName = String(form.get("fileName") ?? "supporting-document").trim();
-    const attachments =
-      selectedType?.requiresDocument && fileUrl
-        ? [
-            {
-              name: fileName,
-              fileUrl,
-              type: fileUrl.toLowerCase().endsWith(".pdf")
-                ? "application/pdf"
-                : "application/octet-stream",
-            },
-          ]
-        : undefined;
-    try {
-      await runAction(
-        "Leave application",
-        async () => {
-          if (days > remaining) {
-            throw new Error(
-              `This request is ${days} working days, but only ${remaining} remain for ${selectedType?.name ?? "this type"}.`,
-            );
-          }
-          await applyForLeave({
-            leaveTypeId: typeId,
-            startDate: from,
-            endDate: to,
-            durationType: "FULL_DAY",
-            note,
-            attachments,
-          });
-          await Promise.all([refetch(), refetchBalances()]);
-        },
-        "Leave request submitted",
-      );
-      setApplyOpen(false);
-      setStartDate("");
-      setEndDate("");
-    } catch {
-      // runAction displays the API error.
+  const myLeave = useMemo(() => {
+    return listFrom(myLeaveData ?? undefined).map((record) => {
+      const mapped = mapLeaveRequest(record);
+      const name = mapped.name || user?.name || "You";
+      return {
+        ...mapped,
+        name,
+        initials: mapped.initials || user?.initials || "—",
+      };
+    });
+  }, [myLeaveData, user?.initials, user?.name]);
+
+  const leaveBalances = useMemo(() => {
+    return listFrom(balanceData ?? undefined).map((record, index) =>
+      mapLeaveBalance(record, index),
+    );
+  }, [balanceData]);
+
+  const createFields = useMemo(() => {
+    const types = Array.isArray(typeData) ? typeData : [];
+    return requestLeaveFields.map((field) => {
+      if (field.name !== "leaveTypeId") return field;
+      return {
+        ...field,
+        defaultValue: types[0]?.id,
+        options: types.map((item) => ({
+          label: displayLeaveTypeName(item.name),
+          value: item.id,
+        })),
+      };
+    });
+  }, [typeData]);
+
+  const visibleRequests = useMemo(() => {
+    const source = activeTab === "My leave" ? myLeave : teamRequests;
+    const needle = query.trim().toLowerCase();
+    return source.filter((request) => {
+      const matchesFilter =
+        activeTab !== "My leave" || matchesStatus(request.status, initialFilter);
+      const haystack =
+        `${request.name} ${request.type} ${request.dateRange}`.toLowerCase();
+      return matchesFilter && (!needle || haystack.includes(needle));
+    });
+  }, [activeTab, initialFilter, myLeave, query, teamRequests]);
+
+  const calendarGroups = useMemo(() => {
+    const groups = new Map<string, typeof teamRequests>();
+    for (const request of visibleRequests) {
+      const key = prettyRange(request.dateRange) || "Upcoming";
+      const list = groups.get(key) ?? [];
+      list.push(request);
+      groups.set(key, list);
     }
+    return Array.from(groups.entries());
+  }, [visibleRequests]);
+
+  function refreshAll() {
+    return Promise.all([refetch(), refetchMine(), refetchBalances()]);
   }
 
-  async function openDecisionLetter(id: string) {
-    try {
-      await runAction("Decision letter", async () => {
-        const payload = await getEmployeeLeave(id);
-        setLetter(leaveDecisionLetter(payload));
+  function approveLeave(id: string, name: string) {
+    void runAction(`Approve ${name}'s leave`, async () => {
+      await approveLeaveRequest(id);
+      await refreshAll();
+    }).catch(() => undefined);
+  }
+
+  function rejectLeave(id: string, name: string) {
+    void runAction(`Decline ${name}'s leave`, async () => {
+      await rejectLeaveRequest(id, "Declined from the leave queue.");
+      await refreshAll();
+    }).catch(() => undefined);
+  }
+
+  function approveExtension(id: string, name: string) {
+    void runAction(`Approve ${name}'s leave extension`, async () => {
+      await approveLeaveExtension(id);
+      await refreshAll();
+    }).catch(() => undefined);
+  }
+
+  function rejectExtension(id: string, name: string) {
+    void runAction(`Decline ${name}'s leave extension`, async () => {
+      await rejectLeaveExtension(
+        id,
+        "Coverage is not available for that extension.",
+      );
+      await refreshAll();
+    }).catch(() => undefined);
+  }
+
+  async function handleRequestLeave(values: Record<string, string>) {
+    await runAction("Request leave", async () => {
+      const types = Array.isArray(typeData) ? typeData : [];
+      const selectedType =
+        types.find((item) => item.id === values.leaveTypeId) ?? types[0];
+      const days = leaveDayCount(values.startDate, values.endDate);
+      const remaining = remainingDaysForType(balanceData, selectedType);
+      if (selectedType && days > remaining) {
+        throw new Error(
+          `This request is ${days} working days, but only ${remaining} remain for ${selectedType.name}.`,
+        );
+      }
+      await applyForLeave({
+        leaveTypeId: values.leaveTypeId,
+        startDate: values.startDate,
+        endDate: values.endDate,
+        durationType: "FULL_DAY",
+        note: values.reason,
       });
-    } catch {
-      /* toast already shown */
-    }
+      await refreshAll();
+    });
   }
 
   return (
     <div className={styles.page}>
       <header className={styles.topBar}>
         <PageDateLabel />
+        {loading ? <p className={styles.statusLine}>Loading leave…</p> : null}
+        {error ? (
+          <p className={styles.statusLine} role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />
-            <input aria-label="Search" placeholder="Search" readOnly />
+            <input
+              aria-label="Search"
+              placeholder="Search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
             <kbd>⌘ K</kbd>
           </label>
           <NotificationsLink className={styles.iconButton} />
@@ -215,308 +303,214 @@ export function EmployeeLeavePage({
         </div>
       </header>
 
-      <div className={styles.heading}>
+      <div className={styles.header}>
         <div>
-          <p>My leave</p>
-          <h1>Leave &amp; time off</h1>
-          <span>Apply for leave, track your requests and download decision letters.</span>
-          {error &&
-          !/not linked to an employee|employee profile is still being set up/i.test(
-            error,
-          ) ? (
-            <p className={styles.empty} role="alert">
-              {error}
-            </p>
-          ) : null}
+          <p className={styles.eyebrow}>Leave &amp; wellbeing</p>
+          <h1 className={styles.title}>Time away, thoughtfully managed</h1>
+          <p className={styles.subtitle}>
+            Request time off, track balances, and keep your team covered — all in
+            one calm place.
+          </p>
         </div>
         <button
           type="button"
-          className={styles.applyButton}
-          onClick={() => setApplyOpen(true)}
+          className={styles.requestButton}
+          onClick={() => setRequestOpen(true)}
         >
-          <Plus size={15} />
-          Apply for leave
+          <Plus size={16} strokeWidth={2.5} />
+          Request leave
         </button>
       </div>
 
-      <section className={styles.balances} aria-label="Leave balances">
-        {balances.map((balance, index) => (
-          <article
-            key={balance.label}
-            className={`${styles.balanceCard} ${
-              index === 0 ? styles.balancePrimary : ""
+      {leaveBalances.length > 0 ? (
+        <div className={styles.balances}>
+          {leaveBalances.map((balance) => {
+            const Icon = balanceIcons[balance.icon];
+            const percentUsed =
+              balance.total > 0 ? (balance.used / balance.total) * 100 : 0;
+            return (
+              <article key={balance.id} className={styles.balanceCard}>
+                <div className={styles.balanceTop}>
+                  <span className={styles.balanceIcon}>
+                    <Icon size={16} strokeWidth={1.75} />
+                  </span>
+                  <p className={styles.balanceRemaining}>
+                    {balance.remaining} left
+                  </p>
+                </div>
+                <p className={styles.balanceLabel}>{balance.label}</p>
+                <div className={styles.progressTrack}>
+                  <div
+                    className={styles.progressFill}
+                    style={{ width: `${Math.min(percentUsed, 100)}%` }}
+                  />
+                </div>
+                <p className={styles.balanceMeta}>
+                  {balance.used} of {balance.total} days used
+                </p>
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
+
+      <div className={styles.filters}>
+        {leaveTabs.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            className={`${styles.filterChip} ${
+              activeTab === tab ? styles.filterChipActive : ""
             }`}
           >
-            <p>{balance.label}</p>
-            <div>
-              <strong>{balance.value}</strong>
-              <span>{balance.hint}</span>
-            </div>
-          </article>
-        ))}
-      </section>
-
-      <div className={styles.filters} aria-label="Filter leave requests">
-        {filters.map((item) => (
-          <button
-            type="button"
-            key={item}
-            onClick={() => setFilter(item)}
-            className={filter === item ? styles.filterActive : ""}
-          >
-            {item}
+            {tab}
           </button>
         ))}
       </div>
 
-      <section className={styles.requestList}>
-        {requests.map((request) => (
-          <article key={request.id} className={styles.requestCard}>
-            <div className={styles.requestMain}>
-              <div className={styles.requestTitle}>
-                <span>{request.code}</span>
-                <h2>
-                  {request.type} · {request.days}{" "}
-                  {request.days === 1 ? "day" : "days"}
-                </h2>
-                <span className={`${styles.status} ${statusClass(request.status)}`}>
-                  {request.status}
-                </span>
-              </div>
-              <p className={styles.requestMeta}>
-                {request.dates}
-                {request.reason ? ` · ${request.reason}` : ""}
+      <section className={styles.panel}>
+        {activeTab === "Team calendar" ? (
+          <>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>Team calendar</h2>
+              <p className={styles.sectionSubtitle}>
+                Upcoming time off across the organisation.
               </p>
-              {request.reviewerName || request.reviewComment ? (
-                <p className={styles.requestReview}>
-                  {request.reviewerName
-                    ? `${request.reviewerName}: “${(request.reviewComment || request.status).replace(/[.]+$/, "")}.”`
-                    : `“${request.reviewComment}”`}
-                </p>
-              ) : null}
             </div>
-            <button
-              type="button"
-              className={styles.letterButton}
-              onClick={() => void openDecisionLetter(request.id)}
-            >
-              <Download size={16} />
-              Decision letter
-            </button>
-          </article>
-        ))}
-        {requests.length === 0 ? (
-          <p className={styles.empty}>No {filter.toLowerCase()} leave requests.</p>
-        ) : null}
-      </section>
-
-      {applyOpen && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className={styles.modalBackdrop}
-              role="presentation"
-              onClick={() => setApplyOpen(false)}
-            >
-              <section
-                className={styles.modal}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="apply-leave-title"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  className={styles.modalClose}
-                  aria-label="Close"
-                  onClick={() => setApplyOpen(false)}
-                >
-                  <X size={17} />
-                </button>
-                <h2 id="apply-leave-title">Apply for leave</h2>
-                <p className={styles.modalDescription}>
-                  Your request goes to your HOD / HR for approval.
-                </p>
-                {typesError ? (
-                  <p className={styles.empty} role="alert">
-                    {typesError}
-                  </p>
-                ) : null}
-                <form onSubmit={handleApply}>
-                  <div className={styles.modalFields}>
-                    <div className={styles.modalField}>
-                      <span>Leave type</span>
-                      <div className={styles.typeSelect} ref={typeSelectRef}>
+            {calendarGroups.length === 0 ? (
+              <p className={styles.empty}>No leave on the calendar yet.</p>
+            ) : (
+              calendarGroups.map(([label, items]) => (
+                <div key={label} className={styles.calendarGroup}>
+                  <p className={styles.calendarLabel}>{label}</p>
+                  {items.map((request) => (
+                    <article key={request.id} className={styles.requestRow}>
+                      <div className={styles.requestIdentity}>
+                        <span className={styles.requestAvatar}>
+                          {request.initials}
+                        </span>
+                        <div className={styles.requestDetails}>
+                          <p className={styles.requestName}>{request.name}</p>
+                          <p className={styles.requestMeta}>
+                            {request.type}
+                            {request.days
+                              ? ` · ${request.days} ${request.days === 1 ? "day" : "days"}`
+                              : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <span className={statusClass[request.status]}>
+                        {request.status}
+                      </span>
+                    </article>
+                  ))}
+                </div>
+              ))
+            )}
+          </>
+        ) : (
+          <>
+            <div className={styles.sectionHeader}>
+              <h2 className={styles.sectionTitle}>
+                {activeTab === "My leave" ? "My leave" : "Leave requests"}
+              </h2>
+              <p className={styles.sectionSubtitle}>
+                {activeTab === "My leave"
+                  ? "Your submitted time off."
+                  : "Review and respond to your team's requests."}
+              </p>
+            </div>
+            {visibleRequests.length === 0 ? (
+              <p className={styles.empty}>
+                {activeTab === "My leave"
+                  ? "You have no leave requests yet."
+                  : "No leave requests yet."}
+              </p>
+            ) : (
+              visibleRequests.map((request) => (
+                <article key={request.id} className={styles.requestRow}>
+                  <div className={styles.requestIdentity}>
+                    <span className={styles.requestAvatar}>
+                      {request.initials}
+                    </span>
+                    <div className={styles.requestDetails}>
+                      <p className={styles.requestName}>{request.name}</p>
+                      <p className={styles.requestMeta}>
+                        {request.type} · {prettyRange(request.dateRange)}
+                        {request.days
+                          ? ` · ${request.days} ${request.days === 1 ? "day" : "days"}`
+                          : ""}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={styles.requestActions}>
+                    <span className={statusClass[request.status]}>
+                      {request.status}
+                    </span>
+                    {activeTab === "Requests" && request.status === "Pending" ? (
+                      <>
                         <button
                           type="button"
-                          className={styles.typeTrigger}
-                          aria-haspopup="listbox"
-                          aria-expanded={typeMenuOpen}
-                          onClick={() => setTypeMenuOpen((open) => !open)}
+                          aria-label={`Decline ${request.name}'s request`}
+                          className={styles.declineButton}
+                          onClick={() => rejectLeave(request.id, request.name)}
                         >
-                          <span>
-                            {selectedType
-                              ? displayLeaveTypeName(selectedType.name)
-                              : "No leave types loaded"}
-                          </span>
-                          <ChevronDown size={16} />
+                          <X size={16} />
                         </button>
-                        {typeMenuOpen ? (
-                          <ul className={styles.typeMenu} role="listbox">
-                            {leaveTypes.map((item) => {
-                              const active = item.id === selectedType?.id;
-                              return (
-                                <li key={item.id}>
-                                  <button
-                                    type="button"
-                                    role="option"
-                                    aria-selected={active}
-                                    className={
-                                      active
-                                        ? styles.typeOptionActive
-                                        : styles.typeOption
-                                    }
-                                    onClick={() => {
-                                      setLeaveTypeId(item.id);
-                                      setTypeMenuOpen(false);
-                                    }}
-                                  >
-                                    {displayLeaveTypeName(item.name)}
-                                  </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        ) : null}
-                        <input
-                          type="hidden"
-                          name="type"
-                          value={selectedType?.id ?? ""}
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div className={styles.dateFields}>
-                      <label className={styles.modalField}>
-                        <span>From</span>
-                        <input
-                          name="startDate"
-                          type="date"
-                          required
-                          value={startDate}
-                          onChange={(event) => setStartDate(event.target.value)}
-                        />
-                      </label>
-                      <label className={styles.modalField}>
-                        <span>To</span>
-                        <input
-                          name="endDate"
-                          type="date"
-                          required
-                          value={endDate}
-                          onChange={(event) => setEndDate(event.target.value)}
-                        />
-                      </label>
-                    </div>
-                    <p className={styles.duration}>
-                      Duration:{" "}
-                      {estimatedDays > 0
-                        ? `${estimatedDays} ${estimatedDays === 1 ? "day" : "days"}`
-                        : "—"}
-                    </p>
-                    {selectedType?.requiresDocument ? (
-                      <>
-                        <label className={styles.modalField}>
-                          <span>
-                            Document name <b>*</b>
-                          </span>
-                          <input
-                            name="fileName"
-                            defaultValue="doctors-note.pdf"
-                            required
-                          />
-                        </label>
-                        <label className={styles.modalField}>
-                          <span>
-                            Document URL <b>*</b>
-                          </span>
-                          <input
-                            name="fileUrl"
-                            type="url"
-                            placeholder="https://..."
-                            required
-                          />
-                        </label>
+                        <button
+                          type="button"
+                          className={styles.approveButton}
+                          onClick={() => approveLeave(request.id, request.name)}
+                        >
+                          <Check size={15} strokeWidth={2.5} />
+                          Approve
+                        </button>
                       </>
                     ) : null}
-                    <label className={styles.modalField}>
-                      <span>
-                        Reason <b>*</b>
-                      </span>
-                      <textarea name="reason" rows={4} required />
-                    </label>
+                    {request.extensionStatus.toUpperCase() === "PENDING" ? (
+                      <>
+                        <button
+                          type="button"
+                          className={styles.declineButton}
+                          onClick={() =>
+                            rejectExtension(request.id, request.name)
+                          }
+                        >
+                          <X size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.approveButton}
+                          onClick={() =>
+                            approveExtension(request.id, request.name)
+                          }
+                        >
+                          Approve extension
+                        </button>
+                      </>
+                    ) : null}
                   </div>
-                  <div className={styles.modalActions}>
-                    <button
-                      type="button"
-                      className={styles.modalCancel}
-                      onClick={() => setApplyOpen(false)}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className={styles.modalSubmit}
-                      disabled={leaveTypes.length === 0}
-                    >
-                      <Plus size={15} />
-                      Submit request
-                    </button>
-                  </div>
-                </form>
-              </section>
-            </div>,
-            document.body,
-          )
-        : null}
+                </article>
+              ))
+            )}
+          </>
+        )}
+      </section>
 
-      {letter && typeof document !== "undefined"
-        ? createPortal(
-            <div
-              className={styles.modalBackdrop}
-              role="presentation"
-              onClick={() => setLetter(null)}
-            >
-              <section
-                className={styles.modal}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="leave-letter-title"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <button
-                  type="button"
-                  className={styles.modalClose}
-                  aria-label="Close"
-                  onClick={() => setLetter(null)}
-                >
-                  <X size={17} />
-                </button>
-                <h2 id="leave-letter-title">Decision letter</h2>
-                <pre className={styles.letterBody}>{letter}</pre>
-                <div className={styles.modalActions}>
-                  <button
-                    type="button"
-                    className={styles.modalCancel}
-                    onClick={() => setLetter(null)}
-                  >
-                    Close
-                  </button>
-                </div>
-              </section>
-            </div>,
-            document.body,
-          )
-        : null}
+      <SimpleModal
+        open={requestOpen}
+        title="Request leave"
+        description="Choose a leave type and dates. Your request goes to your manager for approval."
+        fields={createFields}
+        submitLabel="Submit request"
+        submitIcon
+        showClose
+        wide
+        appearance="soft"
+        onClose={() => setRequestOpen(false)}
+        onSubmit={handleRequestLeave}
+      />
     </div>
   );
 }

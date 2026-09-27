@@ -2,40 +2,82 @@
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
+  ArrowRight,
   Bell,
   CalendarDays,
   CheckSquare2,
   ChevronRight,
+  Clock,
+  Mail,
   Megaphone,
-  ReceiptText,
+  Receipt,
   Search,
-  WalletCards,
 } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { asRecord, employeeApi, listStaffAnnouncements } from "@/lib/api";
+import { usePageActions } from "@/hooks/usePageActions";
 import {
-  listFrom,
-  mapAnnouncement,
-  nestedStr,
-  num,
-  str,
-} from "@/lib/api/mappers";
+  asRecord,
+  employeeApi,
+  listLeaveBalances,
+  listStaffAnnouncements,
+  publishStaffAnnouncement,
+} from "@/lib/api";
+import { listFrom, mapAnnouncement, nestedStr, num, str } from "@/lib/api/mappers";
 import { employeeStatCards } from "@/data/employeeHome";
-import { EmployeeOverviewClockCard } from "@/components/employee/EmployeeOverviewClockCard";
 import styles from "./EmployeeHomePage.module.css";
 
-function statusClass(status: string) {
-  if (status === "Overdue" || status === "Returned") return styles.statusDanger;
-  if (status === "Approved" || status === "Paid" || status === "Reimbursed") {
-    return styles.statusSuccess;
-  }
-  if (status === "Pending" || status === "Submitted") return styles.statusPending;
-  return styles.statusNeutral;
-}
+const createAnnouncementFields = [
+  {
+    name: "title",
+    label: "Title",
+    required: true,
+    fullWidth: true,
+    placeholder: "Announcement title",
+  },
+  {
+    name: "category",
+    label: "Category",
+    type: "select" as const,
+    required: true,
+    fullWidth: true,
+    defaultValue: "General",
+    options: [
+      { label: "General", value: "General" },
+      { label: "HR", value: "HR" },
+      { label: "Finance", value: "Finance" },
+      { label: "Urgent", value: "Urgent" },
+    ],
+  },
+  {
+    name: "audienceType",
+    label: "Audience",
+    type: "select" as const,
+    required: true,
+    fullWidth: true,
+    defaultValue: "all_staff",
+    options: [{ label: "All staff", value: "all_staff" }],
+  },
+  {
+    name: "message",
+    label: "Message",
+    type: "textarea" as const,
+    required: true,
+    fullWidth: true,
+    rows: 4,
+    placeholder: "Write your announcement...",
+  },
+  {
+    name: "isPinned",
+    label: "Pin this announcement",
+    type: "checkbox" as const,
+    defaultValue: "false",
+  },
+];
 
 function firstNameFrom(name: string) {
   return name.split(/\s+/).filter(Boolean)[0] || name;
@@ -58,45 +100,92 @@ function formatShortDate(value: unknown): string {
   return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
-function mapTaskStatus(value: unknown): string {
-  const raw = str(value).toLowerCase();
-  if (raw.includes("overdue")) return "Overdue";
-  if (raw.includes("review")) return "In Review";
-  if (raw.includes("progress") || raw.includes("active")) return "In Progress";
-  if (raw.includes("complete") || raw.includes("done")) return "Completed";
-  if (raw.includes("not") || raw.includes("todo") || raw.includes("pending")) {
-    return "Not Started";
+function dueBadge(due: unknown, status: unknown): "Due soon" | "Overdue" | "" {
+  const rawStatus = str(status).toLowerCase();
+  const date = new Date(str(due));
+  const valid = !Number.isNaN(date.getTime());
+  const diff = valid
+    ? Math.round(
+        (date.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) /
+          86_400_000,
+      )
+    : null;
+  if (rawStatus.includes("overdue") || (diff !== null && diff < 0)) {
+    return "Overdue";
   }
-  return str(value, "Not Started");
+  if (diff !== null && diff <= 7) return "Due soon";
+  return "";
 }
 
-function SectionTitle({
-  icon: Icon,
-  children,
-  href,
-}: {
-  icon: typeof CheckSquare2;
-  children: React.ReactNode;
-  href: string;
-}) {
-  return (
-    <div className={styles.sectionHeader}>
-      <h2>
-        <Icon size={15} />
-        {children}
-      </h2>
-      <Link href={href}>View all</Link>
-    </div>
+function formatMeetingWhen(value: unknown, time?: unknown) {
+  const raw = str(value);
+  const parsed = new Date(raw);
+  const clock =
+    str(time) ||
+    (!Number.isNaN(parsed.getTime())
+      ? parsed.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : "");
+  if (Number.isNaN(parsed.getTime())) {
+    return [raw, clock].filter(Boolean).join(" · ");
+  }
+  const day = parsed.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  return [day, clock].filter(Boolean).join(" · ");
+}
+
+function meetingLocation(record: Record<string, unknown>) {
+  const location = str(record.location ?? record.room ?? record.place);
+  const platform = str(
+    record.platform ?? record.provider ?? record.virtualProvider,
   );
+  const virtual =
+    Boolean(record.virtual) ||
+    Boolean(record.meetingLink ?? record.virtualLink) ||
+    /virtual|meet|zoom|teams/i.test(`${location} ${platform}`);
+  if (virtual) {
+    if (/virtual/i.test(location) && location.includes("(")) return location;
+    return platform ? `Virtual (${platform})` : location || "Virtual";
+  }
+  return location;
+}
+
+function sortLeaveBalances(
+  items: { label: string; value: number; total: number }[],
+) {
+  const order = ["annual", "sick", "personal"];
+  return [...items]
+    .sort((a, b) => {
+      const ai = order.findIndex((key) => a.label.toLowerCase().includes(key));
+      const bi = order.findIndex((key) => b.label.toLowerCase().includes(key));
+      return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+    })
+    .slice(0, 3);
 }
 
 export function EmployeeHomePage() {
   const { user } = useCurrentUser();
-  const { data, loading, error } = useAsyncData(
+  const { runAction } = usePageActions();
+  const [createOpen, setCreateOpen] = useState(false);
+  const { data, loading, error, refetch } = useAsyncData(
     () =>
       Promise.all([
-        employeeApi.dashboard({ previewLimit: 5 }),
-        listStaffAnnouncements().catch(() => []),
+        employeeApi.dashboard({ previewLimit: 5 }).catch(() => ({})),
+        employeeApi.tasks
+          .list()
+          .catch(() => employeeApi.tasks.assigned().catch(() => [])),
+        listLeaveBalances().catch(() => []),
+        employeeApi.meetings
+          .list()
+          .catch(() => employeeApi.meetings.schedule().catch(() => [])),
+        employeeApi.announcements
+          .list()
+          .catch(() => listStaffAnnouncements().catch(() => [])),
       ]),
     [],
   );
@@ -105,7 +194,6 @@ export function EmployeeHomePage() {
   const profile = asRecord(dashboard.profile ?? dashboard.overview);
   const metrics = asRecord(dashboard.metrics ?? dashboard.stats);
   const leave = asRecord(dashboard.leave);
-  const expenses = asRecord(dashboard.expenses);
 
   const displayName =
     str(profile.fullName ?? profile.name, user?.name || "") || "there";
@@ -119,110 +207,123 @@ export function EmployeeHomePage() {
 
   const stats = useMemo(() => {
     const values = [
-      num(metrics.leaveDaysRemaining),
-      num(metrics.assignedTasks),
-      num(metrics.overdueTasks),
+      num(metrics.leaveDaysRemaining ?? leave.daysRemaining ?? leave.annualLeaveDays),
+      num(metrics.assignedTasks ?? metrics.openTasks),
       num(metrics.upcomingMeetings),
       num(metrics.pendingExpenseClaims ?? metrics.expenseClaims),
-      num(metrics.reimbursementsWaiting),
     ];
     return employeeStatCards.map((card, index) => ({
       ...card,
       value: String(values[index] ?? 0),
     }));
-  }, [metrics]);
+  }, [leave, metrics]);
 
-  const tasks = listFrom((dashboard.myWork ?? dashboard.tasks) as never).map(
-    (record, index) => ({
+  const tasks = useMemo(() => {
+    const fromDashboard = listFrom(
+      (dashboard.myWork ?? dashboard.tasks) as never,
+    );
+    const fromList = listFrom((data?.[1] ?? undefined) as never);
+    const merged = fromDashboard.length > 0 ? fromDashboard : fromList;
+    return merged.slice(0, 3).map((record, index) => {
+      const due = record.due ?? record.dueDate ?? record.due_date;
+      const badge = dueBadge(due, record.status);
+      return {
+        id: recordKey(record, index),
+        title: str(record.title ?? record.name),
+        meta: [
+          str(
+            record.category ??
+              record.project ??
+              record.group ??
+              nestedStr(record.assignedBy ?? record.createdBy, [
+                "name",
+                "fullName",
+              ]),
+          ),
+          due ? `Due ${formatShortDate(due)}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        badge,
+      };
+    });
+  }, [dashboard, data]);
+
+  const leaveBalances = useMemo(() => {
+    const fromDashboard = listFrom(
+      (leave.balances ?? dashboard.leaveBalances) as never,
+    );
+    const fromApi = listFrom((data?.[2] ?? undefined) as never);
+    const records = fromDashboard.length > 0 ? fromDashboard : fromApi;
+    return sortLeaveBalances(
+      records.map((record) => ({
+        label: str(
+          record.label ?? record.leaveTypeName ?? record.leave_type_name,
+        ),
+        value: num(
+          record.remainingDays ?? record.remaining_days ?? record.value,
+        ),
+        total: num(
+          record.totalDays ??
+            record.total_days ??
+            record.allocatedDays ??
+            record.allocated_days ??
+            record.total,
+          1,
+        ),
+      })),
+    );
+  }, [dashboard.leaveBalances, data, leave.balances]);
+
+  const meetings = useMemo(() => {
+    const fromDashboard = listFrom(
+      (dashboard.upcomingMeetings ?? dashboard.meetings) as never,
+    );
+    const fromList = listFrom((data?.[3] ?? undefined) as never);
+    const records = fromDashboard.length > 0 ? fromDashboard : fromList;
+    return records.slice(0, 2).map((record, index) => ({
       id: recordKey(record, index),
       title: str(record.title ?? record.name),
-      meta: [
-        nestedStr(record.assignedBy ?? record.createdBy, ["name", "fullName"]),
-        str(record.due ?? record.dueDate ?? record.due_date)
-          ? `Due ${formatShortDate(record.due ?? record.dueDate ?? record.due_date)}`
-          : "",
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      status: mapTaskStatus(record.status),
-    }),
-  );
-
-  const meetings = listFrom(
-    (dashboard.upcomingMeetings ?? dashboard.meetings) as never,
-  ).map((record, index) => ({
-    id: recordKey(record, index),
-    title: str(record.title ?? record.name),
-    meta: [
-      formatShortDate(
+      when: formatMeetingWhen(
         record.startAt ?? record.start_at ?? record.date ?? record.scheduledAt,
+        record.time,
       ),
-      str(record.time) ||
-        (record.startAt || record.start_at
-          ? new Date(str(record.startAt ?? record.start_at)).toLocaleTimeString(
-              "en-US",
-              { hour: "numeric", minute: "2-digit" },
-            )
-          : ""),
-      str(record.location ?? record.room),
-    ]
-      .filter(Boolean)
-      .join(" · "),
-  }));
-
-  const expenseItems = listFrom(
-    (expenses.recentClaims ?? dashboard.expenses) as never,
-  )
-    .filter((record) => {
-      const status = str(record.status).toLowerCase();
-      return !status.includes("cancel") && !status.includes("reject");
-    })
-    .map((record, index) => ({
-      id: recordKey(record, index),
-      title: str(record.title ?? record.description ?? record.reference),
-      status: str(record.status, "Submitted"),
+      location: meetingLocation(record),
     }));
+  }, [dashboard, data]);
 
-  const reimbursementItems = listFrom(
-    (expenses.recentClaims ?? dashboard.expenses) as never,
-  )
-    .filter((record) => {
-      const status = str(
-        record.reimbursementStatus ?? record.reimbursement_status,
-      ).toLowerCase();
-      return Boolean(status) && status !== "not_required";
-    })
-    .map((record, index) => ({
-      id: recordKey(record, index),
-      title: str(record.title ?? record.description ?? record.reference),
-      status: str(
-        record.reimbursementStatus ?? record.reimbursement_status,
-        "Pending",
-      ),
-    }));
+  const announcements = useMemo(() => {
+    const fromDashboard = listFrom(
+      (dashboard.announcements ?? dashboard.alerts) as never,
+    );
+    const fromList = listFrom((data?.[4] ?? undefined) as never);
+    const records = fromDashboard.length > 0 ? fromDashboard : fromList;
+    return records.slice(0, 2).map((record) => {
+      const item = mapAnnouncement(record);
+      return {
+        id: item.id,
+        title: item.title,
+        source: item.source,
+        date: item.date,
+      };
+    });
+  }, [dashboard, data]);
 
-  const leaveRequests = listFrom(
-    (leave.recentRequests ?? dashboard.leaveRequests) as never,
-  );
-  const latestLeave = leaveRequests[0];
-  const leaveBalances = listFrom(
-    (leave.balances ?? dashboard.leaveBalances) as never,
-  ).map((record) => ({
-    label: str(record.label ?? record.leaveTypeName ?? record.leave_type_name),
-    value: num(record.remainingDays ?? record.remaining_days ?? record.value),
-    total: num(record.totalDays ?? record.total_days ?? record.total, 1),
-  }));
-
-  const announcements = listFrom(data?.[1] as never)
-    .map((record) => mapAnnouncement(record))
-    .slice(0, 5);
-
-  const notifications = listFrom(
-    (dashboard.notifications ?? dashboard.alerts) as never,
-  ).map((record, index) => ({
-    id: recordKey(record, index),
-    message: str(record.message ?? record.body ?? record.title),
-  }));
+  async function handleCreateAnnouncement(values: Record<string, string>) {
+    await runAction("Publish announcement", async () => {
+      await publishStaffAnnouncement({
+        title: values.title.trim(),
+        message: values.message.trim(),
+        category: values.category,
+        audienceType: values.audienceType || "all_staff",
+        isPinned: values.isPinned,
+        status: "published",
+        author: user?.name ?? "",
+        initials: user?.initials ?? "",
+      });
+      refetch();
+    });
+  }
 
   return (
     <div className={styles.page}>
@@ -259,160 +360,98 @@ export function EmployeeHomePage() {
         </div>
       </section>
 
-      <EmployeeOverviewClockCard
-        name={displayName}
-        department={nestedStr(profile.department, ["name", "title", "label"])}
-      />
-
       <section className={styles.stats} aria-label="Employee summary">
         {stats.map((stat) => (
           <article key={stat.label} className={styles.statCard}>
-            <strong>{stat.value}</strong>
             <h2>{stat.label}</h2>
-            <p>{stat.hint}</p>
+            <div className={styles.statRow}>
+              <strong>{stat.value}</strong>
+              <p>{stat.hint}</p>
+            </div>
           </article>
         ))}
       </section>
 
-      <div className={styles.dashboardGrid}>
-        <div className={styles.mainColumn}>
+      <div className={styles.board}>
+        <div className={styles.boardCol}>
           <section className={styles.card}>
-            <SectionTitle icon={CheckSquare2} href="/employee/tasks">
-              My tasks
-            </SectionTitle>
-            <div className={styles.rows}>
+            <div className={`${styles.sectionHeader} ${styles.sectionHeaderLined}`}>
+              <h2>
+                <CheckSquare2 size={16} />
+                My tasks
+              </h2>
+              <Link href="/employee/tasks">View all</Link>
+            </div>
+            <div className={styles.taskList}>
               {tasks.length === 0 ? (
                 <p className={styles.empty}>No tasks assigned.</p>
               ) : (
-                tasks.map((task, index) => (
-                  <article key={`${task.id}-${index}`} className={styles.row}>
-                    <div>
+                tasks.map((task) => (
+                  <Link
+                    key={task.id}
+                    href="/employee/tasks"
+                    className={styles.taskRow}
+                  >
+                    <span className={styles.taskCheck} aria-hidden />
+                    <div className={styles.taskBody}>
                       <h3>{task.title}</h3>
-                      <p>{task.meta}</p>
+                      {task.meta ? <p>{task.meta}</p> : null}
                     </div>
-                    <span className={`${styles.status} ${statusClass(task.status)}`}>
-                      {task.status}
-                    </span>
-                  </article>
+                    {task.badge ? (
+                      <span
+                        className={`${styles.taskBadge} ${
+                          task.badge === "Overdue"
+                            ? styles.taskBadgeOverdue
+                            : styles.taskBadgeSoon
+                        }`}
+                      >
+                        {task.badge}
+                      </span>
+                    ) : null}
+                    <ChevronRight size={16} className={styles.taskChevron} />
+                  </Link>
                 ))
               )}
             </div>
           </section>
 
-          <section className={styles.card}>
-            <SectionTitle icon={CalendarDays} href="/employee/meetings">
-              Upcoming meetings
-            </SectionTitle>
-            <div className={styles.rows}>
+          <section className={`${styles.card} ${styles.meetingsCard}`}>
+            <div className={`${styles.sectionHeader} ${styles.sectionHeaderLined}`}>
+              <h2>
+                <CalendarDays size={16} />
+                Upcoming meetings
+              </h2>
+              <Link href="/employee/meetings">View all</Link>
+            </div>
+            <div className={styles.meetingList}>
               {meetings.length === 0 ? (
                 <p className={styles.empty}>No upcoming meetings.</p>
               ) : (
-                meetings.map((meeting, index) => (
-                  <article key={`${meeting.id}-${index}`} className={styles.row}>
-                    <div>
-                      <h3>{meeting.title}</h3>
-                      <p>{meeting.meta}</p>
-                    </div>
+                meetings.map((meeting) => (
+                  <article key={meeting.id} className={styles.meetingRow}>
+                    <h3>{meeting.title}</h3>
+                    {meeting.when ? (
+                      <p className={styles.meetingWhen}>
+                        <Clock size={13} />
+                        {meeting.when}
+                      </p>
+                    ) : null}
+                    {meeting.location ? (
+                      <p className={styles.meetingPlace}>{meeting.location}</p>
+                    ) : null}
                   </article>
                 ))
               )}
             </div>
           </section>
-
-          <div className={styles.splitCards}>
-            <section className={styles.card}>
-              <SectionTitle icon={ReceiptText} href="/employee/expenses">
-                Expense status
-              </SectionTitle>
-              <div className={styles.rows}>
-                {expenseItems.length === 0 ? (
-                  <p className={styles.empty}>No expense claims.</p>
-                ) : (
-                  expenseItems.map((item, index) => (
-                    <article
-                      key={`expense-${item.id}-${index}`}
-                      className={styles.compactRow}
-                    >
-                      <span>{item.title}</span>
-                      <span className={`${styles.status} ${statusClass(item.status)}`}>
-                        {item.status}
-                      </span>
-                    </article>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className={styles.card}>
-              <SectionTitle icon={WalletCards} href="/employee/reimbursements">
-                Reimbursement status
-              </SectionTitle>
-              <div className={styles.rows}>
-                {reimbursementItems.length === 0 ? (
-                  <p className={styles.empty}>No reimbursements.</p>
-                ) : (
-                  reimbursementItems.map((item, index) => (
-                    <article
-                      key={`reimbursement-${item.id}-${index}`}
-                      className={styles.compactRow}
-                    >
-                      <span>{item.title}</span>
-                      <span className={`${styles.status} ${statusClass(item.status)}`}>
-                        {item.status}
-                      </span>
-                    </article>
-                  ))
-                )}
-              </div>
-            </section>
-          </div>
         </div>
 
-        <aside className={styles.sideColumn}>
+        <div className={styles.boardCol}>
           <section className={styles.card}>
-            <SectionTitle icon={CalendarDays} href="/employee/leave">
-              Recent leave request
-            </SectionTitle>
-            {latestLeave ? (
-              <div className={styles.leaveRequest}>
-                <div className={styles.leaveRequestHeader}>
-                  <div>
-                    <h3>
-                      {str(
-                        latestLeave.leaveTypeName ??
-                          latestLeave.leave_type_name ??
-                          latestLeave.type,
-                        "Leave",
-                      )}
-                    </h3>
-                    <p>
-                      {[
-                        formatShortDate(
-                          latestLeave.startDate ?? latestLeave.start_date,
-                        ),
-                        formatShortDate(
-                          latestLeave.endDate ?? latestLeave.end_date,
-                        ),
-                      ]
-                        .filter(Boolean)
-                        .join(" – ")}
-                    </p>
-                  </div>
-                  <span className={`${styles.status} ${styles.statusPending}`}>
-                    {str(latestLeave.status, "Pending")}
-                  </span>
-                </div>
-                <Link href="/employee/leave">Track status →</Link>
-              </div>
-            ) : (
-              <p className={styles.empty}>No leave requests yet.</p>
-            )}
-          </section>
-
-          <section className={styles.card}>
-            <SectionTitle icon={CalendarDays} href="/employee/leave">
-              Leave balance
-            </SectionTitle>
+            <div className={styles.leaveHead}>
+              <h2>Leave balance</h2>
+              <p>{new Date().getFullYear()} entitlements</p>
+            </div>
             <div className={styles.balanceList}>
               {leaveBalances.length === 0 ? (
                 <p className={styles.empty}>No leave balances yet.</p>
@@ -437,52 +476,85 @@ export function EmployeeHomePage() {
                 ))
               )}
             </div>
+            <Link href="/employee/leave?apply=1" className={styles.applyLeave}>
+              Apply for leave
+            </Link>
           </section>
 
           <section className={styles.card}>
-            <SectionTitle icon={Megaphone} href="/employee/announcements">
-              Announcements
-            </SectionTitle>
-            <div className={styles.rows}>
+            <div className={`${styles.sectionHeader} ${styles.sectionHeaderLined}`}>
+              <h2>
+                <Bell size={16} />
+                Announcements
+              </h2>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+              >
+                New announcement
+              </button>
+            </div>
+            <div className={styles.announcementList}>
               {announcements.length === 0 ? (
                 <p className={styles.empty}>No announcements.</p>
               ) : (
                 announcements.map((item) => (
-                  <article key={item.id} className={styles.row}>
-                    <div>
-                      <h3>{item.title}</h3>
-                      <p>
-                        {item.source} · {item.date}
-                      </p>
-                    </div>
+                  <article key={item.id} className={styles.announcementRow}>
+                    <h3>{item.title}</h3>
+                    <p>
+                      {[item.source, item.date].filter(Boolean).join(" · ")}
+                    </p>
                   </article>
                 ))
               )}
             </div>
+            <Link href="/employee/announcements" className={styles.cardLink}>
+              All announcements →
+            </Link>
           </section>
 
           <section className={styles.card}>
-            <SectionTitle icon={Bell} href="/employee/notifications">
-              Notifications
-            </SectionTitle>
-            <div className={styles.rows}>
-              {notifications.length === 0 ? (
-                <p className={styles.empty}>No notifications.</p>
-              ) : (
-                notifications.map((item, index) => (
-                  <article
-                    key={`notification-${item.id}-${index}`}
-                    className={styles.notification}
-                  >
-                    <span aria-hidden />
-                    <p>{item.message}</p>
-                  </article>
-                ))
-              )}
+            <div className={styles.leaveHead}>
+              <h2>Quick actions</h2>
+            </div>
+            <div className={styles.quickActions}>
+              <Link href="/employee/leave?apply=1" className={styles.quickAction}>
+                <span>
+                  <CalendarDays size={16} />
+                  Apply for leave
+                </span>
+                <ArrowRight size={16} />
+              </Link>
+              <Link href="/employee/expenses" className={styles.quickAction}>
+                <span>
+                  <Receipt size={16} />
+                  Submit expense claim
+                </span>
+                <ArrowRight size={16} />
+              </Link>
+              <Link href="/employee/profile" className={styles.quickAction}>
+                <span>
+                  <Mail size={16} />
+                  View my profile
+                </span>
+                <ArrowRight size={16} />
+              </Link>
             </div>
           </section>
-        </aside>
+        </div>
       </div>
+
+      <SimpleModal
+        open={createOpen}
+        title="New announcement"
+        fields={createAnnouncementFields}
+        submitLabel="Publish"
+        submitIcon={<Megaphone size={15} strokeWidth={2.25} />}
+        showClose
+        appearance="soft"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreateAnnouncement}
+      />
     </div>
   );
 }

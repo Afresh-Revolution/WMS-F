@@ -136,9 +136,9 @@ export type CreatedEmail = {
 export const secretaryStatCards: Array<Omit<SecretaryStat, "value">> = [
   { id: "pending", label: "Pending email requests", tag: "Action" },
   { id: "failed", label: "Failed email creations", tag: "Retry" },
-  { id: "today", label: "Meetings today", tag: "Today" },
-  { id: "review", label: "Awaiting review", tag: "Queue" },
-  { id: "upcoming", label: "Open email requests", tag: "In progress" },
+  { id: "created", label: "Recently created", tag: "7 days" },
+  { id: "suspended", label: "Suspended emails", tag: "On hold" },
+  { id: "deactivation", label: "Awaiting deactivation", tag: "Pending" },
 ];
 
 export type MeetingFilter =

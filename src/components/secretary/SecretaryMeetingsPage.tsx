@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Clock3,
   Link2,
+  List,
   MapPin,
   Plus,
   Search,
@@ -21,7 +22,7 @@ import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { secretaryApi } from "@/lib/api";
-import { listFrom, nestedStr, num, str } from "@/lib/api/mappers";
+import { avatarColor, initials, listFrom, nestedStr, num, str } from "@/lib/api/mappers";
 import {
   meetingFilterFromPath,
   meetingFilterHrefs,
@@ -141,11 +142,22 @@ const emptyCreateForm = {
   for: "Admin",
   organiser: "",
   date: "",
-  time: "",
+  time: "10:00",
   mins: "60",
   location: "",
   virtualLink: "",
+  reminder: "30",
+  attendeeDraft: "",
+  agendaDraft: "",
 };
+
+function addToken(list: string[], value: string) {
+  const next = value.trim();
+  if (!next || list.some((item) => item.toLowerCase() === next.toLowerCase())) {
+    return list;
+  }
+  return [...list, next];
+}
 
 export function SecretaryMeetingsPage() {
   const { runAction } = usePageActions();
@@ -155,6 +167,8 @@ export function SecretaryMeetingsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [created, setCreated] = useState<ManagedMeeting[]>([]);
   const [form, setForm] = useState(emptyCreateForm);
+  const [attendees, setAttendees] = useState<string[]>([]);
+  const [agenda, setAgenda] = useState<string[]>([]);
 
   const { data, loading, error } = useAsyncData(
     () => secretaryApi.listMeetings(),
@@ -213,11 +227,25 @@ export function SecretaryMeetingsPage() {
   function closeCreate() {
     setCreateOpen(false);
     setForm(emptyCreateForm);
+    setAttendees([]);
+    setAgenda([]);
   }
 
   function openCreate() {
     setForm(emptyCreateForm);
+    setAttendees([]);
+    setAgenda([]);
     setCreateOpen(true);
+  }
+
+  function addAttendee() {
+    setAttendees((current) => addToken(current, form.attendeeDraft));
+    setForm((current) => ({ ...current, attendeeDraft: "" }));
+  }
+
+  function addAgendaItem() {
+    setAgenda((current) => addToken(current, form.agendaDraft));
+    setForm((current) => ({ ...current, agendaDraft: "" }));
   }
 
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -234,10 +262,18 @@ export function SecretaryMeetingsPage() {
       duration: `${mins}m`,
       location,
       virtual: Boolean(form.virtualLink) || location.toLowerCase().includes("virtual"),
-      attendees: 2,
+      attendees: Math.max(attendees.length, 1),
       audience: mapAudience(form.for),
       organiser: form.organiser.trim() || undefined,
       virtualLink: form.virtualLink.trim() || undefined,
+      reminder: form.reminder,
+      people: attendees.map((name, index) => ({
+        id: `attendee-${index}`,
+        name,
+        initials: initials(name),
+        avatarColor: avatarColor(name),
+      })),
+      agenda,
     };
     await runAction("Schedule meeting", async () => {
       const startsAt = `${date}T${form.time || "10:00"}:00`;
@@ -260,8 +296,12 @@ export function SecretaryMeetingsPage() {
         organiser: form.organiser.trim() || undefined,
         organizerName: form.organiser.trim() || undefined,
         audience: next.audience === "For HOD" ? "HOD" : "ADMIN",
-        reminders: [],
-        attendees: [],
+        reminderMinutes: Number(form.reminder),
+        reminders: [{ minutesBefore: Number(form.reminder) }],
+        attendees,
+        attendeeNames: attendees,
+        agenda,
+        agendaItems: agenda,
       });
       setCreated((current) => [...current, next]);
     });
@@ -426,10 +466,16 @@ export function SecretaryMeetingsPage() {
             aria-labelledby="create-meeting-title"
             onClick={(event) => event.stopPropagation()}
           >
+            <div className={styles.modalAccent} aria-hidden />
             <div className={styles.modalHead}>
-              <h2 id="create-meeting-title" className={styles.modalTitle}>
-                Create meeting
-              </h2>
+              <div>
+                <h2 id="create-meeting-title" className={styles.modalTitle}>
+                  Create meeting
+                </h2>
+                <p className={styles.modalCopy}>
+                  Schedule a meeting for Admin or a HOD.
+                </p>
+              </div>
               <button
                 type="button"
                 className={styles.modalClose}
@@ -439,115 +485,114 @@ export function SecretaryMeetingsPage() {
                 <X size={16} />
               </button>
             </div>
-            <p className={styles.modalCopy}>
-              Schedule a meeting for Admin or a HOD.
-            </p>
             <form className={styles.modalForm} onSubmit={handleCreate}>
-              <label className={styles.modalField}>
-                <span>
-                  Title <em>*</em>
-                </span>
-                <input
-                  name="title"
-                  value={form.title}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      title: event.target.value,
-                    }))
-                  }
-                  placeholder="e.g. Weekly leadership sync"
-                  required
-                />
-              </label>
-
-              <div className={styles.modalPair}>
-                <label className={styles.modalField}>
-                  <span>For</span>
-                  <select
-                    name="for"
-                    value={form.for}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        for: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="Admin">Admin</option>
-                    <option value="HOD">HOD</option>
-                  </select>
-                </label>
-                <label className={styles.modalField}>
-                  <span>Organiser</span>
-                  <input
-                    name="organiser"
-                    value={form.organiser}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        organiser: event.target.value,
-                      }))
-                    }
-                    placeholder="e.g. Nina Patel"
-                  />
-                </label>
-              </div>
-
-              <div className={styles.modalTriple}>
+              <div className={styles.modalBody}>
                 <label className={styles.modalField}>
                   <span>
-                    Date <em>*</em>
+                    Title <em>*</em>
                   </span>
                   <input
-                    type="date"
-                    name="date"
-                    value={form.date}
+                    name="title"
+                    value={form.title}
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        date: event.target.value,
+                        title: event.target.value,
                       }))
                     }
+                    placeholder="e.g. Weekly leadership sync"
                     required
                   />
                 </label>
-                <label className={styles.modalField}>
-                  <span>Time</span>
-                  <input
-                    type="time"
-                    name="time"
-                    value={form.time}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        time: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-                <label className={styles.modalField}>
-                  <span>Mins</span>
-                  <input
-                    type="number"
-                    name="mins"
-                    min={15}
-                    step={15}
-                    value={form.mins}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        mins: event.target.value,
-                      }))
-                    }
-                  />
-                </label>
-              </div>
 
-              <label className={styles.modalField}>
-                <span>Location</span>
-                <span className={styles.iconInput}>
-                  <MapPin size={15} />
+                <div className={styles.modalPair}>
+                  <label className={styles.modalField}>
+                    <span>For</span>
+                    <select
+                      name="for"
+                      value={form.for}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          for: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="Admin">Admin</option>
+                      <option value="HOD">HOD</option>
+                    </select>
+                  </label>
+                  <label className={styles.modalField}>
+                    <span>Organiser</span>
+                    <input
+                      name="organiser"
+                      value={form.organiser}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          organiser: event.target.value,
+                        }))
+                      }
+                      placeholder="David Okoye (Admin)"
+                    />
+                  </label>
+                </div>
+
+                <div className={styles.modalTriple}>
+                  <label className={styles.modalField}>
+                    <span>
+                      Date <em>*</em>
+                    </span>
+                    <input
+                      type="date"
+                      name="date"
+                      value={form.date}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          date: event.target.value,
+                        }))
+                      }
+                      required
+                    />
+                  </label>
+                  <label className={styles.modalField}>
+                    <span>Time</span>
+                    <input
+                      type="time"
+                      name="time"
+                      value={form.time}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          time: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className={styles.modalField}>
+                    <span>Mins</span>
+                    <input
+                      type="number"
+                      name="mins"
+                      min={15}
+                      step={15}
+                      value={form.mins}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          mins: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+
+                <label className={styles.modalField}>
+                  <span className={styles.fieldLabel}>
+                    <MapPin size={14} />
+                    Location
+                  </span>
                   <input
                     name="location"
                     value={form.location}
@@ -559,13 +604,13 @@ export function SecretaryMeetingsPage() {
                     }
                     placeholder="e.g. Boardroom A"
                   />
-                </span>
-              </label>
+                </label>
 
-              <label className={styles.modalField}>
-                <span>Virtual link</span>
-                <span className={styles.iconInput}>
-                  <Link2 size={15} />
+                <label className={styles.modalField}>
+                  <span className={styles.fieldLabel}>
+                    <Link2 size={14} />
+                    Virtual link
+                  </span>
                   <input
                     type="url"
                     name="virtualLink"
@@ -578,8 +623,136 @@ export function SecretaryMeetingsPage() {
                     }
                     placeholder="https://meet.afresh.co/..."
                   />
-                </span>
-              </label>
+                </label>
+
+                <label className={styles.modalField}>
+                  <span className={styles.fieldLabel}>
+                    <Bell size={14} />
+                    Reminder (minutes before)
+                  </span>
+                  <select
+                    name="reminder"
+                    value={form.reminder}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        reminder: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="15">15</option>
+                    <option value="30">30</option>
+                    <option value="45">45</option>
+                    <option value="60">60</option>
+                  </select>
+                </label>
+
+                <div className={styles.modalField}>
+                  <span className={styles.fieldLabel}>
+                    <Users size={14} />
+                    Attendees
+                  </span>
+                  <div className={styles.addRow}>
+                    <input
+                      name="attendeeDraft"
+                      value={form.attendeeDraft}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          attendeeDraft: event.target.value,
+                        }))
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addAttendee();
+                        }
+                      }}
+                      placeholder="Add a name and press Enter"
+                    />
+                    <button
+                      type="button"
+                      className={styles.addButton}
+                      aria-label="Add attendee"
+                      onClick={addAttendee}
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  {attendees.length > 0 ? (
+                    <div className={styles.chipList}>
+                      {attendees.map((name) => (
+                        <button
+                          key={name}
+                          type="button"
+                          className={styles.chip}
+                          onClick={() =>
+                            setAttendees((current) =>
+                              current.filter((item) => item !== name),
+                            )
+                          }
+                        >
+                          {name}
+                          <X size={12} />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className={styles.modalField}>
+                  <span className={styles.fieldLabel}>
+                    <List size={14} />
+                    Agenda items
+                  </span>
+                  <div className={styles.addRow}>
+                    <input
+                      name="agendaDraft"
+                      value={form.agendaDraft}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          agendaDraft: event.target.value,
+                        }))
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addAgendaItem();
+                        }
+                      }}
+                      placeholder="Add an agenda item and press Enter"
+                    />
+                    <button
+                      type="button"
+                      className={styles.addButton}
+                      aria-label="Add agenda item"
+                      onClick={addAgendaItem}
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  {agenda.length > 0 ? (
+                    <div className={styles.chipList}>
+                      {agenda.map((item) => (
+                        <button
+                          key={item}
+                          type="button"
+                          className={styles.chip}
+                          onClick={() =>
+                            setAgenda((current) =>
+                              current.filter((entry) => entry !== item),
+                            )
+                          }
+                        >
+                          {item}
+                          <X size={12} />
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
 
               <div className={styles.modalActions}>
                 <button

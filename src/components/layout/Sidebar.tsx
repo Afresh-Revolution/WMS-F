@@ -43,6 +43,9 @@ import {
 } from "lucide-react";
 import { AfreshLogo } from "./AfreshLogo";
 import { useCurrentUser } from "./CurrentUserProvider";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import { secretaryApi } from "@/lib/api";
+import { listFrom } from "@/lib/api/mappers";
 import styles from "./Sidebar.module.css";
 
 type NavItem = {
@@ -100,6 +103,8 @@ const secretaryPrimaryNav: NavItem[] = [
   { href: "/secretary/meetings", label: "Meetings", icon: CalendarDays },
   { href: "/secretary/tasks", label: "Management Tasks", icon: ListTodo },
   { href: "/secretary/reminders", label: "Reminders", icon: Bell },
+  { href: "/secretary/notifications", label: "Notifications", icon: Bell },
+  { href: "/secretary/profile", label: "Profile", icon: UserRound },
 ];
 
 const employeePrimaryNav: NavItem[] = [
@@ -154,6 +159,14 @@ function isEmployeePath(pathname: string) {
   return pathname === "/employee" || pathname.startsWith("/employee/");
 }
 
+function isUnreadNotification(record: Record<string, unknown>) {
+  if (typeof record.unread === "boolean") return record.unread;
+  if (typeof record.isUnread === "boolean") return record.isUnread;
+  if (typeof record.isRead === "boolean") return !record.isRead;
+  if (typeof record.read === "boolean") return !record.read;
+  return !record.readAt;
+}
+
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") {
     return pathname === "/" || pathname === "/dashboard";
@@ -178,8 +191,20 @@ export function Sidebar({
   const pathname = usePathname();
   const secretary = isSecretaryPath(pathname);
   const employee = isEmployeePath(pathname);
+  const { data: secretaryNotifications } = useAsyncData(
+    () => (secretary ? secretaryApi.listNotifications() : Promise.resolve([])),
+    [secretary],
+  );
+  const unreadNotifications = secretary
+    ? listFrom(secretaryNotifications ?? undefined).filter(isUnreadNotification)
+        .length
+    : 0;
   const primaryNav = secretary
-    ? secretaryPrimaryNav
+    ? secretaryPrimaryNav.map((item) =>
+        item.href === "/secretary/notifications" && unreadNotifications > 0
+          ? { ...item, badge: String(unreadNotifications) }
+          : item,
+      )
     : employee
       ? employeePrimaryNav
       : adminPrimaryNav;

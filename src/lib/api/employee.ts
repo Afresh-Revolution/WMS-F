@@ -131,15 +131,67 @@ export const employeeApi = {
 
   meetings: {
     list: (query?: Record<string, unknown>) =>
-      apiRequest<ApiListResponse<Record<string, unknown>>>(
-        path("/meetings", query),
-      ).then(unwrapList),
+      firstWorking(
+        [
+          () =>
+            apiRequest<ApiListResponse<Record<string, unknown>>>(
+              path("/meetings", query),
+            ).then(unwrapList),
+          () =>
+            apiRequest<ApiListResponse<Record<string, unknown>>>(
+              path("/schedule", query),
+            ).then(unwrapList),
+          () =>
+            apiRequest<ApiListResponse<Record<string, unknown>>>(
+              `/meetings${buildQuery(query)}`,
+            ).then(unwrapList),
+        ],
+        "Meetings were not found.",
+      ),
     schedule: (query?: Record<string, unknown>) =>
       apiRequest<ApiListResponse<Record<string, unknown>>>(
         path("/schedule", query),
       ).then(unwrapList),
     get: (id: Id) =>
-      apiRequest<unknown>(path(`/meetings/${id}`)).then(unwrapData),
+      firstWorking(
+        [
+          () => apiRequest<unknown>(path(`/meetings/${id}`)).then(unwrapData),
+          () => apiRequest<unknown>(`/meetings/${id}`).then(unwrapData),
+        ],
+        "Meeting was not found.",
+      ),
+    create: (body: Record<string, unknown>) =>
+      firstWorking(
+        [
+          () =>
+            apiRequest<unknown>(path("/meetings"), {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>("/meetings", {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+        ],
+        "Create meeting API was not found.",
+      ),
+    update: (id: Id, body: Record<string, unknown>) =>
+      firstWorking(
+        [
+          () =>
+            apiRequest<unknown>(path(`/meetings/${id}`), {
+              method: "PATCH",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>(`/meetings/${id}`, {
+              method: "PATCH",
+              body,
+            }).then(unwrapData),
+        ],
+        "Update meeting API was not found.",
+      ),
   },
 
   attendance: {

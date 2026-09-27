@@ -367,12 +367,17 @@ export function SecretaryRemindersPage() {
               </span>
               <div className={styles.rowBody}>
                 <h2 className={styles.name}>{reminder.title}</h2>
-                <p className={styles.when}>
-                  {reminder.when} · {reminder.dateLabel} · {reminder.time}
-                </p>
-                <div className={styles.meta}>
-                  {reminder.link ? (
-                    reminder.linkHref ? (
+                <div className={styles.whenRow}>
+                  <p className={styles.when}>
+                    {reminder.when} · {reminder.dateLabel} · {reminder.time}
+                  </p>
+                  <span className={channelClass[reminder.channel]}>
+                    {reminder.channel}
+                  </span>
+                </div>
+                {reminder.link ? (
+                  <div className={styles.meta}>
+                    {reminder.linkHref ? (
                       <Link href={reminder.linkHref} className={styles.related}>
                         <Link2 size={13} />
                         {reminder.link}
@@ -382,12 +387,9 @@ export function SecretaryRemindersPage() {
                         <Link2 size={13} />
                         {reminder.link}
                       </span>
-                    )
-                  ) : null}
-                  <span className={channelClass[reminder.channel]}>
-                    {reminder.channel}
-                  </span>
-                </div>
+                    )}
+                  </div>
+                ) : null}
               </div>
               <div className={styles.rowEnd}>
                 {reminder.due && !reminder.done ? (

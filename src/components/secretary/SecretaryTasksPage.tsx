@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
+import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
 import { secretaryApi } from "@/lib/api";
@@ -19,6 +20,7 @@ import { listFrom, nestedStr, str } from "@/lib/api/mappers";
 import {
   boardColumns,
   type BoardTask,
+  type TaskAudience,
   type TaskColumn,
   type TaskPriority,
 } from "@/data/secretary";
@@ -27,10 +29,30 @@ import styles from "./SecretaryTasksPage.module.css";
 const emptyForm = {
   title: "",
   description: "",
-  audience: "For Admin",
+  audience: "Admin",
   priority: "Medium",
-  due: "Due Tomorrow",
+  assignee: "",
+  due: "",
 };
+
+function audienceLabel(value: string): TaskAudience {
+  return value.toLowerCase().includes("hod") ? "For HOD" : "For Admin";
+}
+
+function formatDueLabel(value: string): string {
+  if (!value) return "Due tomorrow";
+  if (!/^\d{4}-\d{2}-\d{2}/.test(value)) return value;
+  const [year, month, day] = value.split("-").map(Number);
+  const due = new Date(year, (month ?? 1) - 1, day ?? 1);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diff = Math.round((due.getTime() - today.getTime()) / 86_400_000);
+  if (diff < 0) return "Overdue";
+  if (diff === 0) return "Due today";
+  if (diff === 1) return "Due tomorrow";
+  if (diff <= 7) return `Due in ${diff} days`;
+  return `Due ${due.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+}
 
 function mapPriority(value: unknown): TaskPriority {
   const raw = str(value).toLowerCase();
@@ -76,9 +98,7 @@ function mapTask(record: Record<string, unknown>, index: number): BoardTask {
     title: str(record.title ?? record.name),
     description: str(record.description ?? record.detail),
     priority: mapPriority(record.priority),
-    audience: str(record.audience).toLowerCase().includes("hod")
-      ? "For HOD"
-      : "For Admin",
+    audience: audienceLabel(str(record.audience)),
     owner: nestedStr(
       record.owner ?? record.assignee ?? record.assignedTo,
       ["name", "fullName"],
@@ -98,6 +118,7 @@ const priorityClass: Record<TaskPriority, string> = {
 };
 
 export function SecretaryTasksPage() {
+  const { user } = useCurrentUser();
   const { runAction } = usePageActions();
   const searchRef = useRef<HTMLInputElement>(null);
   const [columns, setColumns] = useState<Record<string, TaskColumn>>({});
@@ -179,6 +200,14 @@ export function SecretaryTasksPage() {
     },
   ];
 
+  function openCreate() {
+    setForm({
+      ...emptyForm,
+      assignee: user?.name ?? "",
+    });
+    setCreateOpen(true);
+  }
+
   function closeCreate() {
     setCreateOpen(false);
     setForm(emptyForm);
@@ -204,10 +233,10 @@ export function SecretaryTasksPage() {
       title: form.title.trim(),
       description: form.description.trim(),
       priority: mapPriority(form.priority),
-      audience: form.audience === "For HOD" ? "For HOD" : "For Admin",
-      owner: "",
-      due: form.due,
-      overdue: form.due.toLowerCase().includes("overdue"),
+      audience: audienceLabel(form.audience),
+      owner: form.assignee.trim(),
+      due: formatDueLabel(form.due),
+      overdue: formatDueLabel(form.due).toLowerCase().includes("overdue"),
       column: "Open",
     };
     await runAction("New task", async () => {
@@ -217,7 +246,7 @@ export function SecretaryTasksPage() {
         priority: next.priority.toUpperCase(),
         audience: next.audience === "For HOD" ? "HOD" : "ADMIN",
         assignedTo: next.owner || undefined,
-        dueDate: dueDateFromLabel(next.due),
+        dueDate: dueDateFromLabel(form.due),
         status: "TODO",
       });
       setCreated((current) => [...current, next]);
@@ -266,7 +295,7 @@ export function SecretaryTasksPage() {
         <button
           type="button"
           className={styles.createButton}
-          onClick={() => setCreateOpen(true)}
+          onClick={openCreate}
         >
           <Plus size={16} />
           New task
@@ -369,7 +398,7 @@ export function SecretaryTasksPage() {
           >
             <div className={styles.modalHead}>
               <h2 id="create-task-title" className={styles.modalTitle}>
-                New task
+                Create management task
               </h2>
               <button
                 type="button"
@@ -381,11 +410,13 @@ export function SecretaryTasksPage() {
               </button>
             </div>
             <p className={styles.modalCopy}>
-              Add a task for Admin or a HOD.
+              Add a task for Admin or a HOD and set its deadline.
             </p>
             <form className={styles.modalForm} onSubmit={handleCreate}>
               <label className={styles.modalField}>
-                <span>Title</span>
+                <span>
+                  Title <em>*</em>
+                </span>
                 <input
                   value={form.title}
                   onChange={(event) =>
@@ -394,11 +425,12 @@ export function SecretaryTasksPage() {
                       title: event.target.value,
                     }))
                   }
+                  placeholder="e.g. Prepare board pack"
                   required
                 />
               </label>
               <label className={styles.modalField}>
-                <span>Description</span>
+                <span>Detail</span>
                 <textarea
                   rows={3}
                   value={form.description}
@@ -408,6 +440,7 @@ export function SecretaryTasksPage() {
                       description: event.target.value,
                     }))
                   }
+                  placeholder="What needs doing?"
                 />
               </label>
               <div className={styles.modalPair}>
@@ -422,8 +455,8 @@ export function SecretaryTasksPage() {
                       }))
                     }
                   >
-                    <option>For Admin</option>
-                    <option>For HOD</option>
+                    <option>Admin</option>
+                    <option>HOD</option>
                   </select>
                 </label>
                 <label className={styles.modalField}>
@@ -443,18 +476,37 @@ export function SecretaryTasksPage() {
                   </select>
                 </label>
               </div>
-              <label className={styles.modalField}>
-                <span>Due</span>
-                <input
-                  value={form.due}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      due: event.target.value,
-                    }))
-                  }
-                />
-              </label>
+              <div className={styles.modalPair}>
+                <label className={styles.modalField}>
+                  <span>Assignee</span>
+                  <input
+                    value={form.assignee}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        assignee: event.target.value,
+                      }))
+                    }
+                    placeholder="Name"
+                  />
+                </label>
+                <label className={styles.modalField}>
+                  <span>
+                    Due <em>*</em>
+                  </span>
+                  <input
+                    type="date"
+                    value={form.due}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        due: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+              </div>
               <div className={styles.modalActions}>
                 <button
                   type="button"
@@ -464,6 +516,7 @@ export function SecretaryTasksPage() {
                   Cancel
                 </button>
                 <button type="submit" className={styles.modalSave}>
+                  <Plus size={15} />
                   Create task
                 </button>
               </div>

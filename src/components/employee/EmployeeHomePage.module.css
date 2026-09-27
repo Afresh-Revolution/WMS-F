@@ -144,7 +144,7 @@
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -158,25 +158,47 @@
 }
 
 .statCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   padding: 16px 18px;
 }
 
+.statCard h2 {
+  margin: 0;
+  color: #a8a29e;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.statRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .statCard strong {
-  display: block;
   color: var(--afresh-orange);
   font-family: var(--font-display);
-  font-size: 25px;
+  font-size: 32px;
   font-weight: 400;
+  line-height: 1;
 }
 
-.statCard h2 {
-  margin: 3px 0;
-  color: var(--afresh-ink);
-  font-size: 12px;
+.statCard p {
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
-.statCard p,
 .row p,
 .leaveRequest p {
   margin: 0;
@@ -184,41 +206,243 @@
   font-size: 10px;
 }
 
-.dashboardGrid {
+.board {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(250px, 1fr);
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
   gap: 14px;
   align-items: start;
 }
 
-.mainColumn,
-.sideColumn {
+.boardCol {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
+}
+
+.meetingsCard {
+  margin-top: 64px;
+}
+
+.quickActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 18px;
+}
+
+.quickAction {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid #f0ece8;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--afresh-ink);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.quickAction span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.quickAction span svg {
+  flex-shrink: 0;
+  color: var(--afresh-orange);
+}
+
+.quickAction > svg {
+  flex-shrink: 0;
+  color: #d6d3d1;
+}
+
+.quickAction:hover {
+  background: #fffdfb;
+  border-color: #f0d4c4;
 }
 
 .sectionHeader {
   justify-content: space-between;
-  min-height: 46px;
-  padding: 0 18px;
-  border-bottom: 1px solid #f1ede9;
+  min-height: 52px;
+  padding: 4px 20px 0;
 }
 
-.sectionHeader h2 {
-  gap: 7px;
+.sectionHeader h2,
+.leaveHead h2 {
+  gap: 8px;
   margin: 0;
   color: var(--afresh-orange);
-  font-family: var(--font-display);
   font-size: 16px;
-  font-weight: 400;
+  font-weight: 600;
 }
 
 .sectionHeader > a,
-.leaveRequest > a {
+.sectionHeader > button {
+  border: 0;
+  background: transparent;
   color: var(--afresh-orange);
-  font-size: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.sectionHeader > a:hover,
+.sectionHeader > button:hover {
+  text-decoration: underline;
+}
+
+.sectionHeaderLined {
+  min-height: 56px;
+  padding: 4px 20px;
+  border-bottom: 1px solid #f1ede9;
+}
+
+.meetingList,
+.announcementList {
+  display: flex;
+  flex-direction: column;
+}
+
+.meetingRow,
+.announcementRow {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1ede9;
+}
+
+.meetingRow:last-child,
+.announcementRow:last-child {
+  border-bottom: none;
+}
+
+.meetingRow h3,
+.announcementRow h3 {
+  margin: 0;
+  color: var(--afresh-ink);
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.4;
+}
+
+.meetingWhen {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 0;
+  color: #a8a29e;
+  font-size: 13px;
+}
+
+.meetingPlace,
+.announcementRow p {
+  margin: 4px 0 0;
+  color: #a8a29e;
+  font-size: 13px;
+}
+
+.cardLink {
+  display: inline-flex;
+  align-items: center;
+  padding: 14px 20px 16px;
+  color: var(--afresh-orange);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.cardLink:hover {
+  text-decoration: underline;
+}
+
+.taskList {
+  display: flex;
+  flex-direction: column;
+}
+
+.taskRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #f1ede9;
+  text-decoration: none;
+}
+
+.taskRow:last-child {
+  border-bottom: none;
+}
+
+.taskRow:hover {
+  background: #fffdfb;
+}
+
+.taskCheck {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: 1.5px solid #d6d3d1;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.taskBody {
+  min-width: 0;
+  flex: 1;
+}
+
+.taskBody h3 {
+  margin: 0;
+  color: var(--afresh-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.taskBody p {
+  margin: 4px 0 0;
+  color: #a8a29e;
+  font-size: 12px;
+}
+
+.taskBadge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.taskBadgeSoon {
+  background: #fef3c7;
+  color: #a16207;
+}
+
+.taskBadgeOverdue {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.taskChevron {
+  flex-shrink: 0;
+  color: #d6d3d1;
+}
+
+.leaveHead {
+  padding: 18px 20px 0;
+}
+
+.leaveHead p {
+  margin: 6px 0 0;
+  color: #a8a29e;
+  font-size: 13px;
 }
 
 .rows {
@@ -317,29 +541,50 @@
 }
 
 .balanceList {
-  padding: 5px 18px 14px;
+  padding: 8px 20px 6px;
 }
 
 .balance {
-  margin-top: 11px;
+  margin-top: 16px;
 }
 
 .balance > div:first-child {
   justify-content: space-between;
-  margin-bottom: 6px;
-  font-size: 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #44403c;
 }
 
 .balance strong {
   color: var(--afresh-orange);
-  font-size: 9px;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .meter {
-  height: 5px;
+  height: 6px;
   overflow: hidden;
   border-radius: 999px;
   background: #f3e8e2;
+}
+
+.applyLeave {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  margin: 18px 20px 20px;
+  border: 1px solid #f0d4c4;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--afresh-orange);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.applyLeave:hover {
+  background: #fff7ed;
 }
 
 .meter span {
@@ -373,7 +618,7 @@
 }
 
 @media (max-width: 900px) {
-  .dashboardGrid {
+  .board {
     grid-template-columns: 1fr;
   }
 }
@@ -391,7 +636,10 @@
     padding: 25px 22px;
   }
 
-  .stats,
+  .stats {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .splitCards {
     grid-template-columns: 1fr;
   }

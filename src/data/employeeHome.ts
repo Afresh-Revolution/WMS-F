@@ -5,12 +5,10 @@ export type EmployeeStatCard = {
 };
 
 export const employeeStatCards: Array<Omit<EmployeeStatCard, "value">> = [
-  { label: "leave days remaining", hint: "Current balance" },
-  { label: "assigned tasks", hint: "Currently open" },
-  { label: "overdue tasks", hint: "Needs attention" },
-  { label: "upcoming meetings", hint: "Next 7 days" },
-  { label: "expenses in progress", hint: "Awaiting attention" },
-  { label: "open reimbursements", hint: "Being processed" },
+  { label: "Annual leave days left", hint: `${new Date().getFullYear()} balance` },
+  { label: "Open tasks", hint: "This week" },
+  { label: "Upcoming meetings", hint: "Next 7 days" },
+  { label: "Expense pending", hint: "Under review" },
 ];
 
 export type EmployeeTaskStatus =

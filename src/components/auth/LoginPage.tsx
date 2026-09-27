@@ -175,12 +175,12 @@ export function LoginPage() {
               />
               <span>Keep me signed in</span>
             </label>
-          ) : null}
-          {options.forgotPasswordEnabled ? (
-            <Link href="/forgot-password" className={styles.textLink}>
-              Forgot password?
-            </Link>
-          ) : null}
+          ) : (
+            <span />
+          )}
+          <Link href="/forgot-password" className={styles.textLink}>
+            Forgot password?
+          </Link>
         </div>
 
         {error ? (
@@ -200,13 +200,6 @@ export function LoginPage() {
           ) : null}
         </button>
       </form>
-
-      <p className={styles.support}>
-        Need help?{" "}
-        <Link href="/help" className={styles.textLink}>
-          Contact support
-        </Link>
-      </p>
     </AuthShell>
   );
 }
