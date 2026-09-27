@@ -104,6 +104,22 @@ export const employeeApi = {
         path("/assigned-to-me", query),
       ).then(unwrapList),
     get: (id: Id) => apiRequest<unknown>(path(`/tasks/${id}`)).then(unwrapData),
+    create: (body: Record<string, unknown>) =>
+      firstWorking(
+        [
+          () =>
+            apiRequest<unknown>(path("/tasks"), {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>("/tasks", {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+        ],
+        "Create task API was not found.",
+      ),
     update: (id: Id, body: Record<string, unknown>) =>
       apiRequest<unknown>(path(`/tasks/${id}`), { method: "PATCH", body }).then(
         unwrapData,
@@ -318,6 +334,22 @@ export const employeeApi = {
         method: "POST",
         body,
       }).then(unwrapData),
+    cancel: (id: Id, body?: Record<string, unknown>) =>
+      firstWorking(
+        [
+          () =>
+            apiRequest<unknown>(path(`/reimbursements/${id}/cancel`), {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+          () =>
+            apiRequest<unknown>(path(`/expenses/${id}/cancel`), {
+              method: "POST",
+              body,
+            }).then(unwrapData),
+        ],
+        "Could not cancel this claim.",
+      ),
   },
 
   announcements: {
@@ -338,6 +370,21 @@ export const employeeApi = {
     ).then(unwrapList),
 
   records: () => apiRequest<unknown>(path("/records")).then(unwrapData),
+
+  documents: {
+    list: (query?: Record<string, unknown>) =>
+      apiRequest<ApiListResponse<Record<string, unknown>>>(
+        path("/documents", query),
+      ).then(unwrapList),
+    create: (body: FormData) =>
+      apiRequest<unknown>(path("/documents"), { method: "POST", body }).then(
+        unwrapData,
+      ),
+    download: (id: Id) =>
+      apiRequest<unknown>(path(`/documents/${id}/download`), {
+        method: "POST",
+      }).then(unwrapData),
+  },
 
   notifications: {
     list: (query?: Record<string, unknown>) =>

@@ -1,29 +1,34 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
 import {
-  BadgeCheck,
-  BriefcaseBusiness,
+  Briefcase,
+  Building2,
   CalendarDays,
-  Contact,
-  IdCard,
   Mail,
   MapPin,
+  Pencil,
   Phone,
   Search,
-  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
-import { HideOnManager } from "@/components/layout/HideOnManager";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
-import { useManagerPortal } from "@/hooks/useManagerPortal";
+import { usePageActions } from "@/hooks/usePageActions";
 import { formatRoleLabel } from "@/lib/currentUser";
-import { asRecord, employeeApi, managerApi, profileApi, unwrapRecord } from "@/lib/api";
-import { initials, nestedStr, str } from "@/lib/api/mappers";
+import {
+  employeeApi,
+  listLeaveBalances,
+  profileApi,
+  unwrapRecord,
+} from "@/lib/api";
+import { initials, listFrom, mapLeaveBalance, nestedStr, str } from "@/lib/api/mappers";
 import styles from "./EmployeeProfilePage.module.css";
+
+type ProfileTab = "Overview" | "Leave" | "Expenses";
 
 function dash(value: string) {
   return value.trim() || "—";
@@ -54,20 +59,11 @@ function formatDisplayDate(value: string) {
   const iso = /^\d{4}-\d{2}-\d{2}/.test(trimmed) ? trimmed.slice(0, 10) : trimmed;
   const parsed = Date.parse(iso);
   if (!Number.isFinite(parsed)) return trimmed;
-  return new Date(parsed).toLocaleDateString("en-GB", {
+  return new Date(parsed).toLocaleDateString("en-US", {
     day: "numeric",
-    month: "short",
+    month: "long",
     year: "numeric",
   });
-}
-
-function formatEmergency(value: unknown) {
-  if (typeof value === "string" && value.trim()) return value.trim();
-  const record = asRecord(value);
-  const name = firstText(record.name, record.fullName);
-  const relationship = firstText(record.relationship, record.relation);
-  const phone = firstText(record.phone, record.mobile);
-  return [name, relationship, phone].filter(Boolean).join(" · ");
 }
 
 function titleCaseStatus(value: string) {
@@ -76,25 +72,23 @@ function titleCaseStatus(value: string) {
   return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
 }
 
+function fieldValue(value: string) {
+  return value === "—" ? "" : value;
+}
+
 export function EmployeeProfilePage() {
-  const manager = useManagerPortal();
   const { user: sessionUser } = useCurrentUser();
-  const { data, loading, error } = useAsyncData(async () => {
-    if (manager) {
-      const [profile, employment] = await Promise.all([
-        managerApi.getProfile().catch(() => null),
-        managerApi.getEmploymentRecord().catch(() => null),
-      ]);
-      return { profile, employment };
-    }
-    const [profile, employment] = await Promise.all([
+  const { runAction } = usePageActions();
+  const [tab, setTab] = useState<ProfileTab>("Overview");
+  const [editOpen, setEditOpen] = useState(false);
+  const { data, loading, error, refetch } = useAsyncData(async () => {
+    const [profile, employment, balances] = await Promise.all([
       employeeApi.profile.get().catch(() => profileApi.get().catch(() => null)),
-      employeeApi.employmentRecord.get().catch(() =>
-        employeeApi.profile.get().catch(() => null),
-      ),
+      employeeApi.employmentRecord.get().catch(() => null),
+      listLeaveBalances().catch(() => []),
     ]);
-    return { profile, employment };
-  }, [manager]);
+    return { profile, employment, balances };
+  }, []);
 
   const profile = useMemo(() => {
     const profileRoot = unwrapRecord(data?.profile);
@@ -122,26 +116,6 @@ export function EmployeeProfilePage() {
       employee.name,
       sessionUser?.name,
     );
-    const companyEmail = firstText(
-      overview.email,
-      user.email,
-      employee.email,
-      personal.email,
-      sessionUser?.email,
-    );
-    const reportsTo = firstText(
-      overview.manager,
-      employment.manager,
-      employment.reportsTo,
-      employment.reports_to,
-    );
-    const emergency = formatEmergency(
-      personal.emergencyContact ??
-        personal.emergency_contact ??
-        employee.emergencyContact ??
-        employee.emergency_contact,
-    );
-
     return {
       initials:
         firstText(user.initials, overview.initials, employee.initials) ||
@@ -197,8 +171,23 @@ export function EmployeeProfilePage() {
           employee.hireDate,
         ),
       ),
-      reportsTo: dash(reportsTo),
-      companyEmail: dash(companyEmail),
+      reportsTo: dash(
+        firstText(
+          overview.manager,
+          employment.manager,
+          employment.reportsTo,
+          employment.reports_to,
+        ),
+      ),
+      companyEmail: dash(
+        firstText(
+          overview.email,
+          user.email,
+          employee.email,
+          personal.email,
+          sessionUser?.email,
+        ),
+      ),
       personalEmail: dash(
         firstText(
           personal.personalEmail,
@@ -209,10 +198,10 @@ export function EmployeeProfilePage() {
       phone: dash(
         firstText(personal.phone, overview.phone, user.phone, employee.phone),
       ),
-      emergencyContact: dash(emergency),
-      address: dash(
+      location: dash(
         firstText(
           personal.address,
+          personal.location,
           employment.workLocation,
           employment.work_location,
           employee.address,
@@ -222,37 +211,40 @@ export function EmployeeProfilePage() {
     };
   }, [data, sessionUser]);
 
-  const employmentDetails = [
-    { label: "Employee ID", value: profile.employeeId, icon: IdCard },
-    { label: "Department", value: profile.department, icon: BriefcaseBusiness },
-    {
-      label: "Employment type",
-      value: profile.employmentType,
-      icon: BriefcaseBusiness,
-    },
+  const leaveBalances = useMemo(() => {
+    const order = ["annual", "sick", "personal"];
+    return listFrom(data?.balances ?? undefined)
+      .map((record, index) => mapLeaveBalance(record, index))
+      .sort((a, b) => {
+        const ai = order.findIndex((key) => a.label.toLowerCase().includes(key));
+        const bi = order.findIndex((key) => b.label.toLowerCase().includes(key));
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      })
+      .slice(0, 3);
+  }, [data?.balances]);
+
+  const annual = leaveBalances.find((item) =>
+    item.label.toLowerCase().includes("annual"),
+  );
+
+  const employmentRows = [
+    { label: "Role", value: profile.role, icon: Briefcase },
+    { label: "Department", value: profile.department, icon: Building2 },
     { label: "Start date", value: profile.startDate, icon: CalendarDays },
-    { label: "Reports to", value: profile.reportsTo, icon: ShieldCheck },
+    { label: "Employment type", value: profile.employmentType },
+    { label: "Reports to", value: profile.reportsTo },
   ];
-
-  const contactDetails = [
-    { label: "Company email", value: profile.companyEmail, icon: Mail },
-    { label: "Personal email", value: profile.personalEmail, icon: Mail },
-    { label: "Phone", value: profile.phone, icon: Phone },
-    {
-      label: "Emergency contact",
-      value: profile.emergencyContact,
-      icon: Contact,
-    },
-    { label: "Address", value: profile.address, icon: MapPin, wide: true },
-  ];
-
-  const settingsHref = manager ? "/manager/settings" : "/employee/account-settings";
 
   return (
     <div className={styles.page}>
-      <HideOnManager>
       <header className={styles.topBar}>
         <PageDateLabel />
+        {loading ? <p className={styles.statusLine}>Loading profile…</p> : null}
+        {error ? (
+          <p className={styles.statusLine} role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />
@@ -265,83 +257,216 @@ export function EmployeeProfilePage() {
           </ProfileLink>
         </div>
       </header>
-      </HideOnManager>
 
-      <div className={styles.heading}>
-        <p>My profile</p>
-        {loading ? <p>Loading profile…</p> : null}
-        {error ? <p role="alert">{error}</p> : null}
-        <h1>Your employment record</h1>
-        <span>
-          Your personal and employment details. To change contact details, go
-          to{" "}
-          <Link href={settingsHref} className={styles.inlineLink}>
-            Account Settings
-          </Link>
-          .
-        </span>
-      </div>
-
-      <div className={styles.profileGrid}>
-        <section className={styles.identityCard}>
-          <div className={styles.identity}>
-            <div className={styles.avatar}>{profile.initials}</div>
-            <h2>{profile.name}</h2>
-            <p>{profile.role}</p>
-            <span className={styles.activeBadge}>{profile.status}</span>
-          </div>
-
-          <div className={styles.employmentList}>
-            {employmentDetails.map(({ label, value, icon: Icon }) => (
-              <div key={label} className={styles.employmentRow}>
-                <Icon size={15} />
-                <div>
-                  <span>{label}</span>
-                  <strong>{value}</strong>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <div className={styles.rightColumn}>
-          <section className={styles.card}>
-            <h2>
-              <Mail size={16} />
-              Contact
-            </h2>
-            <div className={styles.contactGrid}>
-              {contactDetails.map(({ label, value, icon: Icon, wide }) => (
-                <div
-                  key={label}
-                  className={`${styles.contactRow} ${
-                    wide ? styles.contactWide : ""
-                  }`}
-                >
-                  <Icon size={15} />
-                  <div>
-                    <span>{label}</span>
-                    <strong>{value}</strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className={styles.card}>
-            <h2>
-              <BadgeCheck size={16} />
-              Privacy
-            </h2>
-            <p className={styles.privacy}>
-              This workspace only ever shows <strong>your own records.</strong>{" "}
-              Colleagues&apos; information, company payroll and department-wide
-              data are not accessible here. Salary details are managed by
-              Accounts and are not shown.
-            </p>
-          </section>
+      <div className={styles.header}>
+        <div>
+          <p className={styles.eyebrow}>My profile</p>
+          <h1 className={styles.title}>Your employment record</h1>
+          <p className={styles.subtitle}>
+            View your personal and employment details, leave balance, and
+            request history.
+          </p>
         </div>
+        <button
+          type="button"
+          className={styles.editButton}
+          onClick={() => setEditOpen(true)}
+        >
+          <Pencil size={15} />
+          Edit details
+        </button>
       </div>
+
+      <section className={styles.identityCard}>
+        <div className={styles.identity}>
+          <div className={styles.avatar}>{profile.initials}</div>
+          <div>
+            <h2>{profile.name}</h2>
+            <p>
+              {[profile.role, profile.department].filter((item) => item !== "—").join(" · ") ||
+                "—"}
+            </p>
+            <div className={styles.badges}>
+              <span className={styles.activeBadge}>{profile.status}</span>
+              {profile.employeeId !== "—" ? (
+                <span className={styles.idBadge}>{profile.employeeId}</span>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className={styles.annualLeave}>
+          <span>Annual leave</span>
+          <strong>{annual ? `${annual.remaining} days` : "—"}</strong>
+        </div>
+      </section>
+
+      <div className={styles.tabs}>
+        {(["Overview", "Leave", "Expenses"] as ProfileTab[]).map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={tab === item ? styles.tabActive : ""}
+            onClick={() => setTab(item)}
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+
+      {tab === "Overview" ? (
+        <>
+          <div className={styles.detailGrid}>
+            <div className={styles.detailCol}>
+              <section className={styles.card}>
+                <h2>Personal details</h2>
+                <ul>
+                  <li>
+                    <Mail size={15} />
+                    <span>{profile.companyEmail}</span>
+                    <em>Company</em>
+                  </li>
+                  <li>
+                    <Mail size={15} />
+                    <span>{profile.personalEmail}</span>
+                  </li>
+                  <li>
+                    <Phone size={15} />
+                    <span>{profile.phone}</span>
+                  </li>
+                  <li>
+                    <MapPin size={15} />
+                    <span>{profile.location}</span>
+                  </li>
+                </ul>
+              </section>
+              <LeaveBalance balances={leaveBalances} />
+            </div>
+            <section className={styles.card}>
+              <h2>Employment details</h2>
+              <ul className={styles.employmentList}>
+                {employmentRows.map((row) => {
+                  const Icon = row.icon;
+                  return (
+                    <li key={row.label}>
+                      <span>
+                        {Icon ? <Icon size={15} /> : null}
+                        {row.label}
+                      </span>
+                      <strong>{row.value}</strong>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          </div>
+        </>
+      ) : null}
+
+      {tab === "Leave" ? (
+        <>
+          <LeaveBalance balances={leaveBalances} />
+          <Link href="/employee/leave" className={styles.sectionLink}>
+            View leave requests →
+          </Link>
+        </>
+      ) : null}
+
+      {tab === "Expenses" ? (
+        <section className={styles.card}>
+          <h2>Expenses</h2>
+          <p className={styles.empty}>Your expense claims live on My Expenses.</p>
+          <Link href="/employee/expenses" className={styles.sectionLink}>
+            View expense claims →
+          </Link>
+        </section>
+      ) : null}
+
+      <SimpleModal
+        open={editOpen}
+        title="Edit personal details"
+        description="Update contact information on your profile."
+        fields={[
+          {
+            name: "phone",
+            label: "Phone",
+            fullWidth: true,
+            defaultValue: fieldValue(profile.phone),
+          },
+          {
+            name: "personalEmail",
+            label: "Personal email",
+            type: "email",
+            fullWidth: true,
+            defaultValue: fieldValue(profile.personalEmail),
+          },
+          {
+            name: "location",
+            label: "Location",
+            fullWidth: true,
+            defaultValue: fieldValue(profile.location),
+          },
+        ]}
+        submitLabel="Save changes"
+        onClose={() => setEditOpen(false)}
+        onSubmit={async (values) => {
+          const phone = values.phone.trim();
+          const personalEmail = values.personalEmail.trim();
+          const location = values.location.trim();
+          const body = {
+            phone,
+            personalEmail,
+            personal_email: personalEmail,
+            location,
+            address: location,
+          };
+          await runAction("Save profile", async () => {
+            try {
+              await employeeApi.profile.patch(body);
+            } catch {
+              await employeeApi.employmentRecord.patch(body);
+            }
+            await refetch();
+          });
+        }}
+      />
     </div>
+  );
+}
+
+function LeaveBalance({
+  balances,
+}: {
+  balances: ReturnType<typeof mapLeaveBalance>[];
+}) {
+  return (
+    <section className={styles.card}>
+      <h2>Leave balance</h2>
+      {balances.length === 0 ? (
+        <p className={styles.empty}>No leave balances yet.</p>
+      ) : (
+        <ul className={styles.balanceList}>
+          {balances.map((balance) => (
+            <li key={balance.id}>
+              <div>
+                <span>{balance.label}</span>
+                <strong>
+                  {balance.remaining} of {balance.total} left
+                </strong>
+              </div>
+              <div className={styles.meter}>
+                <span
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      (balance.used / Math.max(balance.total, 1)) * 100,
+                    )}%`,
+                  }}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

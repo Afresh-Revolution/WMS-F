@@ -95,6 +95,18 @@ function formatShortDate(value: string) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function parseCalendarDay(value: string) {
+  const text = value.trim();
+  if (!text) return null;
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+  }
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 function prettyRange(range: string) {
   const parts = range
     .split(/\s*[–-]\s*/)
@@ -125,6 +137,9 @@ export function EmployeeLeavePage({
   const { runAction } = usePageActions();
   const [activeTab, setActiveTab] = useState<LeaveTab>(
     initialFilter === "All" ? "Requests" : "My leave",
+  );
+  const [calendarMonth, setCalendarMonth] = useState(
+    () => new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   );
   const [requestOpen, setRequestOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -206,16 +221,46 @@ export function EmployeeLeavePage({
     });
   }, [activeTab, initialFilter, myLeave, query, teamRequests]);
 
-  const calendarGroups = useMemo(() => {
-    const groups = new Map<string, typeof teamRequests>();
-    for (const request of visibleRequests) {
-      const key = prettyRange(request.dateRange) || "Upcoming";
-      const list = groups.get(key) ?? [];
-      list.push(request);
-      groups.set(key, list);
+  const calendarCells = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const first = new Date(year, month, 1);
+    const start = new Date(year, month, 1 - first.getDay());
+    const marked = new Set<string>();
+    for (const request of teamRequests) {
+      if (request.status === "Declined") continue;
+      const parts = request.dateRange
+        .split(/\s*[–-]\s*/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const from = parseCalendarDay(parts[0] ?? "");
+      const to = parseCalendarDay(parts[1] ?? parts[0] ?? "");
+      if (!from || !to) continue;
+      const cursor = new Date(from);
+      const last = to < from ? from : to;
+      let guard = 0;
+      while (cursor <= last && guard < 400) {
+        marked.add(cursor.toDateString());
+        cursor.setDate(cursor.getDate() + 1);
+        guard += 1;
+      }
     }
-    return Array.from(groups.entries());
-  }, [visibleRequests]);
+    const cells = Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + index);
+      return {
+        key: date.toISOString(),
+        day: date.getDate(),
+        inMonth: date.getMonth() === month,
+        marked: marked.has(date.toDateString()),
+      };
+    });
+    let count = cells.length;
+    while (count > 7 && cells.slice(count - 7, count).every((cell) => !cell.inMonth)) {
+      count -= 7;
+    }
+    return cells.slice(0, count);
+  }, [calendarMonth, teamRequests]);
 
   function refreshAll() {
     return Promise.all([refetch(), refetchMine(), refetchBalances()]);
@@ -371,44 +416,55 @@ export function EmployeeLeavePage({
 
       <section className={styles.panel}>
         {activeTab === "Team calendar" ? (
-          <>
-            <div className={styles.sectionHeader}>
-              <h2 className={styles.sectionTitle}>Team calendar</h2>
-              <p className={styles.sectionSubtitle}>
-                Upcoming time off across the organisation.
-              </p>
+          <div className={styles.calendar}>
+            <div className={styles.calendarHead}>
+              <h2>
+                {calendarMonth.toLocaleDateString("en-US", {
+                  month: "long",
+                  year: "numeric",
+                })}
+              </h2>
+              <div className={styles.calendarNav}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCalendarMonth(
+                      (current) =>
+                        new Date(current.getFullYear(), current.getMonth() - 1, 1),
+                    )
+                  }
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCalendarMonth(
+                      (current) =>
+                        new Date(current.getFullYear(), current.getMonth() + 1, 1),
+                    )
+                  }
+                >
+                  Next
+                </button>
+              </div>
             </div>
-            {calendarGroups.length === 0 ? (
-              <p className={styles.empty}>No leave on the calendar yet.</p>
-            ) : (
-              calendarGroups.map(([label, items]) => (
-                <div key={label} className={styles.calendarGroup}>
-                  <p className={styles.calendarLabel}>{label}</p>
-                  {items.map((request) => (
-                    <article key={request.id} className={styles.requestRow}>
-                      <div className={styles.requestIdentity}>
-                        <span className={styles.requestAvatar}>
-                          {request.initials}
-                        </span>
-                        <div className={styles.requestDetails}>
-                          <p className={styles.requestName}>{request.name}</p>
-                          <p className={styles.requestMeta}>
-                            {request.type}
-                            {request.days
-                              ? ` · ${request.days} ${request.days === 1 ? "day" : "days"}`
-                              : ""}
-                          </p>
-                        </div>
-                      </div>
-                      <span className={statusClass[request.status]}>
-                        {request.status}
-                      </span>
-                    </article>
-                  ))}
+            <div className={styles.weekdays}>
+              {["S", "M", "T", "W", "T", "F", "S"].map((label, index) => (
+                <span key={`${label}-${index}`}>{label}</span>
+              ))}
+            </div>
+            <div className={styles.calendarGrid}>
+              {calendarCells.map((cell) => (
+                <div key={cell.key} className={styles.calendarCell}>
+                  {cell.inMonth ? <span>{cell.day}</span> : null}
+                  {cell.inMonth && cell.marked ? (
+                    <i className={styles.leaveBar} />
+                  ) : null}
                 </div>
-              ))
-            )}
-          </>
+              ))}
+            </div>
+          </div>
         ) : (
           <>
             <div className={styles.sectionHeader}>

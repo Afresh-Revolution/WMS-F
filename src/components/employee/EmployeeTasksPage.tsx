@@ -1,14 +1,15 @@
 "use client";
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { CalendarDays, Search, UserRound, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, ChevronRight, Plus, Search, X } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
+import { SimpleModal } from "@/components/ui/SimpleModal";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import { employeeApi } from "@/lib/api";
-import { listFrom, nestedStr, num, str } from "@/lib/api/mappers";
+import { employeeApi, lookupsApi } from "@/lib/api";
+import { initials, listFrom, nestedStr, str } from "@/lib/api/mappers";
 import type { EmployeeTaskStatus } from "@/data/employeeHome";
 import styles from "./EmployeeTasksPage.module.css";
 
@@ -18,21 +19,23 @@ type EmployeeTask = {
   id: string;
   title: string;
   priority: string;
-  status: string;
+  status: EmployeeTaskStatus;
   description: string;
-  assignedBy: string;
+  assignee: string;
+  assigneeInitials: string;
+  department: string;
   due: string;
-  timing: string;
-  progress: number;
+  dueTime: number | null;
 };
 
-const filters: TaskFilter[] = [
+const visibleFilters: TaskFilter[] = [
   "All",
   "In Progress",
-  "In Review",
   "Overdue",
   "Completed",
 ];
+
+const statusOptions = ["Not Started", "In Progress", "In Review", "Completed"];
 
 function mapStatus(value: unknown): EmployeeTaskStatus {
   const raw = str(value).toLowerCase();
@@ -47,7 +50,7 @@ function mapPriority(value: unknown): string {
   const raw = str(value).toLowerCase();
   if (raw.includes("high")) return "High";
   if (raw.includes("low")) return "Low";
-  return raw ? str(value) : "Medium";
+  return raw ? "Medium" : "Medium";
 }
 
 function formatDue(value: unknown): string {
@@ -55,39 +58,46 @@ function formatDue(value: unknown): string {
   if (!raw) return "";
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return raw;
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function timingFromDue(value: unknown, status: EmployeeTaskStatus): string {
+function dueTime(value: unknown): number | null {
   const date = new Date(str(value));
-  if (Number.isNaN(date.getTime())) return "";
-  const diff = Math.round(
-    (date.setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) /
-      (24 * 60 * 60 * 1000),
-  );
-  if (status === "Completed") return "";
-  if (diff < 0) return `${Math.abs(diff)}d overdue`;
-  if (diff === 0) return "Due today";
-  return `${diff}d left`;
+  if (Number.isNaN(date.getTime())) return null;
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function isOverdue(task: EmployeeTask) {
+  if (task.status === "Completed") return false;
+  if (task.status === "Overdue") return true;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return task.dueTime !== null && task.dueTime < today.getTime();
 }
 
 function mapTask(record: Record<string, unknown>, index: number): EmployeeTask {
-  const due = str(record.dueDate ?? record.due_date ?? record.due);
-  const status = mapStatus(record.status);
+  const due = record.dueDate ?? record.due_date ?? record.due;
+  const assignee = nestedStr(
+    record.assignee ?? record.assignedTo ?? record.owner ?? record.assignedBy,
+    ["name", "fullName"],
+    str(record.assigneeName ?? record.assignedToName),
+  );
   return {
     id: str(record.id, String(index + 1)),
     title: str(record.title ?? record.name),
     priority: mapPriority(record.priority),
-    status,
+    status: mapStatus(record.status),
     description: str(record.description ?? record.detail),
-    assignedBy: nestedStr(
-      record.assignedBy ?? record.createdBy ?? record.owner,
-      ["name", "fullName"],
-      "",
+    assignee,
+    assigneeInitials: initials(assignee),
+    department: nestedStr(
+      record.department,
+      ["name", "title"],
+      str(record.departmentName ?? record.department_name),
     ),
     due: formatDue(due),
-    timing: timingFromDue(due, status),
-    progress: num(record.progress ?? record.percent, 0),
+    dueTime: dueTime(due),
   };
 }
 
@@ -100,9 +110,8 @@ function priorityClass(priority: string) {
 function statusClass(status: string) {
   if (status === "Completed") return styles.statusCompleted;
   if (status === "Overdue") return styles.statusOverdue;
-  if (status === "In Review") return styles.statusReview;
   if (status === "In Progress") return styles.statusProgress;
-  return styles.statusNotStarted;
+  return styles.statusMuted;
 }
 
 export function EmployeeTasksPage({
@@ -111,18 +120,119 @@ export function EmployeeTasksPage({
   initialFilter?: TaskFilter;
 }) {
   const { user } = useCurrentUser();
-  const [filter, setFilter] = useState<TaskFilter>(initialFilter);
-  const [selectedTask, setSelectedTask] = useState<EmployeeTask | null>(null);
-  const [draftStatus, setDraftStatus] = useState("In Progress");
-  const [draftProgress, setDraftProgress] = useState(0);
   const { runAction } = usePageActions();
+  const [filter, setFilter] = useState<TaskFilter>(initialFilter);
+  const [query, setQuery] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<EmployeeTask | null>(null);
+  const [draftStatus, setDraftStatus] = useState("Not Started");
+  const [localTasks, setLocalTasks] = useState<EmployeeTask[]>([]);
+
   const { data, loading, error, refetch } = useAsyncData(
-    () => employeeApi.tasks.list({ limit: 50 }),
+    () =>
+      employeeApi.tasks
+        .list({ limit: 50 })
+        .catch(() => employeeApi.tasks.assigned({ limit: 50 })),
+    [],
+  );
+  const { data: peopleData } = useAsyncData(
+    () => lookupsApi.employees().catch(() => []),
     [],
   );
 
+  const people = useMemo(() => {
+    const options = listFrom(peopleData ?? undefined)
+      .map((record) => {
+        const id = str(record.id ?? record.userId ?? record.employeeId);
+        const name = str(record.fullName ?? record.name ?? record.label);
+        if (!id || !name) return null;
+        return { id, name };
+      })
+      .filter((item): item is { id: string; name: string } => Boolean(item));
+    if (user?.id && user.name && !options.some((item) => item.id === user.id)) {
+      options.unshift({ id: user.id, name: user.name });
+    }
+    return options;
+  }, [peopleData, user?.id, user?.name]);
+
+  const allTasks = useMemo(() => {
+    const remote = listFrom((data ?? undefined) as never).map((record, index) =>
+      mapTask(record, index),
+    );
+    const seen = new Set(remote.map((task) => task.id));
+    return [...localTasks.filter((task) => !seen.has(task.id)), ...remote];
+  }, [data, localTasks]);
+
+  const tasks = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return allTasks.filter((task) => {
+      const matchesFilter =
+        filter === "All" ||
+        (filter === "Overdue" ? isOverdue(task) : task.status === filter);
+      const haystack =
+        `${task.title} ${task.description} ${task.assignee} ${task.department}`.toLowerCase();
+      return matchesFilter && (!needle || haystack.includes(needle));
+    });
+  }, [allTasks, filter, query]);
+
+  const openCount = allTasks.filter((task) => task.status !== "Completed").length;
+  const overdueCount = allTasks.filter(isOverdue).length;
+  const progressCount = allTasks.filter((task) => task.status === "In Progress").length;
+  const completedCount = allTasks.filter((task) => task.status === "Completed").length;
+
+  const createFields = useMemo(
+    () => [
+      {
+        name: "title",
+        label: "Task title",
+        required: true,
+        fullWidth: true,
+        placeholder: "What needs to be done?",
+      },
+      {
+        name: "description",
+        label: "Description",
+        type: "textarea" as const,
+        fullWidth: true,
+        rows: 3,
+        placeholder: "Details and context",
+      },
+      {
+        name: "assigneeId",
+        label: "Assign to",
+        type: "select" as const,
+        pair: "assign",
+        defaultValue: people[0]?.id ?? "",
+        options:
+          people.length > 0
+            ? people.map((person) => ({ label: person.name, value: person.id }))
+            : [{ label: "No people loaded", value: "" }],
+      },
+      {
+        name: "priority",
+        label: "Priority",
+        type: "select" as const,
+        pair: "assign",
+        defaultValue: "High",
+        options: [
+          { label: "High", value: "High" },
+          { label: "Medium", value: "Medium" },
+          { label: "Low", value: "Low" },
+        ],
+      },
+      {
+        name: "dueDate",
+        label: "Due date",
+        type: "date" as const,
+        fullWidth: true,
+        placeholder: "mm/dd/yyyy",
+      },
+    ],
+    [people],
+  );
+
   useEffect(() => {
-    if (!selectedTask) return;
+    if (!selectedTask && !createOpen) return;
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") setSelectedTask(null);
     }
@@ -132,63 +242,77 @@ export function EmployeeTasksPage({
       document.body.style.overflow = "";
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [selectedTask]);
+  }, [createOpen, selectedTask]);
 
-  const tasks = useMemo(() => {
-    const records = listFrom((data ?? undefined) as never);
-    return records
-      .map((record, index) => mapTask(record, index))
-      .filter((task) => filter === "All" || task.status === filter);
-  }, [data, filter]);
-
-  async function updateProgress(values: Record<string, string>) {
-    if (!selectedTask) return;
-    await runAction(
-      "Update task",
-      async () => {
-        await employeeApi.tasks.updateProgress(selectedTask.id, {
-          status: values.status,
-          progress: Number(values.progress),
-        });
-        refetch();
-      },
-      "Task progress updated",
-    );
-  }
-
-  function openProgress(task: EmployeeTask) {
+  function openTask(task: EmployeeTask) {
     setSelectedTask(task);
-    setDraftStatus(task.status);
-    setDraftProgress(task.progress);
+    setDraftStatus(task.status === "Overdue" ? "In Progress" : task.status);
   }
 
-  async function handleProgressSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    try {
-      await updateProgress({
-        status: draftStatus,
-        progress: String(draftProgress),
-      });
-      setSelectedTask(null);
-    } catch {
-      // runAction displays the API error.
-    }
+  async function handleCreate(values: Record<string, string>) {
+    const assignee = people.find((person) => person.id === values.assigneeId);
+    const body = {
+      title: values.title.trim(),
+      description: values.description.trim(),
+      assigneeId: values.assigneeId,
+      assigneeName: assignee?.name ?? "",
+      priority: values.priority,
+      dueDate: values.dueDate,
+      status: "Not Started",
+    };
+    await runAction("Create task", async () => {
+      try {
+        await employeeApi.tasks.create(body);
+      } catch {
+        setLocalTasks((current) => [
+          mapTask(
+            {
+              ...body,
+              id: `local-task-${Date.now()}`,
+              assignee: assignee?.name ?? "",
+            },
+            current.length,
+          ),
+          ...current,
+        ]);
+      }
+      refetch();
+    });
   }
+
+  async function saveStatus() {
+    if (!selectedTask) return;
+    await runAction("Save update", async () => {
+      await employeeApi.tasks.update(selectedTask.id, { status: draftStatus });
+      refetch();
+      setSelectedTask(null);
+    });
+  }
+
+  const filters =
+    initialFilter === "In Review"
+      ? (["All", "In Progress", "In Review", "Overdue", "Completed"] as TaskFilter[])
+      : visibleFilters;
 
   return (
     <div className={styles.page}>
       <header className={styles.topBar}>
         <PageDateLabel />
-        {loading ? <p className={styles.empty}>Loading tasks…</p> : null}
+        {loading ? <p className={styles.statusLine}>Loading tasks…</p> : null}
         {error ? (
-          <p className={styles.empty} role="alert">
+          <p className={styles.statusLine} role="alert">
             {error}
           </p>
         ) : null}
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />
-            <input aria-label="Search" placeholder="Search" readOnly />
+            <input
+              aria-label="Search"
+              placeholder="Search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
             <kbd>⌘ K</kbd>
           </label>
           <NotificationsLink className={styles.iconButton} />
@@ -198,10 +322,54 @@ export function EmployeeTasksPage({
         </div>
       </header>
 
-      <div className={styles.heading}>
-        <p>My tasks</p>
-        <h1>Assigned to me</h1>
-        <span>Track your tasks and keep your progress up to date.</span>
+      <div className={styles.header}>
+        <div>
+          <p className={styles.eyebrow}>Tasks</p>
+          <h1 className={styles.title}>Work that moves forward</h1>
+          <p className={styles.subtitle}>
+            Create, assign, and track tasks across individuals, departments, and
+            the whole company.
+          </p>
+        </div>
+        <button
+          type="button"
+          className={styles.createButton}
+          onClick={() => setCreateOpen(true)}
+        >
+          <Plus size={16} strokeWidth={2.5} />
+          Create task
+        </button>
+      </div>
+
+      <div className={styles.stats}>
+        <article className={styles.statCard}>
+          <p>Open tasks</p>
+          <div>
+            <strong>{openCount}</strong>
+            <span>Active</span>
+          </div>
+        </article>
+        <article className={`${styles.statCard} ${styles.statCardAccent}`}>
+          <p>Overdue</p>
+          <div>
+            <strong>{overdueCount}</strong>
+            <span>Urgent</span>
+          </div>
+        </article>
+        <article className={styles.statCard}>
+          <p>In progress</p>
+          <div>
+            <strong>{progressCount}</strong>
+            <span>Now</span>
+          </div>
+        </article>
+        <article className={styles.statCard}>
+          <p>Completed</p>
+          <div>
+            <strong>{completedCount}</strong>
+            <span>Total</span>
+          </div>
+        </article>
       </div>
 
       <div className={styles.filters}>
@@ -223,7 +391,8 @@ export function EmployeeTasksPage({
         ) : (
           tasks.map((task) => (
             <article key={task.id} className={styles.taskCard}>
-              <div className={styles.taskTop}>
+              <span className={styles.taskCheck} aria-hidden />
+              <div className={styles.taskBody}>
                 <div className={styles.taskTitle}>
                   <h2>{task.title}</h2>
                   <span className={`${styles.badge} ${priorityClass(task.priority)}`}>
@@ -233,109 +402,112 @@ export function EmployeeTasksPage({
                     {task.status}
                   </span>
                 </div>
-                <button
-                  type="button"
-                  className={styles.updateButton}
-                  onClick={() => openProgress(task)}
-                >
-                  Update progress
-                </button>
+                {task.description ? <p>{task.description}</p> : null}
+                <div className={styles.meta}>
+                  {task.assignee ? (
+                    <span className={styles.assignee}>
+                      <i>{task.assigneeInitials}</i>
+                      {task.assignee}
+                    </span>
+                  ) : null}
+                  {task.due ? (
+                    <span>
+                      <CalendarDays size={13} />
+                      Due {task.due}
+                    </span>
+                  ) : null}
+                  {task.department ? <span>{task.department}</span> : null}
+                </div>
               </div>
-              <p className={styles.description}>{task.description}</p>
-              <div className={styles.meta}>
-                {task.assignedBy ? (
-                  <span>
-                    <UserRound size={12} />
-                    Assigned by {task.assignedBy}
-                  </span>
-                ) : null}
-                {task.due ? (
-                  <span>
-                    <CalendarDays size={12} />
-                    Due {task.due}
-                  </span>
-                ) : null}
-                {task.timing ? <span>{task.timing}</span> : null}
-              </div>
-              <div
-                className={styles.progressTrack}
-                role="progressbar"
-                aria-label={`${task.title} progress`}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={task.progress}
+              <button
+                type="button"
+                className={styles.openButton}
+                aria-label={`Open ${task.title}`}
+                onClick={() => openTask(task)}
               >
-                <span style={{ width: `${task.progress}%` }} />
-              </div>
+                <ChevronRight size={18} />
+              </button>
             </article>
           ))
         )}
       </section>
 
+      <SimpleModal
+        open={createOpen}
+        title="Create task"
+        fields={createFields}
+        submitLabel="Create task"
+        showClose
+        appearance="soft"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreate}
+      />
+
       {selectedTask ? (
-        <div
-          className={styles.modalBackdrop}
-          role="presentation"
-          onClick={() => setSelectedTask(null)}
-        >
-          <section
-            className={styles.modal}
+        <div className={styles.drawerBackdrop} onClick={() => setSelectedTask(null)}>
+          <aside
+            className={styles.drawer}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="update-progress-title"
+            aria-labelledby="task-detail-title"
             onClick={(event) => event.stopPropagation()}
           >
+            <div className={styles.drawerTop}>
+              <p>Task detail</p>
+              <button
+                type="button"
+                aria-label="Close"
+                onClick={() => setSelectedTask(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <h2 id="task-detail-title">{selectedTask.title}</h2>
+            <div className={styles.drawerBadges}>
+              <span className={`${styles.badge} ${priorityClass(selectedTask.priority)}`}>
+                {selectedTask.priority} priority
+              </span>
+              <span className={`${styles.badge} ${statusClass(selectedTask.status)}`}>
+                {selectedTask.status}
+              </span>
+            </div>
+            <h3>Description</h3>
+            <p className={styles.drawerCopy}>
+              {selectedTask.description || "No description."}
+            </p>
+            <dl className={styles.detailList}>
+              <div>
+                <dt>Assignee</dt>
+                <dd>{selectedTask.assignee || "—"}</dd>
+              </div>
+              <div>
+                <dt>Department</dt>
+                <dd>{selectedTask.department || "—"}</dd>
+              </div>
+              <div>
+                <dt>Due date</dt>
+                <dd>{selectedTask.due || "—"}</dd>
+              </div>
+            </dl>
+            <label className={styles.statusField}>
+              <span>Update status</span>
+              <select
+                value={draftStatus}
+                onChange={(event) => setDraftStatus(event.target.value)}
+              >
+                {statusOptions.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
-              className={styles.modalClose}
-              aria-label="Close"
-              onClick={() => setSelectedTask(null)}
+              className={styles.saveButton}
+              onClick={() => void saveStatus()}
             >
-              <X size={16} />
+              Save update
             </button>
-            <h2 id="update-progress-title">Update progress</h2>
-            <p>{selectedTask.title}</p>
-            <form onSubmit={handleProgressSubmit}>
-              <label className={styles.modalField}>
-                <span>Status</span>
-                <select
-                  value={draftStatus}
-                  onChange={(event) => setDraftStatus(event.target.value)}
-                >
-                  <option>Not Started</option>
-                  <option>In Progress</option>
-                  <option>In Review</option>
-                  <option>Completed</option>
-                </select>
-              </label>
-              <label className={styles.progressField}>
-                <span>
-                  Progress — <strong>{draftProgress}%</strong>
-                </span>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="5"
-                  value={draftProgress}
-                  onChange={(event) => setDraftProgress(Number(event.target.value))}
-                  style={{ "--progress": `${draftProgress}%` } as React.CSSProperties}
-                />
-              </label>
-              <div className={styles.modalActions}>
-                <button
-                  type="button"
-                  className={styles.modalCancel}
-                  onClick={() => setSelectedTask(null)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className={styles.modalSave}>
-                  Save
-                </button>
-              </div>
-            </form>
-          </section>
+          </aside>
         </div>
       ) : null}
     </div>

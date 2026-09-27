@@ -362,15 +362,80 @@
   background: var(--afresh-orange-dark);
 }
 
-.calendarGroup {
-  padding-bottom: 4px;
+.calendarHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
-.calendarLabel {
-  margin: 12px 0 0;
+.calendarHead h2 {
+  margin: 0;
+  color: var(--afresh-orange);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.calendarNav {
+  display: flex;
+  gap: 8px;
+}
+
+.calendarNav button {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #ebe6e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #78716c;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.weekdays,
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.weekdays span {
+  padding-bottom: 10px;
+  color: #c4bfb9;
   font-size: 12px;
   font-weight: 600;
-  color: #a8a29e;
+  text-align: center;
+}
+
+.calendarCell {
+  position: relative;
+  min-height: 92px;
+  padding: 8px 10px;
+  border-top: 1px solid #f3eeea;
+  border-left: 1px solid #f3eeea;
+}
+
+.calendarCell:nth-child(7n) {
+  border-right: 1px solid #f3eeea;
+}
+
+.calendarCell:nth-last-child(-n + 7) {
+  border-bottom: 1px solid #f3eeea;
+}
+
+.calendarCell > span {
+  color: #57534e;
+  font-size: 13px;
+}
+
+.leaveBar {
+  position: absolute;
+  right: 12px;
+  bottom: 18px;
+  left: 12px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--afresh-orange);
 }
 
 .empty {

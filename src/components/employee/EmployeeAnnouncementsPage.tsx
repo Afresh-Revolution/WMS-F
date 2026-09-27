@@ -12,7 +12,6 @@ import {
   Pin,
   Plus,
   Search,
-  Triangle,
 } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
@@ -459,13 +458,6 @@ export function EmployeeAnnouncementsPage() {
               {loading ? "Loading announcements…" : "No announcements in this view."}
             </div>
           ) : null}
-        </div>
-
-        <div className={styles.prototypeWrap}>
-          <span className={styles.prototypeChip}>
-            <Triangle size={11} fill="currentColor" />
-            Prototype: Employee
-          </span>
         </div>
       </div>
 

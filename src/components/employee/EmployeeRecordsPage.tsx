@@ -1,278 +1,240 @@
 "use client";
 
 import { PageDateLabel } from "@/components/layout/PageDateLabel";
-import { useMemo, useState } from "react";
-import { Download, FileText, Search } from "lucide-react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { Download, Eye, FileText, Search, Upload, X } from "lucide-react";
 import { NotificationsLink, ProfileLink } from "@/components/layout/PageLinks";
 import { useCurrentUser } from "@/components/layout/CurrentUserProvider";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { usePageActions } from "@/hooks/usePageActions";
-import {
-  ApiError,
-  apiRequest,
-  asRecord,
-  employeeApi,
-  unwrapList,
-} from "@/lib/api";
-import { listFrom, str } from "@/lib/api/mappers";
-import type {
-  EmployeeRecordCategory,
-  EmployeeRecordItem,
-} from "@/data/employeeHome";
+import { employeeApi, getAccessToken } from "@/lib/api";
+import { num, str } from "@/lib/api/mappers";
 import styles from "./EmployeeRecordsPage.module.css";
 
-const filters: EmployeeRecordCategory[] = [
-  "Documents",
-  "Promotions",
-  "Salary Increments",
-  "Disciplinary",
-];
+const categories = ["All", "Policy", "HR", "Finance", "Reports", "Compliance"] as const;
+const uploadCategories = ["Policy", "HR", "Finance", "Reports", "Compliance"] as const;
+const accessLevels = ["All staff", "Managers", "HR only", "Restricted"] as const;
+type CategoryFilter = (typeof categories)[number];
+type SectionTab = "Library" | "Recent" | "My uploads";
 
-const DUMMY_TITLES = new Set([
-  "offer letter",
-  "employment contract",
-  "staff id card",
-  "employee handbook",
-]);
+type DocumentRow = {
+  id: string;
+  name: string;
+  category: string;
+  kind: string;
+  updated: string;
+  sizeValue: string;
+  sizeUnit: string;
+  access: string;
+  downloads: number;
+  fileUrl: string;
+  local: boolean;
+  uploadedById: string;
+  updatedAt: string;
+};
 
-function isDummyRow(record: Record<string, unknown>, title: string) {
-  if (
-    record.isSample === true ||
-    record.sample === true ||
-    record.dummy === true ||
-    record.isDummy === true ||
-    record.prototype === true ||
-    record.isPrototype === true ||
-    record.seed === true
-  ) {
-    return true;
+const emptyUpload = {
+  name: "",
+  category: "Policy",
+  access: "All staff",
+  file: null as File | null,
+};
+
+function splitSize(bytes: number) {
+  if (bytes >= 1024 * 1024) {
+    const mb = bytes / (1024 * 1024);
+    const value = mb >= 10 ? String(Math.round(mb)) : mb.toFixed(1).replace(/\.0$/, "");
+    return { value, unit: "MB" };
   }
-  const source = str(
-    record.source ?? record.origin ?? record.kind ?? record.tag,
-  ).toLowerCase();
-  if (/(sample|dummy|prototype|seed|demo|mock)/.test(source)) return true;
-  return DUMMY_TITLES.has(title.trim().toLowerCase());
+  if (bytes >= 1024) {
+    return { value: String(Math.max(1, Math.round(bytes / 1024))), unit: "KB" };
+  }
+  if (bytes > 0) return { value: String(bytes), unit: "B" };
+  return { value: "—", unit: "" };
 }
 
-async function optionalList(path: string) {
-  try {
-    return unwrapList<Record<string, unknown>>(await apiRequest(path));
-  } catch (error) {
-    if (
-      error instanceof ApiError &&
-      (error.status === 404 || error.status === 405 || error.status === 403)
-    ) {
-      return [];
-    }
-    return [];
-  }
+function formatUpdated(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-function rowsFrom(payload: unknown, keys: string[]) {
-  const root = asRecord(payload);
-  const data = asRecord(root.data);
-  for (const key of keys) {
-    const rows = listFrom((data[key] ?? root[key]) as never);
-    if (rows.length) return rows;
-  }
-  return [];
-}
-
-function formatDate(value: unknown): string {
-  const raw = str(value);
-  if (!raw) return "";
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return raw;
-  return date.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function fileKind(record: Record<string, unknown>) {
-  const raw = str(
-    record.fileType ??
-      record.mimeType ??
-      record.contentType ??
-      record.type ??
-      record.extension ??
-      record.fileName ??
-      record.url ??
-      record.fileUrl,
-  ).toLowerCase();
-  if (raw.includes("pdf") || raw.endsWith(".pdf")) return "PDF";
-  if (
-    raw.includes("image") ||
-    raw.includes("png") ||
-    raw.includes("jpg") ||
-    raw.includes("jpeg") ||
-    raw.includes("webp")
-  ) {
-    return "Image";
-  }
-  if (raw.includes("doc")) return "DOCX";
-  if (raw.includes("letter") || raw.includes("notice")) return "Letter";
-  return raw.includes("/") ? "File" : str(record.kind ?? record.format, "File");
-}
-
-function mapCategory(value: unknown): EmployeeRecordCategory {
-  const raw = str(value).toLowerCase();
-  if (raw.includes("promot")) return "Promotions";
-  if (raw.includes("salary") || raw.includes("increment")) {
-    return "Salary Increments";
-  }
-  if (raw.includes("disciplin") || raw.includes("warning") || raw.includes("query")) {
-    return "Disciplinary";
-  }
-  return "Documents";
-}
-
-function mapRecord(
-  record: Record<string, unknown>,
-  index: number,
-  fallbackCategory: EmployeeRecordCategory,
-): EmployeeRecordItem | null {
-  const title = str(
-    record.title ??
-      record.documentName ??
-      record.document_name ??
-      record.name ??
-      record.letterTitle ??
-      record.position ??
-      record.caseTitle,
-  );
-  if (!title || isDummyRow(record, title)) return null;
-  const available = !["pending", "processing", "draft"].includes(
-    str(record.status).toLowerCase(),
-  );
-  const fileUrl = str(
-    record.fileUrl ??
-      record.file_url ??
-      record.url ??
-      record.documentUrl ??
-      record.downloadUrl ??
-      record.href,
-  );
+function mapDocument(record: Record<string, unknown>, index: number): DocumentRow | null {
+  const name = str(record.name ?? record.title ?? record.documentName ?? record.fileName);
+  if (!name) return null;
+  const size = splitSize(num(record.size ?? record.fileSize));
+  const updatedAt = str(record.updatedAt ?? record.updated_at ?? record.createdAt);
   return {
-    id: str(record.id ?? record.reference ?? record._id, `REC-${index + 1}`),
-    title,
-    category: mapCategory(
-      record.category ??
-        record.documentType ??
-        record.document_type ??
-        record.type ??
-        fallbackCategory,
-    ),
-    kind: fileKind(record),
-    date: formatDate(
-      record.date ??
-        record.issuedAt ??
-        record.issued_at ??
-        record.effectiveDate ??
-        record.createdAt ??
-        record.created_at,
-    ),
-    fileUrl,
-    status: available && fileUrl ? "Available" : available ? "Available" : "Pending",
+    id: str(record.id ?? record._id, `DOC-${index + 1}`),
+    name,
+    category: str(record.category, "Policy"),
+    kind: str(record.fileType ?? record.kind, "File"),
+    updated: formatUpdated(updatedAt),
+    sizeValue: size.value,
+    sizeUnit: size.unit,
+    access: str(record.access, "All staff"),
+    downloads: num(record.downloads ?? record.downloadCount),
+    fileUrl: str(record.fileUrl ?? record.file_url ?? record.url),
+    local: record.local === true || str(record.id).startsWith("doc-"),
+    uploadedById: str(record.uploadedById ?? record.ownerId ?? record.createdBy),
+    updatedAt,
   };
 }
 
-function mergeRows(
-  buckets: Array<[EmployeeRecordCategory, Record<string, unknown>[]]>,
-) {
-  const seen = new Set<string>();
-  const items: EmployeeRecordItem[] = [];
-  buckets.forEach(([category, rows], bucketIndex) => {
-    rows.forEach((row, index) => {
-      const item = mapRecord(row, bucketIndex * 100 + index, category);
-      if (!item) return;
-      const key = `${item.category}:${item.id}:${item.title}`.toLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      items.push({ ...item, category });
-    });
-  });
-  return items;
-}
-
-async function loadRecordLibrary() {
-  const bundle = await employeeApi.records().catch(() => null);
-  const promotions = rowsFrom(bundle, ["promotions", "promotionLetters"]);
-  const salary = rowsFrom(bundle, [
-    "salaryIncrements",
-    "salary_increments",
-    "increments",
-  ]);
-  const discipline = rowsFrom(bundle, [
-    "disciplinary",
-    "discipline",
-    "cases",
-    "warnings",
-  ]);
-  const documents = rowsFrom(bundle, ["documents", "files"]);
-
-  const extras = await Promise.all([
-    documents.length ? Promise.resolve([]) : optionalList("/employee/documents"),
-    documents.length
-      ? Promise.resolve([])
-      : optionalList("/employee/employment-record/documents"),
-    promotions.length ? Promise.resolve([]) : optionalList("/employee/promotions"),
-    salary.length
-      ? Promise.resolve([])
-      : optionalList("/employee/salary-increments"),
-    discipline.length ? Promise.resolve([]) : optionalList("/employee/discipline"),
-  ]);
-
-  return mergeRows([
-    ["Documents", [...documents, ...extras[0], ...extras[1]]],
-    ["Promotions", [...promotions, ...extras[2]]],
-    ["Salary Increments", [...salary, ...extras[3]]],
-    ["Disciplinary", [...discipline, ...extras[4]]],
-  ]);
+async function openFile(row: DocumentRow, download: boolean) {
+  const external = /^https?:\/\//i.test(row.fileUrl) && !row.local;
+  if (external) {
+    window.open(row.fileUrl, "_blank", "noopener,noreferrer");
+    return;
+  }
+  const token = getAccessToken();
+  const response = await fetch(
+    `/api/v1/employee/documents/${encodeURIComponent(row.id)}/file${download ? "?download=1" : ""}`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+  );
+  if (!response.ok) {
+    throw new Error(download ? "Could not download this document." : "Could not open this document.");
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const filename =
+    response.headers.get("content-disposition")?.match(/filename="([^"]+)"/)?.[1] ||
+    row.name;
+  if (download) {
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.append(link);
+    link.click();
+    link.remove();
+  } else {
+    window.open(objectUrl, "_blank", "noopener,noreferrer");
+  }
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 export function EmployeeRecordsPage() {
   const { user } = useCurrentUser();
-  const [filter, setFilter] = useState<EmployeeRecordCategory>("Documents");
-  const { showToast } = usePageActions();
-  const { data, loading, error } = useAsyncData(() => loadRecordLibrary(), []);
-
-  const records = data ?? [];
-  const visible = useMemo(
-    () => records.filter((item) => item.category === filter),
-    [filter, records],
+  const { runAction } = usePageActions();
+  const [section, setSection] = useState<SectionTab>("Library");
+  const [category, setCategory] = useState<CategoryFilter>("All");
+  const [query, setQuery] = useState("");
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState(emptyUpload);
+  const { data, loading, error, refetch } = useAsyncData(
+    () => employeeApi.documents.list(),
+    [],
   );
 
-  function handleDownload(item: EmployeeRecordItem) {
-    if (!item.fileUrl) {
-      showToast("This file is not available to download yet.", "info");
-      return;
-    }
-    const link = document.createElement("a");
-    link.href = item.fileUrl;
-    link.download = item.title;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    document.body.append(link);
-    link.click();
-    link.remove();
+  const documents = useMemo(() => {
+    const rows = Array.isArray(data) ? data : [];
+    return rows
+      .map((record, index) => mapDocument(record, index))
+      .filter((item): item is DocumentRow => Boolean(item))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }, [data]);
+
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const recentCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    return documents.filter((item) => {
+      if (section === "My uploads" && item.uploadedById !== (user?.id ?? "")) return false;
+      if (section === "Recent") {
+        const time = new Date(item.updatedAt).getTime();
+        if (!Number.isFinite(time) || time < recentCutoff) return false;
+      }
+      if (category !== "All" && item.category !== category) return false;
+      if (!needle) return true;
+      return `${item.name} ${item.category} ${item.kind} ${item.access}`
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [category, documents, query, section, user?.id]);
+
+  const categoryCount = new Set(documents.map((item) => item.category).filter(Boolean)).size;
+  const restrictedCount = documents.filter((item) => item.access !== "All staff").length;
+  const downloadTotal = documents.reduce((sum, item) => sum + item.downloads, 0);
+
+  function closeUpload() {
+    setUploadOpen(false);
+    setForm(emptyUpload);
   }
+
+  useEffect(() => {
+    if (!uploadOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeUpload();
+    }
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [uploadOpen]);
+
+  async function handleUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await runAction(
+        "Upload document",
+        async () => {
+          if (!form.name.trim()) throw new Error("Enter a document name.");
+          if (!form.file) throw new Error("Choose a file to upload.");
+          const body = new FormData();
+          body.set("name", form.name.trim());
+          body.set("category", form.category);
+          body.set("access", form.access);
+          body.set("file", form.file);
+          await employeeApi.documents.create(body);
+          await refetch();
+        },
+        "Document uploaded",
+      );
+      closeUpload();
+    } catch {
+      return;
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleOpen(row: DocumentRow, download: boolean) {
+    await runAction(download ? `Download ${row.name}` : `Open ${row.name}`, async () => {
+      if (download) {
+        await employeeApi.documents.download(row.id).catch(() => null);
+      }
+      await openFile(row, download);
+      if (download) await refetch();
+    });
+  }
+
+  const sections: SectionTab[] = ["Library", "Recent", "My uploads"];
+  const countLabel = `${visible.length} document${visible.length === 1 ? "" : "s"}`;
 
   return (
     <div className={styles.page}>
       <header className={styles.topBar}>
         <PageDateLabel />
-        {loading ? <p className={styles.empty}>Loading records…</p> : null}
+        {loading ? <p className={styles.statusLine}>Loading documents…</p> : null}
         {error ? (
-          <p className={styles.empty} role="alert">
+          <p className={styles.statusLine} role="alert">
             {error}
           </p>
         ) : null}
         <div className={styles.topActions}>
           <label className={styles.search}>
             <Search size={14} />
-            <input aria-label="Search" placeholder="Search" readOnly />
+            <input
+              aria-label="Search"
+              placeholder="Search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
             <kbd>⌘ K</kbd>
           </label>
           <NotificationsLink className={styles.iconButton} />
@@ -282,59 +244,270 @@ export function EmployeeRecordsPage() {
         </div>
       </header>
 
-      <div className={styles.heading}>
+      <div className={styles.header}>
         <div>
-          <p>My records</p>
-          <h1>Your personal records</h1>
-          <span>
-            Documents and official notices that belong to you. Only your own
-            records are shown.
-          </span>
+          <p className={styles.eyebrow}>Documents</p>
+          <h1 className={styles.title}>Every document, always at hand</h1>
+          <p className={styles.subtitle}>
+            Policies, reports, contracts, and compliance files — organised,
+            searchable, and access-controlled.
+          </p>
         </div>
+        <button
+          type="button"
+          className={styles.uploadButton}
+          onClick={() => setUploadOpen(true)}
+        >
+          <Upload size={16} />
+          Upload
+        </button>
       </div>
 
-      <nav className={styles.filters} aria-label="Record filters">
-        {filters.map((item) => (
+      <div className={styles.stats}>
+        <article className={styles.statCard}>
+          <div className={styles.statTop}>
+            <p>Total documents</p>
+            <span>In library</span>
+          </div>
+          <strong>{documents.length}</strong>
+        </article>
+        <article className={styles.statCard}>
+          <div className={styles.statTop}>
+            <p>Categories</p>
+            <span>Organised</span>
+          </div>
+          <strong>{categoryCount}</strong>
+        </article>
+        <article className={styles.statCard}>
+          <div className={styles.statTop}>
+            <p>Access-restricted</p>
+            <span>Protected</span>
+          </div>
+          <strong>{restrictedCount}</strong>
+        </article>
+        <article className={styles.statCard}>
+          <div className={styles.statTop}>
+            <p>Total downloads</p>
+            <span>All time</span>
+          </div>
+          <strong>{downloadTotal.toLocaleString("en-US")}</strong>
+        </article>
+      </div>
+
+      <div className={styles.sections}>
+        {sections.map((item) => (
           <button
-            type="button"
             key={item}
-            className={filter === item ? styles.filterActive : ""}
-            onClick={() => setFilter(item)}
+            type="button"
+            className={section === item ? styles.sectionActive : ""}
+            onClick={() => setSection(item)}
           >
             {item}
           </button>
         ))}
-      </nav>
+      </div>
 
-      <section className={styles.grid} aria-label={`${filter} records`}>
-        {visible.length === 0 ? (
-          <p className={styles.empty}>No {filter.toLowerCase()} in this view.</p>
-        ) : (
-          visible.map((item) => (
-            <article key={`${item.category}-${item.id}`} className={styles.card}>
-              <span className={styles.icon} aria-hidden>
-                <FileText size={16} />
-              </span>
-              <div className={styles.body}>
-                <h2 className={styles.title}>{item.title}</h2>
-                <p className={styles.meta}>
-                  {item.kind}
-                  {item.date ? ` · ${item.date}` : ""}
-                </p>
-              </div>
-              <button
-                type="button"
-                className={styles.download}
-                aria-label={`Download ${item.title}`}
-                disabled={!item.fileUrl}
-                onClick={() => handleDownload(item)}
-              >
-                <Download size={16} />
-              </button>
-            </article>
-          ))
-        )}
+      <div className={styles.toolbar}>
+        <label className={styles.docSearch}>
+          <Search size={15} />
+          <input
+            aria-label="Search documents"
+            placeholder="Search documents..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <div className={styles.chips}>
+          {categories.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={category === item ? styles.chipActive : ""}
+              onClick={() => setCategory(item)}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <section className={styles.tableCard}>
+        <div className={styles.tableHead}>
+          <h2>{countLabel}</h2>
+        </div>
+        <div className={styles.tableWrap}>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Updated</th>
+                <th>Size</th>
+                <th>Access</th>
+                <th>Downloads</th>
+                <th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {visible.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className={styles.emptyCell}>
+                    No documents in this view.
+                  </td>
+                </tr>
+              ) : (
+                visible.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <div className={styles.nameCell}>
+                        <span className={styles.fileIcon} aria-hidden>
+                          <FileText size={16} />
+                        </span>
+                        <span>
+                          <strong>{item.name}</strong>
+                          <small>{item.kind}</small>
+                        </span>
+                      </div>
+                    </td>
+                    <td className={styles.muted}>{item.category}</td>
+                    <td className={styles.muted}>{item.updated}</td>
+                    <td className={styles.sizeCell}>
+                      <span>{item.sizeValue}</span>
+                      {item.sizeUnit ? <span>{item.sizeUnit}</span> : null}
+                    </td>
+                    <td>
+                      <span className={styles.access}>{item.access}</span>
+                    </td>
+                    <td className={styles.downloads}>
+                      {item.downloads.toLocaleString("en-US")}
+                    </td>
+                    <td className={styles.actions}>
+                      <button
+                        type="button"
+                        aria-label={`View ${item.name}`}
+                        onClick={() => void handleOpen(item, false)}
+                      >
+                        <Eye size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Download ${item.name}`}
+                        onClick={() => void handleOpen(item, true)}
+                      >
+                        <Download size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
+
+      {uploadOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div className={styles.modalBackdrop} role="presentation" onClick={closeUpload}>
+              <section
+                className={styles.modal}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="upload-document-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  className={styles.modalClose}
+                  aria-label="Close"
+                  onClick={closeUpload}
+                >
+                  <X size={17} />
+                </button>
+                <h2 id="upload-document-title">Upload document</h2>
+                <p>Add a file to the library. Access controls who can open it.</p>
+                <form className={styles.form} onSubmit={handleUpload}>
+                  <label className={styles.formField}>
+                    <span>Name</span>
+                    <input
+                      value={form.name}
+                      onChange={(event) =>
+                        setForm((current) => ({ ...current, name: event.target.value }))
+                      }
+                      placeholder="Employee Handbook 2026"
+                      required
+                    />
+                  </label>
+                  <div className={styles.formPair}>
+                    <label className={styles.formField}>
+                      <span>Category</span>
+                      <select
+                        value={form.category}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, category: event.target.value }))
+                        }
+                      >
+                        {uploadCategories.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className={styles.formField}>
+                      <span>Access</span>
+                      <select
+                        value={form.access}
+                        onChange={(event) =>
+                          setForm((current) => ({ ...current, access: event.target.value }))
+                        }
+                      >
+                        {accessLevels.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <label className={styles.uploadField}>
+                    <span>File</span>
+                    <div className={styles.dropZone}>
+                      <span className={styles.uploadIcon}>
+                        <Upload size={18} />
+                      </span>
+                      <strong>{form.file ? form.file.name : "Drop a file or click to upload"}</strong>
+                      <small>PDF, DOCX, JPG or PNG · up to 15 MB</small>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.xls,.xlsx,.csv"
+                        required
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            file: event.target.files?.[0] ?? null,
+                            name:
+                              current.name ||
+                              (event.target.files?.[0]?.name.replace(/\.[^.]+$/, "") ?? ""),
+                          }))
+                        }
+                      />
+                    </div>
+                  </label>
+                  <div className={styles.modalActions}>
+                    <button type="button" className={styles.modalCancel} onClick={closeUpload}>
+                      Cancel
+                    </button>
+                    <button type="submit" className={styles.modalSubmit} disabled={submitting}>
+                      <Upload size={15} />
+                      {submitting ? "Uploading…" : "Upload"}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
